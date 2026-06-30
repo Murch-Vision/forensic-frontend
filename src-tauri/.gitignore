@@ -1,0 +1,10 @@
+# Rust build output
+/target/
+
+# Tauri generated schemas
+/gen/
+
+# Staged sidecar payload + node binary (produced by `pnpm desktop:prepare`)
+/sidecar/*
+/binaries/*
+!*/.gitkeep

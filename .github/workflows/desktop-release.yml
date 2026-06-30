@@ -1,0 +1,97 @@
+name: desktop-release
+
+# Builds the Tauri desktop app (with the bundled Node API sidecar) for macOS and
+# Windows and attaches the installers to a draft GitHub Release.
+#
+# Trigger by pushing a tag like `v3.2.0`, or run manually (workflow_dispatch).
+#
+# NOTE on repo layout: this assumes forensic-api is a SEPARATE repo that we check
+# out alongside the frontend. If you keep both in one monorepo, delete the
+# "Checkout forensic-api" step and point FORENSIC_API_DIR at its in-repo path.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      api_repo:
+        description: "owner/name of the forensic-api repo"
+        required: false
+      api_ref:
+        description: "forensic-api git ref (branch/tag/sha)"
+        default: "main"
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Target users are mostly Windows; you (the dev) are macOS.
+          - os: windows-latest
+            args: "--bundles nsis,msi"
+          - os: macos-latest # Apple Silicon. Add `macos-13` for an Intel build.
+            args: "--bundles app,dmg"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout frontend (this repo)
+        uses: actions/checkout@v4
+
+      - name: Checkout forensic-api
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.api_repo || format('{0}/forensic-api', github.repository_owner) }}
+          ref: ${{ github.event.inputs.api_ref || 'main' }}
+          path: forensic-api
+          # For a PRIVATE api repo, add a PAT with repo:read scope:
+          # token: ${{ secrets.API_REPO_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Stage API sidecar (builds the native API binary on this OS)
+        run: pnpm desktop:prepare
+        env:
+          FORENSIC_API_DIR: ${{ github.workspace }}/forensic-api
+
+      - name: Build desktop app + draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # --- macOS signing & notarization (optional; unsigned builds still run
+          #     but warn). Provide these repo secrets to enable: ---
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # --- Windows code signing (optional): ---
+          # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: "Forensic Analyst Workstation __VERSION__"
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

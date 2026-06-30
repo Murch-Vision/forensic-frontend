@@ -1,0 +1,486 @@
+/* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+ * File Name   : TransactionsPage.tsx
+ * Created at  : 2026-06-23
+ * Updated at  : 2026-06-30
+ * Author      : jeefo
+ * Purpose     :
+ * Description :
+.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
+import {useState} from "react";
+import {useLazyQuery, useMutation, useQuery} from "@apollo/client";
+import {
+  ACTIVE_CASE_QUERY,
+  EVIDENCE_FOR_CASE,
+  TAG_EVIDENCE,
+  TRANSACTIONS_QUERY,
+  TRANSACTION_DRILLDOWN,
+} from "../graphql/queries";
+import {
+  Badge,
+  Card,
+  DataTable,
+  Loading,
+  PageHeader,
+  StatCard,
+} from "../components/kit";
+import Plot from "../components/Plot";
+import {formatDateTime, formatMoney, sevClass} from "../lib/format";
+import type {BankTransaction} from "../types";
+
+interface TxnAccount {
+  id            : number;
+  accountNumber : string;
+  bankName      : string | null;
+  maskedNumber  : string;
+}
+
+interface TxnData {
+  bankAccounts : TxnAccount[];
+  transactions : BankTransaction[];
+}
+
+interface DrillDown {
+  target: BankTransaction | null;
+  relatedWindow: {id: number; timestamp: string; amount: number;
+    type: string; description: string | null}[];
+  ruleResult: {
+    finalScore: number; finalAction: string; finalRisk: string;
+    criticalFlags: number; highFlags: number;
+    violations: {ruleId: number; ruleName: string; severity: string;
+      description: string}[];
+  };
+}
+
+const PALETTE = [
+  "#00E5FF", "#00E676", "#B388FF", "#FFAB00",
+  "#FF6D00", "#448AFF", "#FF1744", "#E040FB",
+];
+
+const ROW: React.CSSProperties = {
+  display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16,
+};
+
+export default function TransactionsPage() {
+  const {data, loading} = useQuery<TxnData>(TRANSACTIONS_QUERY);
+  const caseQ = useQuery<{activeCase: {id: number} | null}>(ACTIVE_CASE_QUERY);
+  const activeCase = caseQ.data?.activeCase ?? null;
+  const evidenceQ = useQuery<{evidenceForCase: {sourceType: string;
+    sourceId: number; exhibitNumber: number}[]}>(EVIDENCE_FOR_CASE, {
+    variables: {caseFileId: activeCase?.id ?? 0}, skip: !activeCase});
+  const [tagEvidence] = useMutation(TAG_EVIDENCE);
+  const [filterAccount, setFilterAccount] = useState("All");
+  const [filterType, setFilterType] = useState("");
+  const [filterFlag, setFilterFlag] = useState("");
+  const [drill, drillQ] = useLazyQuery<{transactionDrillDown: DrillDown}>(
+    TRANSACTION_DRILLDOWN, {fetchPolicy: "no-cache"});
+  const [drillOpen, setDrillOpen] = useState(false);
+
+  const exhibitByTxn = new Map<number, number>();
+  for (const e of evidenceQ.data?.evidenceForCase ?? []) {
+    if (e.sourceType === "TRANSACTION") {
+      exhibitByTxn.set(e.sourceId, e.exhibitNumber);
+    }
+  }
+
+  function openDrill(t: BankTransaction) {
+    setDrillOpen(true);
+    drill({variables: {transactionId: t.id}});
+  }
+
+  async function onTag(t: BankTransaction) {
+    if (!activeCase) return;
+    await tagEvidence({variables: {
+      caseFileId: activeCase.id, sourceType: "TRANSACTION", sourceId: t.id,
+      description: `${formatMoney(t.amount)} — ${formatDateTime(t.timestamp)}`,
+      severity: "INFO",
+    }});
+    await evidenceQ.refetch();
+  }
+
+  if (loading || !data) {
+    return (
+      <div className="page-container">
+        <PageHeader icon="💳" title="Гүйлгээний Анализ"
+          subtitle="САНХҮҮГИЙН УРСГАЛЫН АНАЛИЗ" />
+        <Loading />
+      </div>
+    );
+  }
+
+  const accounts = data.bankAccounts;
+  const allTxns  = data.transactions;
+  // Charts use the account-filtered set; the table narrows further by
+  // type/flag, matching the C# where charts track the account filter only.
+  const filtered = filterAccount === "All"
+    ? allTxns
+    : allTxns.filter((t) => t.bankAccountId === Number(filterAccount));
+  const tableRows = filtered.filter((t) =>
+    (!filterType || t.type === filterType)
+    && (!filterFlag || t.flagStatus === filterFlag));
+
+  const totalCount   = filtered.length;
+  const credits = filtered.filter((t) => t.type === "credit");
+  const debits = filtered.filter((t) => t.type === "debit");
+  const totalCredits = credits.reduce((sum, t) => sum + t.amount, 0);
+  const totalDebits = debits.reduce((sum, t) => sum + t.amount, 0);
+
+  // Daily volume (credit/debit bars) + recomputed running balance line.
+  const dayKeys = [...new Set(filtered.map((t) => t.timestamp.slice(0, 10)))]
+    .sort();
+  const dayCredit = new Map<string, number>();
+  const dayDebit = new Map<string, number>();
+  for (const t of filtered) {
+    const d = t.timestamp.slice(0, 10);
+    if (t.type === "credit") {
+      dayCredit.set(d, (dayCredit.get(d) ?? 0) + t.amount);
+    } else if (t.type === "debit") {
+      dayDebit.set(d, (dayDebit.get(d) ?? 0) + t.amount);
+    }
+  }
+  const dCred = dayKeys.map((d) => dayCredit.get(d) ?? 0);
+  const dDeb = dayKeys.map((d) => dayDebit.get(d) ?? 0);
+  let cum = 0;
+  const runningBal = dayKeys.map((_d, i) => {
+    cum += dCred[i] - dDeb[i];
+    return cum;
+  });
+
+  // Category aggregation feeds the waterfall + sunburst.
+  const catAgg = new Map<string, {c: number; d: number}>();
+  for (const t of filtered) {
+    const k = t.category ?? "Бусад";
+    const a = catAgg.get(k) ?? {c: 0, d: 0};
+    if (t.type === "credit") a.c += t.amount;
+    else if (t.type === "debit") a.d += t.amount;
+    catAgg.set(k, a);
+  }
+  const topCats = [...catAgg.entries()]
+    .sort((a, b) => (b[1].c + b[1].d) - (a[1].c + a[1].d)).slice(0, 8);
+
+  const wfLabels: string[] = [];
+  const wfValues: number[] = [];
+  const wfMeasure: string[] = [];
+  for (const [k, a] of topCats) {
+    wfLabels.push(`${k} +`);
+    wfValues.push(a.c);
+    wfMeasure.push("relative");
+  }
+  for (const [k, a] of topCats) {
+    wfLabels.push(`${k} −`);
+    wfValues.push(-a.d);
+    wfMeasure.push("relative");
+  }
+  wfLabels.push("Цэвэр дүн");
+  wfValues.push(0);
+  wfMeasure.push("total");
+
+  const sbLabels: string[] = [];
+  const sbParents: string[] = [];
+  const sbValues: number[] = [];
+  const sbColors: string[] = [];
+  topCats.forEach(([k, a], i) => {
+    sbLabels.push(k);
+    sbParents.push("");
+    sbValues.push(a.c + a.d);
+    sbColors.push(PALETTE[i % PALETTE.length]);
+    if (a.c > 0) {
+      sbLabels.push(`${k} — Орлого`);
+      sbParents.push(k);
+      sbValues.push(a.c);
+      sbColors.push("#00E676");
+    }
+    if (a.d > 0) {
+      sbLabels.push(`${k} — Зарлага`);
+      sbParents.push(k);
+      sbValues.push(a.d);
+      sbColors.push("#FF5252");
+    }
+  });
+
+  // Hourly distribution with night/peak coloring.
+  const hourCounts = new Array(24).fill(0);
+  for (const t of filtered) hourCounts[new Date(t.timestamp).getHours()]++;
+  const hourLabels = Array.from({length: 24},
+    (_v, h) => `${String(h).padStart(2, "0")}:00`);
+  const avgHour = filtered.length / 24;
+  const hourColors = hourCounts.map((c) =>
+    c > avgHour * 1.5 ? "#FF6D00" : c > avgHour ? "#FFAB00" : "#00E5FF");
+
+  const columns = [
+    {
+      header: "Огноо",
+      render: (t: BankTransaction) => formatDateTime(t.timestamp),
+    },
+    {
+      header: "Төрөл",
+      render: (t: BankTransaction) => (
+        <span style={{
+          color: t.type === "credit"
+            ? "var(--accent-green)"
+            : "var(--accent-red)",
+        }}>
+          {t.type}
+        </span>
+      ),
+    },
+    {
+      header: "Дүн",
+      align: "right" as const,
+      render: (t: BankTransaction) => formatMoney(t.amount),
+    },
+    {
+      header: "Категори",
+      render: (t: BankTransaction) => t.category ?? "—",
+    },
+    {
+      header: "Харьцагч",
+      render: (t: BankTransaction) =>
+        t.counterpartyName ?? t.counterpartyAccount ?? "—",
+    },
+    {
+      header: "Баланс",
+      align: "right" as const,
+      render: (t: BankTransaction) => formatMoney(t.runningBalance),
+    },
+    {
+      header: "Суваг",
+      render: (t: BankTransaction) => t.channel,
+    },
+    {
+      header: "Төлөв",
+      render: (t: BankTransaction) => (
+        <Badge text={t.flagStatus} kind={sevClass(t.flagStatus)} />
+      ),
+    },
+  ];
+
+  return (
+    <div className="page-container">
+      <PageHeader icon="💳" title="Гүйлгээний Анализ"
+        subtitle="САНХҮҮГИЙН УРСГАЛЫН АНАЛИЗ" />
+
+      <div className="metrics-grid">
+        <StatCard label="Нийт гүйлгээ" value={totalCount} />
+        <StatCard label="Орлогын гүйлгээ" value={formatMoney(totalCredits)}
+          color="green" />
+        <StatCard label="Зарлагын гүйлгээ" value={formatMoney(totalDebits)}
+          color="red" />
+      </div>
+
+      <Card title="Шүүлтүүр" style={{marginBottom: 16}}>
+        <div style={{display: "flex", gap: 12, flexWrap: "wrap"}}>
+          <select className="form-input" value={filterAccount}
+            onChange={(e) => setFilterAccount(e.target.value)}
+            style={{minWidth: 180}}>
+            <option value="All">Бүх данс</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={String(a.id)}>{a.maskedNumber}</option>
+            ))}
+          </select>
+          <select className="form-input" value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            style={{minWidth: 160}}>
+            <option value="">Бүх төрөл</option>
+            <option value="credit">Орлогын гүйлгээ</option>
+            <option value="debit">Зарлагын гүйлгээ</option>
+          </select>
+          <select className="form-input" value={filterFlag}
+            onChange={(e) => setFilterFlag(e.target.value)}
+            style={{minWidth: 160}}>
+            <option value="">Бүх туг</option>
+            <option value="FLAGGED">Тугтай</option>
+            <option value="SUSPICIOUS">Сэжигтэй</option>
+          </select>
+        </div>
+      </Card>
+
+      <div style={ROW}>
+        <Card title="Гүйлгээний дэлгэц (дүн vs хугацаа)">
+          <Plot
+            height={260}
+            data={[
+              {type: "scatter", mode: "markers", name: "Орлого",
+                x: credits.map((t) => t.timestamp.slice(0, 10)),
+                y: credits.map((t) => t.amount),
+                marker: {color: "#00E676", size: 6, opacity: 0.6}},
+              {type: "scatter", mode: "markers", name: "Зарлага",
+                x: debits.map((t) => t.timestamp.slice(0, 10)),
+                y: debits.map((t) => t.amount),
+                marker: {color: "#FF5252", size: 6, opacity: 0.6}},
+            ]}
+          />
+        </Card>
+        <Card title="Дүнгийн тархалт (Violin)">
+          <Plot
+            height={260}
+            data={[
+              {type: "violin", name: "Орлого", y: credits.map((t) => t.amount),
+                line: {color: "#00E676"}, box: {visible: true},
+                meanline: {visible: true}},
+              {type: "violin", name: "Зарлага", y: debits.map((t) => t.amount),
+                line: {color: "#FF5252"}, box: {visible: true},
+                meanline: {visible: true}},
+            ]}
+          />
+        </Card>
+      </div>
+
+      <div style={ROW}>
+        <Card title="Өдөр тутмын хэмжээ & гүйцэтгэлийн баланс">
+          <Plot
+            height={280}
+            data={[
+              {type: "bar", name: "Орлого", x: dayKeys, y: dCred,
+                marker: {color: "#00E676"}},
+              {type: "bar", name: "Зарлага", x: dayKeys, y: dDeb,
+                marker: {color: "#FF5252"}},
+              {type: "scatter", mode: "lines", name: "Баланс", x: dayKeys,
+                y: runningBal, yaxis: "y2", line: {color: "#00E5FF", width: 2}},
+            ]}
+            layout={{barmode: "group",
+              yaxis2: {overlaying: "y", side: "right", gridcolor: "#1A1A3E"}}}
+          />
+        </Card>
+        <Card title="Санхүүгийн урсгал (дээд ангилал)">
+          <Plot
+            height={280}
+            data={[{
+              type: "waterfall", orientation: "v",
+              x: wfLabels, y: wfValues, measure: wfMeasure,
+              connector: {line: {color: "#3a4a6a"}},
+            }]}
+            layout={{margin: {l: 50, r: 16, t: 16, b: 120},
+              xaxis: {tickangle: -30}}}
+          />
+        </Card>
+      </div>
+
+      <div style={ROW}>
+        <Card title="Ангилал & төрлийн дэлгэрэнгүй (Sunburst)">
+          <Plot
+            height={320}
+            data={[{
+              type: "sunburst", labels: sbLabels, parents: sbParents,
+              values: sbValues, marker: {colors: sbColors},
+              branchvalues: "total",
+            }]}
+          />
+        </Card>
+        <Card title="Цаг тутмын гүйлгээний тархалт">
+          <Plot
+            height={320}
+            data={[{
+              type: "bar", x: hourLabels, y: hourCounts,
+              marker: {color: hourColors},
+            }]}
+          />
+        </Card>
+      </div>
+
+      <Card title={`Гүйлгээний жагсаалт (${tableRows.length}) — мөр дээр дарж нягтлах`}
+        noPadding>
+        <DataTable<BankTransaction>
+          columns={columns}
+          rows={tableRows}
+          rowKey={(t) => t.id}
+          empty="Гүйлгээ алга"
+          onRowClick={openDrill}
+        />
+      </Card>
+
+      {drillOpen && (
+        <div
+          onClick={() => setDrillOpen(false)}
+          style={{position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+            zIndex: 1000, display: "flex", justifyContent: "flex-end"}}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{width: 460, maxWidth: "92vw", height: "100%",
+              background: "var(--bg-tertiary)", overflowY: "auto",
+              borderLeft: "1px solid var(--border-primary)", padding: 18}}
+          >
+            <div style={{display: "flex", justifyContent: "space-between",
+              alignItems: "center", marginBottom: 12}}>
+              <span className="card-title">Гүйлгээний нягтлал</span>
+              <button className="btn btn-sm" onClick={() => setDrillOpen(false)}>
+                ХААХ
+              </button>
+            </div>
+            {drillQ.loading || !drillQ.data ? (
+              <Loading />
+            ) : (() => {
+              const dd = drillQ.data.transactionDrillDown;
+              if (!dd.target) return <div>Олдсонгүй</div>;
+              const target = dd.target;
+              const tagged = exhibitByTxn.get(target.id);
+              return (
+                <>
+                  <div style={{fontSize: 12, marginBottom: 12}}>
+                    <div>{formatDateTime(target.timestamp)}</div>
+                    <div style={{fontSize: 20, fontWeight: 700,
+                      color: target.type === "credit"
+                        ? "var(--accent-green)" : "var(--risk-high)"}}>
+                      {formatMoney(target.amount)} ({target.type})
+                    </div>
+                    <div style={{color: "var(--text-secondary)"}}>
+                      {target.description ?? ""}
+                    </div>
+                    <div style={{color: "var(--text-muted)"}}>
+                      Харьцагч: {target.counterpartyName
+                        ?? target.counterpartyAccount ?? "—"}
+                    </div>
+                  </div>
+                  <div style={{marginBottom: 12}}>
+                    Дансны дүгнэлт:{" "}
+                    <Badge text={dd.ruleResult.finalAction}
+                      kind={sevClass(dd.ruleResult.finalRisk === "NORMAL"
+                        ? "INFO" : dd.ruleResult.finalRisk)} />{" "}
+                    оноо {(dd.ruleResult.finalScore * 100).toFixed(0)}%
+                  </div>
+                  <div style={{fontSize: 11, fontWeight: 700, margin: "8px 0",
+                    color: "var(--text-muted)"}}>
+                    ЗӨРЧЛҮҮД ({dd.ruleResult.violations.length})
+                  </div>
+                  {dd.ruleResult.violations.map((v, i) => (
+                    <div key={i} style={{fontSize: 11, marginBottom: 6}}>
+                      <Badge text={v.severity} kind={sevClass(v.severity)} />{" "}
+                      {v.ruleName}: {v.description}
+                    </div>
+                  ))}
+                  <div style={{fontSize: 11, fontWeight: 700, margin: "12px 0 6px",
+                    color: "var(--text-muted)"}}>
+                    ±10 МИНУТЫН ХӨРШ ({dd.relatedWindow.length})
+                  </div>
+                  {dd.relatedWindow.map((r) => (
+                    <div key={r.id} style={{fontSize: 11,
+                      color: "var(--text-secondary)"}}>
+                      {formatDateTime(r.timestamp)} · {r.type} ·{" "}
+                      {formatMoney(r.amount)}
+                    </div>
+                  ))}
+                  <div style={{marginTop: 16}}>
+                    {!activeCase ? (
+                      <div style={{fontSize: 11, color: "var(--text-muted)"}}>
+                        Идэвхтэй кейс сонгох шаардлагатай.
+                      </div>
+                    ) : tagged != null ? (
+                      <button className="btn" disabled style={{width: "100%"}}>
+                        Үүсгэсэн (Exhibit #{tagged})
+                      </button>
+                    ) : (
+                      <button className="btn btn-primary" style={{width: "100%"}}
+                        onClick={() => onTag(target)}>
+                        НОТЛОХ ТУГ ТАВИХ
+                      </button>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

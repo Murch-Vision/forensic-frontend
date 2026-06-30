@@ -1,0 +1,47 @@
+{
+  "name": "forensic-analyst-frontend",
+  "version": "3.2.0-rc4",
+  "description": "Forensic intelligence analysis platform — React/TS/GraphQL frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "desktop:prepare": "node scripts/prepare-sidecar.mjs",
+    "desktop": "pnpm desktop:prepare && tauri dev",
+    "build:desktop": "pnpm desktop:prepare && tauri build",
+    "build:mac": "pnpm desktop:prepare && tauri build --bundles app,dmg",
+    "build:windows": "pnpm desktop:prepare && tauri build --bundles nsis,msi",
+    "build:linux": "pnpm desktop:prepare && tauri build --bundles deb,appimage"
+  },
+  "dependencies": {
+    "@apollo/client": "^3.12.6",
+    "graphql": "^16.10.0",
+    "leaflet": "^1.9.4",
+    "plotly.js-dist-min": "^3.6.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-leaflet": "^4.2.1",
+    "react-plotly.js": "^4.0.0",
+    "react-router-dom": "^6.28.1"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^26.0.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/react-plotly.js": "^2.6.4",
+    "@tauri-apps/cli": "^2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

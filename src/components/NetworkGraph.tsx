@@ -1,0 +1,583 @@
+/* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+ * File Name   : NetworkGraph.tsx
+ * Created at  : 2026-06-24
+ * Updated at  : 2026-06-30
+ * Author      : jeefo
+ * Purpose     :
+ * Description :
+.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
+import {useEffect, useRef} from "react";
+import type {
+  NetworkLink,
+  NetworkNode,
+  NetworkNodeType,
+} from "../lib/networkGraph";
+
+// Self-contained <canvas> force-directed graph — no charting dependency. A
+// small Verlet-ish simulation (charge repulsion + link springs + per-cluster
+// gravity) runs in a requestAnimationFrame loop and the whole scene is painted
+// to a single canvas, so hundreds of nodes pan/zoom smoothly (SVG choked at
+// this size — every transform reflowed a thousand DOM elements). Nodes are
+// pulled toward their cluster anchor so cells settle into separated blobs.
+// Nodes are draggable, the canvas pans, and the wheel zooms about the cursor.
+
+interface TypeStyle {
+  ring : string;
+  icon : string;
+  r    : number;
+}
+
+const TYPE_STYLE: Record<NetworkNodeType, TypeStyle> = {
+  COMMAND  : {ring: "#FF1744", icon: "⚔", r: 26},
+  GROUP    : {ring: "#FF6D00", icon: "👥", r: 22},
+  PERSON   : {ring: "#00C853", icon: "👤", r: 16},
+  LOCATION : {ring: "#00B0FF", icon: "🏛", r: 18},
+  EXTERNAL : {ring: "#2979FF", icon: "🌐", r: 16},
+};
+
+const TYPE_LABEL: Record<NetworkNodeType, string> = {
+  COMMAND  : "Үндсэн байгууллага",
+  GROUP    : "Байгууллага",
+  PERSON   : "Хувь хүн",
+  LOCATION : "Байршил / банк",
+  EXTERNAL : "Гадаад этгээд",
+};
+
+interface SimNode extends NetworkNode {
+  x  : number;
+  y  : number;
+  vx : number;
+  vy : number;
+  // Cluster anchor this node gravitates toward.
+  ax : number;
+  ay : number;
+  // Pinned position while dragging (null = free).
+  fx : number | null;
+  fy : number | null;
+}
+
+interface SimLink {
+  s        : SimNode;
+  t        : SimNode;
+  strength : number;
+}
+
+interface View {
+  k  : number;
+  tx : number;
+  ty : number;
+}
+
+const WIDTH = 1280;
+const HEIGHT = 720;
+const RENDER_HEIGHT = 640;
+const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+const LABEL_FONT = "bold 10px -apple-system, system-ui, sans-serif";
+
+function radiusOf(n: SimNode): number {
+  return TYPE_STYLE[n.type].r * n.weight;
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
+// One simulation step. Mutates the node array in place and returns the next
+// alpha (cooling factor). Forces scale with alpha so the layout settles.
+function tick(nodes: SimNode[], links: SimLink[], alpha: number): number {
+  const cluster = 0.055 * alpha;
+
+  for (let i = 0; i < nodes.length; i++) {
+    const a = nodes[i];
+    // Pull toward this node's cluster anchor instead of the canvas center —
+    // this is what makes the cells separate into visible blobs.
+    a.vx += (a.ax - a.x) * cluster;
+    a.vy += (a.ay - a.y) * cluster;
+
+    for (let j = i + 1; j < nodes.length; j++) {
+      const b = nodes[j];
+      let dx = a.x - b.x;
+      let dy = a.y - b.y;
+      let d2 = dx * dx + dy * dy;
+      if (d2 < 1) d2 = 1;
+      // Same-cell nodes repel gently; cross-cell nodes repel harder so the
+      // clusters push each other apart.
+      const same = a.cluster === b.cluster;
+      const charge = (same ? 2600 : 6500) / d2 * alpha;
+      const min = radiusOf(a) + radiusOf(b) + 14;
+      const dist = Math.sqrt(d2);
+      const ux = dx / dist;
+      const uy = dy / dist;
+      // Hard collision push keeps node bodies from overlapping.
+      const overlap = dist < min ? (min - dist) * 0.5 * alpha : 0;
+      a.vx += ux * (charge + overlap);
+      a.vy += uy * (charge + overlap);
+      b.vx -= ux * (charge + overlap);
+      b.vy -= uy * (charge + overlap);
+    }
+  }
+
+  for (const l of links) {
+    const dx = l.t.x - l.s.x;
+    const dy = l.t.y - l.s.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const ideal = l.s.cluster === l.t.cluster ? 70 : 200;
+    const k = 0.05 * alpha * (0.4 + l.strength * 0.15);
+    const f = (dist - ideal) * k;
+    const ux = dx / dist;
+    const uy = dy / dist;
+    l.s.vx += ux * f;
+    l.s.vy += uy * f;
+    l.t.vx -= ux * f;
+    l.t.vy -= uy * f;
+  }
+
+  for (const n of nodes) {
+    if (n.fx !== null && n.fy !== null) {
+      n.x = n.fx;
+      n.y = n.fy;
+      n.vx = 0;
+      n.vy = 0;
+      continue;
+    }
+    n.vx = clamp(n.vx * 0.84, -45, 45);
+    n.vy = clamp(n.vy * 0.84, -45, 45);
+    n.x += n.vx;
+    n.y += n.vy;
+  }
+
+  return alpha * 0.99;
+}
+
+export default function NetworkGraph(props: {
+  nodes : NetworkNode[];
+  links : NetworkLink[];
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const nodesRef = useRef<SimNode[]>([]);
+  const linksRef = useRef<SimLink[]>([]);
+  const alphaRef = useRef(1);
+  const rafRef = useRef(0);
+  const runningRef = useRef(false);
+  const dragRef = useRef<SimNode | null>(null);
+  const clusterDragRef = useRef<
+    {members: SimNode[]; lastX: number; lastY: number} | null>(null);
+  const panRef = useRef<{x: number; y: number} | null>(null);
+  const hoverRef = useRef<string | null>(null);
+  const viewRef = useRef<View>({k: 1, tx: 0, ty: 0});
+  // Graph→screen mapping captured at draw time, reused for hit testing.
+  const fitRef = useRef({fit: 1, offX: 0, offY: 0});
+
+  // Paint the whole scene to the canvas. Cheap enough to run every frame.
+  function draw() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = canvas.clientWidth;
+    const cssH = canvas.clientHeight;
+    if (canvas.width !== Math.round(cssW * dpr)
+      || canvas.height !== Math.round(cssH * dpr)) {
+      canvas.width = Math.round(cssW * dpr);
+      canvas.height = Math.round(cssH * dpr);
+    }
+
+    const fit = Math.min(cssW / WIDTH, cssH / HEIGHT);
+    const offX = (cssW - WIDTH * fit) / 2;
+    const offY = (cssH - HEIGHT * fit) / 2;
+    fitRef.current = {fit, offX, offY};
+
+    const v = viewRef.current;
+    const scale = fit * v.k;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.translate(v.tx + offX, v.ty + offY);
+    ctx.scale(scale, scale);
+
+    const nodes = nodesRef.current;
+    const links = linksRef.current;
+    const hover = hoverRef.current;
+    const neighbors = new Set<string>();
+    if (hover) {
+      for (const l of links) {
+        if (l.s.id === hover) neighbors.add(l.t.id);
+        if (l.t.id === hover) neighbors.add(l.s.id);
+      }
+    }
+
+    // Links.
+    for (const l of links) {
+      const active = hover && (l.s.id === hover || l.t.id === hover);
+      ctx.beginPath();
+      ctx.moveTo(l.s.x, l.s.y);
+      ctx.lineTo(l.t.x, l.t.y);
+      ctx.strokeStyle = active ? "#5ec8ff" : "#3a4a6a";
+      ctx.globalAlpha = hover ? (active ? 0.9 : 0.06) : 0.32;
+      ctx.lineWidth = active ? l.strength * 0.8 + 1 : l.strength * 0.5;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // Nodes.
+    const showAll = v.k >= 1.3;
+    for (const n of nodes) {
+      const st = TYPE_STYLE[n.type];
+      const r = radiusOf(n);
+      const dim = hover && hover !== n.id && !neighbors.has(n.id);
+      const baseAlpha = dim ? 0.2 : 1;
+
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      ctx.globalAlpha = baseAlpha;
+      ctx.fillStyle = "#0b0e1a";
+      ctx.fill();
+      ctx.globalAlpha = baseAlpha * 0.12;
+      ctx.fillStyle = st.ring;
+      ctx.fill();
+      ctx.globalAlpha = baseAlpha;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = st.ring;
+      ctx.stroke();
+
+      ctx.font = `${r}px ${EMOJI_FONT}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(st.icon, n.x, n.y);
+
+      const showLabel = n.weight >= 1 || showAll
+        || hover === n.id || neighbors.has(n.id);
+      if (showLabel) {
+        ctx.font = LABEL_FONT;
+        ctx.textBaseline = "top";
+        ctx.fillStyle = "#c8cce0";
+        ctx.fillText(n.label, n.x, n.y + r + 3);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Single rAF loop: ticks the sim while it's still cooling, always repaints,
+  // and keeps going while dragging or panning. Idle when there's nothing to do.
+  function ensureRunning() {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    const frame = () => {
+      let cont = false;
+      if (alphaRef.current > 0.01) {
+        alphaRef.current = tick(nodesRef.current, linksRef.current,
+          alphaRef.current);
+        cont = true;
+      }
+      draw();
+      if (dragRef.current || clusterDragRef.current || panRef.current) {
+        cont = true;
+      }
+      if (cont) {
+        rafRef.current = requestAnimationFrame(frame);
+      } else {
+        runningRef.current = false;
+      }
+    };
+    rafRef.current = requestAnimationFrame(frame);
+  }
+
+  function reheat() {
+    if (alphaRef.current < 0.3) alphaRef.current = 0.3;
+    ensureRunning();
+  }
+
+  // Build the simulation graph once per dataset.
+  useEffect(() => {
+    // Assign every cluster an anchor — the COMMAND cell sits in the middle,
+    // the operational cells ring it on an ellipse.
+    const clusters = [...new Set(props.nodes.map((n) => n.cluster))];
+    const coreKey = props.nodes.find((n) => n.type === "COMMAND")?.cluster
+      ?? clusters[0];
+    const ring = clusters.filter((c) => c !== coreKey);
+    const anchors = new Map<string, {x: number; y: number}>();
+    anchors.set(coreKey, {x: WIDTH / 2, y: HEIGHT / 2});
+    ring.forEach((c, i) => {
+      const angle = (i / ring.length) * Math.PI * 2;
+      anchors.set(c, {
+        x: WIDTH / 2 + Math.cos(angle) * 470,
+        y: HEIGHT / 2 + Math.sin(angle) * 250,
+      });
+    });
+
+    const map = new Map<string, SimNode>();
+    const sim: SimNode[] = props.nodes.map((node) => {
+      const anchor = anchors.get(node.cluster)!;
+      const s: SimNode = {
+        ...node,
+        x  : anchor.x + Math.cos(node.id.length * 1.7) * 40,
+        y  : anchor.y + Math.sin(node.id.length * 2.3) * 40,
+        vx : 0,
+        vy : 0,
+        ax : anchor.x,
+        ay : anchor.y,
+        fx : null,
+        fy : null,
+      };
+      map.set(node.id, s);
+      return s;
+    });
+    const lk: SimLink[] = props.links
+      .map((l) => ({s: map.get(l.source)!, t: map.get(l.target)!,
+        strength: l.strength}))
+      .filter((l) => l.s && l.t);
+
+    nodesRef.current = sim;
+    linksRef.current = lk;
+    alphaRef.current = 1;
+    ensureRunning();
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      // Reset so a remount (e.g. StrictMode's double-invoke) can restart the
+      // loop — otherwise ensureRunning sees a stale `true` and bails.
+      runningRef.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.nodes, props.links]);
+
+  // Repaint on container resize so the layout keeps filling the card.
+  useEffect(() => {
+    const onResize = () => ensureRunning();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Screen → graph coordinates given the current fit + pan/zoom transform.
+  function toGraph(clientX: number, clientY: number) {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const sx = clientX - rect.left;
+    const sy = clientY - rect.top;
+    const {fit, offX, offY} = fitRef.current;
+    const v = viewRef.current;
+    const scale = fit * v.k;
+    return {
+      x: (sx - v.tx - offX) / scale,
+      y: (sy - v.ty - offY) / scale,
+    };
+  }
+
+  function nodeAt(clientX: number, clientY: number): SimNode | null {
+    const p = toGraph(clientX, clientY);
+    const {fit} = fitRef.current;
+    // ~6 screen px of slop so hovering/clicking near a node still hits it.
+    const slop = 6 / (fit * viewRef.current.k);
+    let found: SimNode | null = null;
+    for (const n of nodesRef.current) {
+      const dx = p.x - n.x;
+      const dy = p.y - n.y;
+      const r = radiusOf(n) + slop;
+      // Last match wins — it's the node drawn on top.
+      if (dx * dx + dy * dy <= r * r) found = n;
+    }
+    return found;
+  }
+
+  // Zoom about a screen point (CSS px relative to the canvas). The fit factor
+  // cancels out, so this is the plain zoom-about-cursor formula.
+  function zoomAt(sx: number, sy: number, factor: number) {
+    const v = viewRef.current;
+    const k = clamp(v.k * factor, 0.3, 5);
+    const tx = sx - ((sx - v.tx) / v.k) * k;
+    const ty = sy - ((sy - v.ty) / v.k) * k;
+    viewRef.current = {k, tx, ty};
+    ensureRunning();
+  }
+
+  // Native, non-passive wheel listener — React's onWheel is passive, so
+  // preventDefault is ignored there and the page scrolls behind the graph.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      zoomAt(e.clientX - rect.left, e.clientY - rect.top,
+        e.deltaY < 0 ? 1.12 : 1 / 1.12);
+    };
+    canvas.addEventListener("wheel", onWheel, {passive: false});
+    return () => canvas.removeEventListener("wheel", onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function setCursor(c: string) {
+    const canvas = canvasRef.current;
+    if (canvas) canvas.style.cursor = c;
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    const node = nodeAt(e.clientX, e.clientY);
+    if (node) {
+      const p = toGraph(e.clientX, e.clientY);
+      // Grabbing a hub (org / command node) drags the whole cluster; grabbing
+      // a person drags just that node.
+      if (node.type === "COMMAND" || node.type === "GROUP") {
+        const members = nodesRef.current.filter(
+          (m) => m.cluster === node.cluster);
+        members.forEach((m) => {
+          m.fx = m.x;
+          m.fy = m.y;
+        });
+        clusterDragRef.current = {members, lastX: p.x, lastY: p.y};
+        setCursor("grabbing");
+        reheat();
+        return;
+      }
+      dragRef.current = node;
+      node.fx = p.x;
+      node.fy = p.y;
+      setCursor("grabbing");
+      reheat();
+      return;
+    }
+    panRef.current = {x: e.clientX, y: e.clientY};
+    setCursor("grabbing");
+    ensureRunning();
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (clusterDragRef.current) {
+      const cd = clusterDragRef.current;
+      const p = toGraph(e.clientX, e.clientY);
+      const dx = p.x - cd.lastX;
+      const dy = p.y - cd.lastY;
+      cd.lastX = p.x;
+      cd.lastY = p.y;
+      // Translate the whole cell rigidly — positions and anchors — so it
+      // stays put after release.
+      for (const m of cd.members) {
+        m.x += dx;
+        m.y += dy;
+        m.ax += dx;
+        m.ay += dy;
+        m.fx = m.x;
+        m.fy = m.y;
+      }
+      return;
+    }
+    if (dragRef.current) {
+      const p = toGraph(e.clientX, e.clientY);
+      dragRef.current.fx = p.x;
+      dragRef.current.fy = p.y;
+      return;
+    }
+    if (panRef.current) {
+      const dx = e.clientX - panRef.current.x;
+      const dy = e.clientY - panRef.current.y;
+      panRef.current = {x: e.clientX, y: e.clientY};
+      const v = viewRef.current;
+      viewRef.current = {...v, tx: v.tx + dx, ty: v.ty + dy};
+      return;
+    }
+    const node = nodeAt(e.clientX, e.clientY);
+    const id = node ? node.id : null;
+    const isHub = node
+      && (node.type === "COMMAND" || node.type === "GROUP");
+    setCursor(node ? (isHub ? "move" : "pointer") : "grab");
+    if (id !== hoverRef.current) {
+      hoverRef.current = id;
+      ensureRunning();
+    }
+  }
+
+  function onPointerUp() {
+    if (clusterDragRef.current) {
+      for (const m of clusterDragRef.current.members) {
+        m.fx = null;
+        m.fy = null;
+      }
+      clusterDragRef.current = null;
+    }
+    if (dragRef.current) {
+      dragRef.current.fx = null;
+      dragRef.current.fy = null;
+      dragRef.current = null;
+    }
+    panRef.current = null;
+    setCursor("grab");
+  }
+
+  function onPointerLeave() {
+    if (hoverRef.current) {
+      hoverRef.current = null;
+      ensureRunning();
+    }
+  }
+
+  function onReset() {
+    viewRef.current = {k: 1, tx: 0, ty: 0};
+    nodesRef.current.forEach((n) => {
+      n.fx = null;
+      n.fy = null;
+    });
+    alphaRef.current = 1;
+    ensureRunning();
+  }
+
+  function zoomButton(factor: number) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, factor);
+  }
+
+  const btnStyle: React.CSSProperties = {
+    width: 30, height: 30, fontSize: 16, lineHeight: "1",
+    display: "flex", alignItems: "center", justifyContent: "center",
+  };
+
+  return (
+    <div style={{position: "relative"}}>
+      <div style={{
+        position: "absolute", top: 10, right: 10, zIndex: 2,
+        display: "flex", gap: 6,
+      }}>
+        <button className="btn" style={btnStyle}
+          onClick={() => zoomButton(1.2)}>+</button>
+        <button className="btn" style={btnStyle}
+          onClick={() => zoomButton(1 / 1.2)}>−</button>
+        <button className="btn" onClick={onReset}>↺ Дахин эхлүүлэх</button>
+      </div>
+      <div style={{
+        position: "absolute", top: 10, left: 10, zIndex: 2,
+        display: "flex", flexDirection: "column", gap: 4,
+        background: "rgba(10,12,24,0.65)", padding: "8px 10px",
+        borderRadius: 8, fontSize: 11,
+      }}>
+        {(Object.keys(TYPE_STYLE) as NetworkNodeType[]).map((t) => (
+          <div key={t} style={{display: "flex", alignItems: "center", gap: 6}}>
+            <span style={{
+              width: 12, height: 12, borderRadius: "50%",
+              border: `2px solid ${TYPE_STYLE[t].ring}`,
+              background: "#0b0e1a", display: "inline-block",
+            }} />
+            <span style={{color: "#9aa0b5"}}>{TYPE_LABEL[t]}</span>
+          </div>
+        ))}
+      </div>
+
+      <canvas
+        ref={canvasRef}
+        style={{
+          width: "100%", height: RENDER_HEIGHT, cursor: "grab",
+          borderRadius: 8, touchAction: "none", display: "block",
+          background:
+            "radial-gradient(circle at 50% 40%, #131726 0%, #0a0c16 100%)",
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerLeave={onPointerLeave}
+      />
+    </div>
+  );
+}
