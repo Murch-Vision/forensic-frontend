@@ -135,12 +135,24 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   header); NetworkGraph zoomAt() must include fitRef letterbox offX/offY —
   screen = graph·(fit·k) + t + off, the offset does NOT cancel between zooms.
 
+- 2026-07-02: CASE SCOPING made real — api evidence list queries (suspects/
+  bankAccounts/transactions/callRecords/suspectLinks/correlations) now return
+  ONLY the active case's records (membership = SUSPECT evidence entries; no
+  case = all data). AppHeader case switch calls client.resetStore() so every
+  open page refetches. New `CaseScopeBar` (components/CaseScopeBar.tsx,
+  `.scope-bar*` css) under PageHeader on Transactions/Calls/Timeline/
+  LinkChart: cyan strip = case id+name+counts, amber "Бүх кейс" variant when
+  no case selected (hint + link to /cases). Dashboard stats remain global.
+
 ## Ignore per user (do not touch/improve)
 Settings page, Залилангийн урсгал (fraud) page.
 
 ## Backlog (user wishes, in priority order)
-1. Make active-case defaulting obvious on data pages (txns/calls) — user
-   confused how the default case is chosen.
-2. Redesign Хүмүүсийн сан page + add-person modal ("design crap / dog shit").
-3. Deeper drilldown breadcrumbs (case → person on detail views) — optional
+1. Redesign Хүмүүсийн сан page + add-person modal ("design crap / dog shit").
+2. Deeper drilldown breadcrumbs (case → person on detail views) — optional
    refinement of the hierarchy wish; core case → page scope is shipped.
+
+## Parked (NOT in this run's backlog)
+- Import doesn't tag suspects into the active case → freshly imported data
+  stays hidden under a scoped case until the person is tagged. Candidate:
+  auto-tag import-touched suspects into the active case (api importService).

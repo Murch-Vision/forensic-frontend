@@ -26,6 +26,7 @@ import {
   StatCard,
 } from "../components/kit";
 import {Select} from "../components/inputs";
+import CaseScopeBar from "../components/CaseScopeBar";
 import Plot from "../components/Plot";
 import {formatDateTime, formatDuration, riskClass} from "../lib/format";
 import type {CallRecord} from "../types";
@@ -202,6 +203,8 @@ export default function CallRecordsPage() {
     <div className="page-container">
       <PageHeader icon="📞" title="Дуудлагын дэлгэрэнгүй бүртгэл"
         subtitle="CDR АНАЛИЗ БА ХОЛБООНЫ ЗАГВАР" />
+      <CaseScopeBar summary={`${allCalls.length} дуудлага · ${
+        suspects.length} сэжигтэн`} />
 
       <Card title="Сэжигтнээр шүүх" style={{marginBottom: 16}}>
         <div style={{display: "flex", gap: 12, alignItems: "center",

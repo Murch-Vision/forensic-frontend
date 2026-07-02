@@ -24,6 +24,7 @@ import {
   SankeyChart,
 } from "../components/kit";
 import NetworkGraph from "../components/NetworkGraph";
+import CaseScopeBar from "../components/CaseScopeBar";
 import {buildEvidenceNetwork} from "../lib/networkGraph";
 import type {NetworkNode} from "../lib/networkGraph";
 import type {SuspectLinkType} from "../types";
@@ -144,6 +145,8 @@ export default function LinkChartPage() {
     <div className="page-container">
       <PageHeader icon="🕸" title="Холбоосын зураглал"
         subtitle="СҮЛЖЭЭНИЙ ШИНЖИЛГЭЭ" actions={actions} />
+      <CaseScopeBar summary={`${suspects.length} сэжигтэн · ${
+        network.nodes.length} зангилаа`} />
 
       <Card
         title={`Нотлох баримтын сүлжээ — ${network.nodes.length} зангилаа, `

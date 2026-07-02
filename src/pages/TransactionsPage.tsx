@@ -25,6 +25,7 @@ import {
   StatCard,
 } from "../components/kit";
 import {DateInput, Select} from "../components/inputs";
+import CaseScopeBar from "../components/CaseScopeBar";
 import Plot from "../components/Plot";
 import {formatDateTime, formatMoney, sevClass} from "../lib/format";
 import type {BankTransaction} from "../types";
@@ -380,6 +381,8 @@ export default function TransactionsPage() {
     <div className="page-container">
       <PageHeader icon="💳" title="Гүйлгээний Анализ"
         subtitle="САНХҮҮГИЙН УРСГАЛЫН АНАЛИЗ" />
+      <CaseScopeBar summary={`${allTxns.length} гүйлгээ · ${
+        accounts.length} данс`} />
 
       <div className="metrics-grid">
         <StatCard label="Нийт гүйлгээ" value={totalCount} />

@@ -20,6 +20,7 @@ import {
 } from "../components/kit";
 import type {Column} from "../components/kit";
 import {Select} from "../components/inputs";
+import CaseScopeBar from "../components/CaseScopeBar";
 import {
   formatDateTime,
   formatDuration,
@@ -161,6 +162,7 @@ export default function TimelinePage() {
     <div className="page-container">
       <PageHeader icon="🕒" title="Цагийн хугацааны анализ"
         subtitle="ЦАГИЙН ХОЛБОО БА ҮЙЛ ЯВДЛЫН ДАРААЛАЛ" />
+      <CaseScopeBar summary={`${visible.length} үйл явдал`} />
 
       <div className="metrics-grid">
         <StatCard label="Үйл явдал" value={visible.length} />

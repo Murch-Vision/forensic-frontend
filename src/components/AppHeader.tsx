@@ -7,7 +7,7 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {Link, useLocation} from "react-router-dom";
-import {useMutation, useQuery} from "@apollo/client";
+import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {ACTIVE_CASE_QUERY, SET_ACTIVE_CASE} from "../graphql/queries";
 import {NAV_META, STATUS_BADGE, STATUS_LABELS} from "../nav";
 import {Select} from "./inputs";
@@ -27,6 +27,7 @@ interface CaseRef {
 
 export default function AppHeader() {
   const location = useLocation();
+  const client = useApolloClient();
   const caseQ = useQuery<{activeCase: CaseRef | null; caseFiles: CaseRef[]}>(
     ACTIVE_CASE_QUERY
   );
@@ -38,7 +39,9 @@ export default function AppHeader() {
 
   async function onSelectCase(id: number | null) {
     await setActiveCase({variables: {caseFileId: id}});
-    await caseQ.refetch();
+    // Every evidence query is case-scoped server-side — refetch them all so
+    // whatever page is open follows the new scope immediately.
+    await client.resetStore();
   }
 
   const status = activeCase?.status ?? "";
