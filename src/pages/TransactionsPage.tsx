@@ -71,6 +71,10 @@ export default function TransactionsPage() {
   const [filterAccount, setFilterAccount] = useState("All");
   const [filterType, setFilterType] = useState("");
   const [filterFlag, setFilterFlag] = useState("");
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo] = useState("");
+  const [filterDesc, setFilterDesc] = useState("");
+  const [topN, setTopN] = useState(10);
   const [drill, drillQ] = useLazyQuery<{transactionDrillDown: DrillDown}>(
     TRANSACTION_DRILLDOWN, {fetchPolicy: "no-cache"});
   const [drillOpen, setDrillOpen] = useState(false);
@@ -109,14 +113,79 @@ export default function TransactionsPage() {
 
   const accounts = data.bankAccounts;
   const allTxns  = data.transactions;
-  // Charts use the account-filtered set; the table narrows further by
-  // type/flag, matching the C# where charts track the account filter only.
-  const filtered = filterAccount === "All"
-    ? allTxns
-    : allTxns.filter((t) => t.bankAccountId === Number(filterAccount));
+  // Charts, stats and duplicate analysis track the account/date/description
+  // filters; the table narrows further by type/flag.
+  const descNeedle = filterDesc.trim().toLowerCase();
+  const filtered = allTxns.filter((t) =>
+    (filterAccount === "All" || t.bankAccountId === Number(filterAccount))
+    && (!filterFrom || t.timestamp.slice(0, 10) >= filterFrom)
+    && (!filterTo || t.timestamp.slice(0, 10) <= filterTo)
+    && (!descNeedle
+      || (t.description ?? "").toLowerCase().includes(descNeedle)));
   const tableRows = filtered.filter((t) =>
     (!filterType || t.type === filterType)
     && (!filterFlag || t.flagStatus === filterFlag));
+  const hasFilter = filterAccount !== "All" || filterType !== ""
+    || filterFlag !== "" || filterFrom !== "" || filterTo !== ""
+    || filterDesc !== "";
+
+  function clearFilters() {
+    setFilterAccount("All");
+    setFilterType("");
+    setFilterFlag("");
+    setFilterFrom("");
+    setFilterTo("");
+    setFilterDesc("");
+  }
+
+  // Duplicated гүйлгээний утга: identical descriptions used 2+ times.
+  const descAgg = new Map<string, {count: number; total: number}>();
+  for (const t of filtered) {
+    const d = t.description?.trim();
+    if (!d) continue;
+    const a = descAgg.get(d) ?? {count: 0, total: 0};
+    a.count++;
+    a.total += t.amount;
+    descAgg.set(d, a);
+  }
+  const dupDescs = [...descAgg.entries()]
+    .filter(([, a]) => a.count > 1)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, topN)
+    .map(([desc, a]) => ({desc, ...a}));
+
+  // Duplicated transactions between account pairs: within one
+  // данс ↔ харьцсан данс pair, the same amount moving 2+ times.
+  const acctById = new Map(accounts.map((a) => [a.id, a.maskedNumber]));
+  interface PairAgg {
+    account: string; counterparty: string;
+    txns: number; dupes: number; total: number;
+    amounts: Map<number, number>;
+  }
+  const pairAgg = new Map<string, PairAgg>();
+  for (const t of filtered) {
+    const cp = t.counterpartyAccount?.trim();
+    if (!cp) continue;
+    const key = `${t.bankAccountId}→${cp}`;
+    const a = pairAgg.get(key) ?? {
+      account: acctById.get(t.bankAccountId) ?? String(t.bankAccountId),
+      counterparty: cp, txns: 0, dupes: 0, total: 0,
+      amounts: new Map<number, number>(),
+    };
+    a.txns++;
+    a.total += t.amount;
+    a.amounts.set(t.amount, (a.amounts.get(t.amount) ?? 0) + 1);
+    pairAgg.set(key, a);
+  }
+  const dupPairs = [...pairAgg.values()]
+    .map((a) => {
+      let dupes = 0;
+      for (const n of a.amounts.values()) if (n > 1) dupes += n;
+      return {...a, dupes};
+    })
+    .filter((a) => a.dupes > 0)
+    .sort((a, b) => b.dupes - a.dupes)
+    .slice(0, topN);
 
   const totalCount   = filtered.length;
   const credits = filtered.filter((t) => t.type === "credit");
@@ -267,32 +336,116 @@ export default function TransactionsPage() {
           color="red" />
       </div>
 
-      <Card title="Шүүлтүүр" style={{marginBottom: 16}}>
-        <div style={{display: "flex", gap: 12, flexWrap: "wrap"}}>
-          <select className="form-input" value={filterAccount}
-            onChange={(e) => setFilterAccount(e.target.value)}
-            style={{minWidth: 180}}>
-            <option value="All">Бүх данс</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={String(a.id)}>{a.maskedNumber}</option>
-            ))}
-          </select>
-          <select className="form-input" value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            style={{minWidth: 160}}>
-            <option value="">Бүх төрөл</option>
-            <option value="credit">Орлогын гүйлгээ</option>
-            <option value="debit">Зарлагын гүйлгээ</option>
-          </select>
-          <select className="form-input" value={filterFlag}
-            onChange={(e) => setFilterFlag(e.target.value)}
-            style={{minWidth: 160}}>
-            <option value="">Бүх туг</option>
-            <option value="FLAGGED">Тугтай</option>
-            <option value="SUSPICIOUS">Сэжигтэй</option>
-          </select>
+      <Card title="Шүүлтүүр" style={{marginBottom: 16}}
+        actions={hasFilter ? (
+          <button className="btn btn-sm" onClick={clearFilters}>ЦЭВЭРЛЭХ</button>
+        ) : undefined}>
+        <div style={{display: "flex", gap: 12, flexWrap: "wrap",
+          alignItems: "flex-end"}}>
+          <div>
+            <label className="form-label">Данс</label>
+            <select className="form-input" value={filterAccount}
+              onChange={(e) => setFilterAccount(e.target.value)}
+              style={{minWidth: 180}}>
+              <option value="All">Бүх данс</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={String(a.id)}>{a.maskedNumber}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Төрөл</label>
+            <select className="form-input" value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              style={{minWidth: 160}}>
+              <option value="">Бүх төрөл</option>
+              <option value="credit">Орлогын гүйлгээ</option>
+              <option value="debit">Зарлагын гүйлгээ</option>
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Туг</label>
+            <select className="form-input" value={filterFlag}
+              onChange={(e) => setFilterFlag(e.target.value)}
+              style={{minWidth: 160}}>
+              <option value="">Бүх туг</option>
+              <option value="FLAGGED">Тугтай</option>
+              <option value="SUSPICIOUS">Сэжигтэй</option>
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Эхлэх огноо</label>
+            <input type="date" className="form-input" value={filterFrom}
+              onChange={(e) => setFilterFrom(e.target.value)}
+              style={{minWidth: 160}} />
+          </div>
+          <div>
+            <label className="form-label">Дуусах огноо</label>
+            <input type="date" className="form-input" value={filterTo}
+              onChange={(e) => setFilterTo(e.target.value)}
+              style={{minWidth: 160}} />
+          </div>
+          <div style={{flex: 1, minWidth: 220}}>
+            <label className="form-label">Гүйлгээний утга</label>
+            <input type="text" className="form-input" value={filterDesc}
+              onChange={(e) => setFilterDesc(e.target.value)}
+              placeholder="Утгаар хайх..."
+              style={{width: "100%"}} />
+          </div>
         </div>
       </Card>
+
+      <div style={ROW}>
+        <Card
+          title={`Давхардсан гүйлгээний утга (${dupDescs.length})`}
+          actions={
+            <select className="form-input" value={topN}
+              onChange={(e) => setTopN(Number(e.target.value))}
+              title="Топ N" style={{width: 110}}>
+              {[5, 10, 20, 50].map((n) => (
+                <option key={n} value={n}>Топ {n}</option>
+              ))}
+            </select>
+          }
+          noPadding
+        >
+          <DataTable<{desc: string; count: number; total: number}>
+            columns={[
+              {header: "Гүйлгээний утга", render: (r) => r.desc},
+              {header: "Давтамж", align: "right" as const,
+                render: (r) => <strong>{r.count}</strong>},
+              {header: "Нийт дүн", align: "right" as const,
+                render: (r) => formatMoney(r.total)},
+            ]}
+            rows={dupDescs}
+            rowKey={(r) => r.desc}
+            empty="Давхардсан утга алга"
+            onRowClick={(r) => setFilterDesc(r.desc)}
+          />
+        </Card>
+        <Card title={`Данс хоорондын давхардсан гүйлгээ (${dupPairs.length})`}
+          noPadding>
+          <DataTable<(typeof dupPairs)[number]>
+            columns={[
+              {header: "Данс", render: (r) => r.account},
+              {header: "Харьцсан данс", render: (r) => r.counterparty},
+              {header: "Нийт гүйлгээ", align: "right" as const,
+                render: (r) => r.txns},
+              {header: "Давхардсан", align: "right" as const,
+                render: (r) => (
+                  <strong style={{color: "var(--accent-amber)"}}>
+                    {r.dupes}
+                  </strong>
+                )},
+              {header: "Нийт дүн", align: "right" as const,
+                render: (r) => formatMoney(r.total)},
+            ]}
+            rows={dupPairs}
+            rowKey={(r) => `${r.account}→${r.counterparty}`}
+            empty="Давхардсан гүйлгээ алга"
+          />
+        </Card>
+      </div>
 
       <div style={ROW}>
         <Card title="Гүйлгээний дэлгэц (дүн vs хугацаа)">

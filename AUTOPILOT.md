@@ -1,2 +1,3 @@
 - 2026-07-02: Global case system — case switcher + status in new top AppHeader on every page; removed Map/Шинжилгээ/OSINT/Аудит/Мэдээллийн самбар pages (user wish).
 - 2026-07-02: Import page rework — drag&drop dropzone, removed textarea / account picker / message log (user wishes).
+- 2026-07-02: Transactions page — date-range + гүйлгээний утга filters, top-N duplicated descriptions, account-pair duplicate counts (user wishes).

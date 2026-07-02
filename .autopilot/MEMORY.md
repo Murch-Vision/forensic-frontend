@@ -50,12 +50,15 @@ Unknown paths redirect to /dashboard.
   auto-resolves/creates the subject's account: importService
   resolveSubjectAccount), message log removed (errors still shown).
 
+- 2026-07-02: TransactionsPage — filter bar (данс/төрөл/туг + date range +
+  гүйлгээний утга search, ЦЭВЭРЛЭХ reset; charts+stats follow all but
+  type/flag), duplicate analysis cards: top-N давхардсан гүйлгээний утга
+  (click row → sets desc filter) and данс↔харьцсан данс duplicated-amount
+  pairs. All client-side over TRANSACTIONS_QUERY.
+
 ## Backlog (user wishes, in priority order)
-1. Bank transaction page filters: date range, гүйлгээний утга filter,
-   top-N duplicated гүйлгээний утга analysis.
-2. Duplicated-transaction counts between accounts.
-3. Call→transaction correlation filter (transactions within N min after call).
-4. UI consistency sweep: uniform button sizes in every toolbar.
-5. Merge cases feature.
-6. Global people database (person appears across cases → full profile).
-7. Hierarchy for all pages (case → suspect → …).
+1. Call→transaction correlation filter (transactions within N min after call).
+2. UI consistency sweep: uniform button sizes in every toolbar.
+3. Merge cases feature.
+4. Global people database (person appears across cases → full profile).
+5. Hierarchy for all pages (case → suspect → …).
