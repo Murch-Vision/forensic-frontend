@@ -174,6 +174,15 @@ Settings page, Залилангийн урсгал (fraud) page.
   RULE: use it instead of native checkboxes in toolbars), event rows get
   TYPE_META colored inset rail + MN badges. Fraud page untouched per user.
 
+- 2026-07-03: Cases page clarity (user wish) — scope action renamed to match
+  the gate language: СОНГОХ btn / СОНГОГДСОН `.badge.accent` (was the
+  confusing ИДЭВХЖҮҮЛЭХ, which collided with the Идэвхтэй STATUS), actions
+  under a labeled Үйлдэл column with a per-row ЗАСАХ button → edit modal
+  (name/description/priority/investigator, api updateCaseFile). Мөрдөгч
+  column added, Хаагдсан column dropped (status implies it). NOTE: the
+  "Болд Батбаярын удирдсан санхүүгийн сүлжээ." text the user asked about is
+  CASE-0001's seeded demo description — now editable via ЗАСАХ.
+
 ## Backlog (user wishes, in priority order)
 (empty — all user wishes shipped; FIXED BACKLOG fully done 2026-07-02)
 

@@ -649,6 +649,7 @@ body {
 .badge.warning { background: rgba(255,171,0,0.15); color: var(--severity-warning); }
 .badge.alert { background: rgba(255,109,0,0.15); color: var(--severity-alert); }
 .badge.unknown { background: rgba(85,85,112,0.2); color: var(--text-muted); }
+.badge.accent { background: rgba(0,229,255,0.12); color: var(--accent-cyan); }
 
 /* Suspect Avatar */
 .avatar {

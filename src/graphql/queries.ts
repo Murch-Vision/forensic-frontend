@@ -450,6 +450,14 @@ export const CASE_FILES_QUERY = gql`
   }
 `;
 
+export const UPDATE_CASE_FILE = gql`
+  mutation UpdateCaseFile($caseFileId: Int!, $input: CaseFileUpdateInput!) {
+    updateCaseFile(caseFileId: $caseFileId, input: $input) {
+      id caseId caseName description status priority leadInvestigator
+    }
+  }
+`;
+
 export const ACTIVE_CASE_QUERY = gql`
   query ActiveCase {
     activeCase { id caseId caseName status priority }

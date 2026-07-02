@@ -15,6 +15,7 @@ import {
   MERGE_CASES,
   SET_ACTIVE_CASE,
   SET_CASE_STATUS,
+  UPDATE_CASE_FILE,
 } from "../graphql/queries";
 import {STATUS_BADGE, STATUS_LABELS} from "../nav";
 import {Card, Loading, MetricsGrid, PageHeader, StatCard} from "../components/kit";
@@ -62,11 +63,17 @@ export default function CasesPage() {
     {refetchQueries: refetchAll});
   const [createCaseFile] = useMutation(CREATE_CASE_FILE,
     {refetchQueries: refetchAll});
+  const [updateCaseFile] = useMutation(UPDATE_CASE_FILE,
+    {refetchQueries: refetchAll});
   const [mergeCases] = useMutation(MERGE_CASES, {refetchQueries: refetchAll});
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({caseId: "", caseName: ""});
   const [formError, setFormError] = useState("");
+  const [editCase, setEditCase] = useState<CaseRow | null>(null);
+  const [editForm, setEditForm] = useState({caseName: "", description: "",
+    priority: "MEDIUM", leadInvestigator: ""});
+  const [editError, setEditError] = useState("");
   const [showMerge, setShowMerge] = useState(false);
   const [mergeTarget, setMergeTarget] = useState<number | null>(null);
   const [mergeSources, setMergeSources] = useState<Set<number>>(new Set());
@@ -97,6 +104,37 @@ export default function CasesPage() {
     setShowForm(false);
     const id = res.data?.createCaseFile?.id;
     if (id) await setActiveCase({variables: {caseFileId: id}});
+  }
+
+  function openEdit(c: CaseRow) {
+    setEditCase(c);
+    setEditForm({
+      caseName: c.caseName,
+      description: c.description ?? "",
+      priority: c.priority,
+      leadInvestigator: c.leadInvestigator ?? "",
+    });
+    setEditError("");
+  }
+
+  async function submitEdit() {
+    if (!editCase) return;
+    const caseName = editForm.caseName.trim();
+    if (!caseName) {
+      setEditError("Кейсийн нэр хоосон байж болохгүй.");
+      return;
+    }
+    try {
+      await updateCaseFile({variables: {caseFileId: editCase.id, input: {
+        caseName,
+        description: editForm.description.trim() || null,
+        priority: editForm.priority,
+        leadInvestigator: editForm.leadInvestigator.trim() || null,
+      }}});
+      setEditCase(null);
+    } catch (err) {
+      setEditError("Хадгалахад алдаа гарлаа: " + String(err));
+    }
   }
 
   function openMerge() {
@@ -178,9 +216,9 @@ export default function CasesPage() {
                 <th>Нэр</th>
                 <th>Төлөв</th>
                 <th>Зэрэглэл</th>
+                <th>Мөрдөгч</th>
                 <th>Үүсгэсэн</th>
-                <th>Хаагдсан</th>
-                <th style={{width: 140}}></th>
+                <th style={{width: 220, textAlign: "right"}}>Үйлдэл</th>
               </tr>
             </thead>
             <tbody>
@@ -212,25 +250,34 @@ export default function CasesPage() {
                       {PRIORITY_LABELS[c.priority] ?? c.priority}
                     </span>
                   </td>
+                  <td style={{whiteSpace: "nowrap",
+                    color: c.leadInvestigator ? undefined
+                      : "var(--text-muted)"}}>
+                    {c.leadInvestigator ?? "—"}
+                  </td>
                   <td style={{whiteSpace: "nowrap"}}>
                     {formatDate(c.createdAt)}
                   </td>
-                  <td style={{whiteSpace: "nowrap"}}>
-                    {formatDate(c.closedAt)}
-                  </td>
-                  <td style={{textAlign: "right"}}>
+                  <td style={{textAlign: "right", whiteSpace: "nowrap"}}>
                     {c.id === activeId ? (
-                      <span className={`badge ${
-                        STATUS_BADGE[c.status] ?? "unknown"}`}>
-                        ИДЭВХТЭЙ КЕЙС
+                      <span className="badge accent"
+                        title="Одоо энэ кейс дотор ажиллаж байна">
+                        СОНГОГДСОН
                       </span>
                     ) : (
                       <button className="btn btn-sm"
+                        title="Энэ кейс дотор ажиллах — бүх өгөгдлийн хуудас энэ кейсийг харуулна"
                         onClick={() => setActiveCase({
                           variables: {caseFileId: c.id}})}>
-                        ИДЭВХЖҮҮЛЭХ
+                        СОНГОХ
                       </button>
                     )}
+                    <button className="btn btn-sm"
+                      style={{marginLeft: 8}}
+                      title="Кейсийн мэдээлэл засах"
+                      onClick={() => openEdit(c)}>
+                      ЗАСАХ
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -310,6 +357,66 @@ export default function CasesPage() {
                   {merging ? "НЭГТГЭЖ БАЙНА..." : `НЭГТГЭХ (${mergeSources.size})`}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editCase && (
+        <div className="modal-overlay" onClick={() => setEditCase(null)}>
+          <div className="modal-content" style={{width: "min(520px, 92vw)"}}
+            onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">
+                КЕЙС ЗАСАХ — {editCase.caseId}
+              </span>
+              <button className="modal-close" title="Хаах"
+                onClick={() => setEditCase(null)}>
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              {editError && (
+                <div className="form-error-box">{editError}</div>
+              )}
+              <label className="form-label">Кейсийн нэр *</label>
+              <input className="form-input" autoFocus
+                value={editForm.caseName}
+                onChange={(e) => setEditForm((f) =>
+                  ({...f, caseName: e.target.value}))}
+                style={{marginBottom: 14}} />
+              <label className="form-label">Тайлбар</label>
+              <textarea className="form-input"
+                style={{minHeight: 72, resize: "vertical", marginBottom: 14}}
+                value={editForm.description}
+                onChange={(e) => setEditForm((f) =>
+                  ({...f, description: e.target.value}))} />
+              <div className="form-grid-2">
+                <div>
+                  <label className="form-label">Зэрэглэл</label>
+                  <Select style={{width: "100%"}}
+                    value={editForm.priority}
+                    onChange={(v) => setEditForm((f) =>
+                      ({...f, priority: v}))}
+                    options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map(
+                      (p) => ({value: p, label: PRIORITY_LABELS[p]}))} />
+                </div>
+                <div>
+                  <label className="form-label">Мөрдөгч</label>
+                  <input className="form-input"
+                    value={editForm.leadInvestigator}
+                    onChange={(e) => setEditForm((f) =>
+                      ({...f, leadInvestigator: e.target.value}))} />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn" onClick={() => setEditCase(null)}>
+                ЦУЦЛАХ
+              </button>
+              <button className="btn btn-accent" onClick={submitEdit}>
+                ХАДГАЛАХ
+              </button>
             </div>
           </div>
         </div>

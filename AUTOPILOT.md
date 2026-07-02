@@ -17,3 +17,4 @@
 - 2026-07-02: breadcrumb drilldown — header now shows Кейс › Хуудас › <хүн/зангилаа> on people, calls, timeline and link chart detail views.
 - 2026-07-02: timeline polished — nav-matching title, 4 stat cards, ToggleChip filters (native checkboxes gone), colored event rails + MN badges. Fraud page left untouched per user wish.
 - 2026-07-03: hierarchy gate (user wish) — transactions/calls/timeline/linkchart show a case-picker panel instead of all-case data until a case is selected.
+- 2026-07-03: cases page — СОНГОХ/СОНГОГДСОН scope action (was ИДЭВХЖҮҮЛЭХ), Үйлдэл column with ЗАСАХ → case edit modal (user wish).
