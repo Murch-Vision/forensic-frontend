@@ -1,0 +1,1 @@
+- 2026-07-02: Global case system — case switcher + status in new top AppHeader on every page; removed Map/Шинжилгээ/OSINT/Аудит/Мэдээллийн самбар pages (user wish).

@@ -18,11 +18,9 @@ import {
 import {
   ACTIVE_CASE_QUERY,
   CREATE_BANK_ACCOUNT,
-  CREATE_CASE_FILE,
   CREATE_PHONE_NUMBER,
   DWELL_ZONES,
   EVIDENCE_FOR_CASE,
-  SET_ACTIVE_CASE,
   SUSPECT_ACCESS_LOGS,
   TAG_EVIDENCE,
 } from "../graphql/queries";
@@ -114,26 +112,13 @@ export default function SuspectsPage() {
     await detail.refetch();
   }
 
-  // Active-case session + evidence tagging (W-1 / W-2).
+  // Evidence tagging follows the case picked in the global AppHeader
+  // (shared ACTIVE_CASE_QUERY cache entry).
   interface CaseRef {id: number; caseId: string; caseName: string}
   const caseQ = useQuery<{activeCase: CaseRef | null; caseFiles: CaseRef[]}>(
     ACTIVE_CASE_QUERY
   );
-  const [setActiveCase] = useMutation(SET_ACTIVE_CASE);
   const [tagEvidence] = useMutation(TAG_EVIDENCE);
-  const [createCaseFile] = useMutation(CREATE_CASE_FILE);
-
-  async function onCreateCase() {
-    const caseId = window.prompt("Кейсийн дугаар (жишээ: CASE-0002):");
-    if (!caseId) return;
-    const caseName = window.prompt("Кейсийн нэр:") ?? caseId;
-    const res = await createCaseFile({
-      variables: {input: {caseId, caseName, status: "ACTIVE", priority: "MEDIUM"}},
-    });
-    await caseQ.refetch();
-    const id = res.data?.createCaseFile?.id;
-    if (id) await onSelectCase(id);
-  }
   const activeCase = caseQ.data?.activeCase ?? null;
   const evidenceQ = useQuery<{
     evidenceForCase: {sourceType: string; sourceId: number; exhibitNumber: number}[];
@@ -144,12 +129,6 @@ export default function SuspectsPage() {
   const exhibitBySuspect = new Map<number, number>();
   for (const e of evidenceQ.data?.evidenceForCase ?? []) {
     if (e.sourceType === "SUSPECT") exhibitBySuspect.set(e.sourceId, e.exhibitNumber);
-  }
-
-  async function onSelectCase(id: number | null) {
-    await setActiveCase({variables: {caseFileId: id}});
-    await caseQ.refetch();
-    if (id) await evidenceQ.refetch();
   }
 
   async function onTagSuspect(s: Suspect) {
@@ -283,21 +262,6 @@ export default function SuspectsPage() {
           <div className="page-subtitle">ХУВИЙН МЭДЭЭЛЭЛ & АЛБАН ТУШААЛ</div>
         </div>
         <div className="toolbar">
-          <select
-            className="form-input"
-            value={activeCase?.id ?? ""}
-            onChange={(e) =>
-              onSelectCase(e.target.value ? Number(e.target.value) : null)}
-            style={{marginRight: 8, maxWidth: 220}}
-            title="Идэвхтэй кейс — нотлох баримт тэмдэглэхэд хэрэгтэй"
-          >
-            <option value="">Бүх кейс (идэвхгүй)</option>
-            {(caseQ.data?.caseFiles ?? []).map((c) => (
-              <option key={c.id} value={c.id}>{c.caseId} · {c.caseName}</option>
-            ))}
-          </select>
-          <button className="btn btn-sm" onClick={onCreateCase}
-            style={{marginRight: 8}}>+ КЕЙС</button>
           <button
             className="btn btn-success"
             onClick={startAddSubject}
@@ -316,7 +280,8 @@ export default function SuspectsPage() {
           <div className="loading-spinner" style={{margin: "0 auto"}} />
         </div>
       ) : (
-        <div style={{display: "flex", gap: 16, height: "calc(100vh - 120px)"}}>
+        <div style={{display: "flex", gap: 16,
+          height: "calc(100vh - var(--app-header-h) - 120px)"}}>
           {/* Сэжигтэн жагсаалт */}
           <div
             className="card"

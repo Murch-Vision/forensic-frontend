@@ -453,13 +453,21 @@ export const CLEAR_ALL_DATA = gql`
 export const ACTIVE_CASE_QUERY = gql`
   query ActiveCase {
     activeCase { id caseId caseName status priority }
-    caseFiles { id caseId caseName }
+    caseFiles { id caseId caseName status }
   }
 `;
 
 export const SET_ACTIVE_CASE = gql`
   mutation SetActiveCase($caseFileId: Int) {
-    setActiveCase(caseFileId: $caseFileId) { id caseId caseName }
+    setActiveCase(caseFileId: $caseFileId) { id caseId caseName status }
+  }
+`;
+
+export const SET_CASE_STATUS = gql`
+  mutation SetCaseStatus($caseFileId: Int!, $status: CaseStatus!) {
+    setCaseStatus(caseFileId: $caseFileId, status: $status) {
+      id caseId caseName status
+    }
   }
 `;
 

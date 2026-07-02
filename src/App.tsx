@@ -7,6 +7,7 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {NavLink, Navigate, Route, Routes} from "react-router-dom";
+import AppHeader from "./components/AppHeader";
 import SuspectsPage from "./pages/SuspectsPage";
 import DashboardPage from "./pages/DashboardPage";
 import ImportPage from "./pages/ImportPage";
@@ -14,16 +15,12 @@ import TransactionsPage from "./pages/TransactionsPage";
 import CallRecordsPage from "./pages/CallRecordsPage";
 import TimelinePage from "./pages/TimelinePage";
 import LinkChartPage from "./pages/LinkChartPage";
-import IntelBoardPage from "./pages/IntelBoardPage";
-import MapPage from "./pages/MapPage";
-import AnalysisPage from "./pages/AnalysisPage";
-import OsintPage from "./pages/OsintPage";
-import AuditLogPage from "./pages/AuditLogPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
 import FraudWorkflowPage from "./pages/FraudWorkflowPage";
 
-// Navigation mirrors the Blazor page set; every page is ported.
+// Case-centric page set: the analyst works inside the case picked in the
+// global AppHeader; every page below follows that session.
 const NAV = [
   {path: "/dashboard", label: "Хяналтын самбар", icon: "\u{1F4CA}",
     el: <DashboardPage />},
@@ -39,18 +36,8 @@ const NAV = [
     el: <TimelinePage />},
   {path: "/linkchart", label: "Холбоосын зураглал", icon: "\u{1F578}",
     el: <LinkChartPage />},
-  {path: "/intelboard", label: "Мэдээллийн самбар", icon: "\u{1F4CB}",
-    el: <IntelBoardPage />},
-  {path: "/map", label: "Газрын зураг", icon: "\u{1F5FA}",
-    el: <MapPage />},
-  {path: "/analysis", label: "Шинжилгээ", icon: "\u{1F50D}",
-    el: <AnalysisPage />},
   {path: "/fraud", label: "Залилангийн урсгал", icon: "\u{1F6E1}",
     el: <FraudWorkflowPage />},
-  {path: "/osint", label: "OSINT", icon: "\u{1F30D}",
-    el: <OsintPage />},
-  {path: "/audit", label: "Аудит", icon: "\u{1F4DC}",
-    el: <AuditLogPage />},
   {path: "/reports", label: "Тайлан", icon: "\u{1F4C4}",
     el: <ReportsPage />},
   {path: "/settings", label: "Тохиргоо", icon: "\u{2699}",
@@ -105,14 +92,18 @@ export default function App() {
           </NavLink>
         ))}
       </nav>
-      <main style={{flex: 1, overflow: "hidden"}}>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          {NAV.map((n) => (
-            <Route key={n.path} path={n.path} element={n.el} />
-          ))}
-        </Routes>
-      </main>
+      <div style={{flex: 1, display: "flex", flexDirection: "column", minWidth: 0}}>
+        <AppHeader />
+        <main style={{flex: 1, overflow: "hidden", minHeight: 0}}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            {NAV.map((n) => (
+              <Route key={n.path} path={n.path} element={n.el} />
+            ))}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </main>
+      </div>
     </div>
   );
 }
