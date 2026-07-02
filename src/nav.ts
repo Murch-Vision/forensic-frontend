@@ -17,8 +17,8 @@ export interface NavMeta {
 }
 
 export const NAV_META: NavMeta[] = [
-  {path: "/cases", label: "Кейсүүд", icon: "\u{1F4C1}"},
   {path: "/dashboard", label: "Хяналтын самбар", icon: "\u{1F4CA}"},
+  {path: "/cases", label: "Кейсүүд", icon: "\u{1F4C1}"},
   {path: "/people", label: "Хүмүүсийн сан", icon: "\u{1F465}"},
   {path: "/import", label: "Өгөгдөл импорт", icon: "\u{1F4E5}"},
   {path: "/transactions", label: "Гүйлгээ", icon: "\u{1F4B0}"},

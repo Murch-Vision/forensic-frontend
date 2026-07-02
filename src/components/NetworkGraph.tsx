@@ -29,19 +29,15 @@ interface TypeStyle {
 }
 
 const TYPE_STYLE: Record<NetworkNodeType, TypeStyle> = {
-  PERSON   : {ring: "#00C853", icon: "👤", r: 18},
-  GROUP    : {ring: "#FF6D00", icon: "👥", r: 22},
-  ACCOUNT  : {ring: "#00B0FF", icon: "🏦", r: 14},
-  PHONE    : {ring: "#E040FB", icon: "📱", r: 12},
-  EXTERNAL : {ring: "#5C7CFA", icon: "🌐", r: 13},
+  PERSON  : {ring: "#00C853", icon: "👤", r: 18},
+  ACCOUNT : {ring: "#00B0FF", icon: "🏦", r: 14},
+  PHONE   : {ring: "#E040FB", icon: "📱", r: 12},
 };
 
 const TYPE_LABEL: Record<NetworkNodeType, string> = {
-  PERSON   : "Сэжигтэн",
-  GROUP    : "Байгууллага",
-  ACCOUNT  : "Данс",
-  PHONE    : "Утас",
-  EXTERNAL : "Гадаад этгээд",
+  PERSON  : "Сэжигтэн",
+  ACCOUNT : "Данс",
+  PHONE   : "Утас",
 };
 
 // Edge palette: money green, calls cyan, intel purple, ownership neutral.
@@ -477,9 +473,9 @@ export default function NetworkGraph(props: {
     clickRef.current = {x: e.clientX, y: e.clientY, node};
     if (node) {
       const p = toGraph(e.clientX, e.clientY);
-      // Grabbing a hub (org / person node) drags its whole constellation;
-      // grabbing an account/phone/external drags just that node.
-      if (node.type === "GROUP" || node.type === "PERSON") {
+      // Grabbing a person drags their whole constellation; grabbing an
+      // account/phone drags just that node.
+      if (node.type === "PERSON") {
         const members = nodesRef.current.filter(
           (m) => m.cluster === node.cluster);
         members.forEach((m) => {
@@ -539,8 +535,7 @@ export default function NetworkGraph(props: {
     }
     const node = nodeAt(e.clientX, e.clientY);
     const id = node ? node.id : null;
-    const isHub = node
-      && (node.type === "GROUP" || node.type === "PERSON");
+    const isHub = node && node.type === "PERSON";
     setCursor(node ? (isHub ? "move" : "pointer") : "grab");
     if (id !== hoverRef.current) {
       hoverRef.current = id;

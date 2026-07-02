@@ -13,15 +13,11 @@ import {formatMoney, formatNum} from "./format";
 // their bank accounts and phones, transactions aggregated per account pair
 // and calls aggregated per phone pair. Counterparty account numbers are
 // matched against known accounts so money paths BETWEEN suspects surface as
-// direct edges; unmatched counterparties become external nodes (top-N by
-// volume so the chart stays readable — the hidden remainder is reported).
+// direct edges. Only case entities are drawn (user wish): no organization
+// hubs and no external-party nodes — an edge exists only when BOTH ends are
+// a known suspect / account / phone.
 
-export type NetworkNodeType =
-  | "PERSON"
-  | "GROUP"
-  | "ACCOUNT"
-  | "PHONE"
-  | "EXTERNAL";
+export type NetworkNodeType = "PERSON" | "ACCOUNT" | "PHONE";
 
 export type NetworkLinkKind = "owns" | "txn" | "call" | "intel";
 
@@ -107,10 +103,6 @@ const RISK_LABEL: Record<string, string> = {
   LOW      : "Бага",
 };
 
-// Keep only this many external counterparty accounts / phone numbers (by
-// volume) so a big statement import doesn't turn the chart into a hairball.
-const MAX_EXTERNAL = 15;
-
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 const last8 = (s: string) => digits(s).slice(-8);
 
@@ -125,13 +117,12 @@ export function buildEvidenceNetwork(
   transactions : GraphTransaction[],
   calls        : GraphCall[],
   phones       : GraphPhone[]
-): {nodes: NetworkNode[]; links: NetworkLink[]; hiddenExternal: number} {
+): {nodes: NetworkNode[]; links: NetworkLink[]} {
   const nodes = new Map<string, NetworkNode>();
   const links: NetworkLink[] = [];
   const suspectNode = new Map<number, string>();
-  const orgIds = new Map<string, string>();
 
-  // --- Suspects (+ their organizations as hub nodes) -----------------------
+  // --- Suspects --------------------------------------------------------------
   for (const s of suspects) {
     const personId = `s:${s.id}`;
     suspectNode.set(s.id, personId);
@@ -144,23 +135,6 @@ export function buildEvidenceNetwork(
       sub     : s.organization ?? undefined,
       stats   : [["Эрсдэл", RISK_LABEL[s.riskLevel] ?? s.riskLevel]],
     });
-    const org = s.organization?.trim();
-    if (org) {
-      let orgId = orgIds.get(org);
-      if (!orgId) {
-        orgId = `org:${org}`;
-        orgIds.set(org, orgId);
-        nodes.set(orgId, {
-          id      : orgId,
-          label   : org,
-          type    : "GROUP",
-          weight  : 1.3,
-          cluster : orgId,
-          stats   : [],
-        });
-      }
-      links.push({source: personId, target: orgId, strength: 2, kind: "owns"});
-    }
   }
 
   // --- Owned bank accounts --------------------------------------------------
@@ -186,86 +160,34 @@ export function buildEvidenceNetwork(
     }
   }
 
-  // --- Transactions aggregated per (account, counterparty) pair -------------
-  interface TxnAgg {
-    from: string; toKey: string; toName: string;
-    count: number; total: number; inflow: number; outflow: number;
-  }
+  // --- Transactions aggregated per known account pair ------------------------
+  // Only counterparties that resolve to an account in the case draw an edge.
+  interface TxnAgg {from: string; to: string; count: number; total: number}
   const txnAgg = new Map<string, TxnAgg>();
   const accById = new Map(accounts.map((a) => [a.id, a]));
   for (const t of transactions) {
     if (!accById.has(t.bankAccountId)) continue;
     const from = `a:${t.bankAccountId}`;
     const cpNum = digits(t.counterpartyAccount);
-    const matched = cpNum ? accountByNumber.get(cpNum) : undefined;
-    const toKey = matched
-      ?? (cpNum ? `x:${cpNum}`
-        : t.counterpartyName ? `x:${t.counterpartyName.trim().toLowerCase()}`
-        : "");
-    if (!toKey || toKey === from) continue;
-    const key = from < toKey ? `${from}|${toKey}` : `${toKey}|${from}`;
+    const to = cpNum ? accountByNumber.get(cpNum) : undefined;
+    if (!to || to === from) continue;
+    const key = from < to ? `${from}|${to}` : `${to}|${from}`;
     let agg = txnAgg.get(key);
     if (!agg) {
-      agg = {from, toKey,
-        toName: t.counterpartyName?.trim()
-          || t.counterpartyAccount?.trim() || "Тодорхойгүй",
-        count: 0, total: 0, inflow: 0, outflow: 0};
+      agg = {from, to, count: 0, total: 0};
       txnAgg.set(key, agg);
     }
     agg.count += 1;
     agg.total += Math.abs(t.amount);
-    if (t.amount >= 0) agg.inflow += t.amount;
-    else agg.outflow += -t.amount;
   }
-
-  // External counterparties: keep the top MAX_EXTERNAL by moved volume.
-  const extVolume = new Map<string, number>();
   for (const agg of txnAgg.values()) {
-    if (agg.toKey.startsWith("x:")) {
-      extVolume.set(agg.toKey,
-        (extVolume.get(agg.toKey) ?? 0) + agg.total);
-    }
-  }
-  const keptExt = new Set([...extVolume.entries()]
-    .sort((p, q) => q[1] - p[1])
-    .slice(0, MAX_EXTERNAL)
-    .map(([k]) => k));
-  let hiddenExternal = extVolume.size - keptExt.size;
-
-  const extStats = new Map<string, {count: number; total: number}>();
-  for (const agg of txnAgg.values()) {
-    const isExt = agg.toKey.startsWith("x:");
-    if (isExt && !keptExt.has(agg.toKey)) continue;
-    if (isExt && !nodes.has(agg.toKey)) {
-      nodes.set(agg.toKey, {
-        id      : agg.toKey,
-        label   : agg.toName,
-        type    : "EXTERNAL",
-        weight  : 0.8,
-        cluster : agg.from,
-        sub     : agg.toKey.startsWith("x:") && /^\d+$/.test(agg.toKey.slice(2))
-          ? agg.toKey.slice(2) : undefined,
-        stats   : [],
-      });
-    }
-    if (isExt) {
-      const st = extStats.get(agg.toKey) ?? {count: 0, total: 0};
-      st.count += agg.count;
-      st.total += agg.total;
-      extStats.set(agg.toKey, st);
-    }
     links.push({
       source   : agg.from,
-      target   : agg.toKey,
+      target   : agg.to,
       strength : txnStrength(agg.count),
       kind     : "txn",
       label    : `${agg.count} гүйлгээ · ${formatMoney(agg.total)}`,
     });
-  }
-  for (const [id, st] of extStats) {
-    nodes.get(id)!.stats.push(
-      ["Гүйлгээ", formatNum(st.count)],
-      ["Нийт дүн", formatMoney(st.total)]);
   }
 
   // Per-account transaction totals for the detail panel.
@@ -309,28 +231,17 @@ export function buildEvidenceNetwork(
 
   interface CallAgg {a: string; b: string; count: number; seconds: number}
   const callAgg = new Map<string, CallAgg>();
-  const extCallCount = new Map<string, number>();
   for (const c of calls) {
     const own = suspectNode.get(c.suspectId ?? -1) ?? null;
     const callerKey = last8(c.callerNumber);
     const calledKey = last8(c.calledNumber);
     let a = callerKey ? phoneNode.get(callerKey) ?? null : null;
     let b = calledKey ? phoneNode.get(calledKey) ?? null : null;
-    // When neither number is a registered phone, the record's suspect stands
-    // in for THEIR side of the call (picked by direction); the other side
-    // stays an external number — never both, or the edge would collapse.
-    if (!a && !b && own) {
-      if (c.direction === "INCOMING") {
-        b = own;
-        a = callerKey ? `xp:${callerKey}` : null;
-      } else {
-        a = own;
-        b = calledKey ? `xp:${calledKey}` : null;
-      }
-    } else {
-      if (!a) a = callerKey ? `xp:${callerKey}` : own;
-      if (!b) b = calledKey ? `xp:${calledKey}` : own;
-    }
+    // The record's suspect stands in for THEIR unregistered side (picked by
+    // direction). A side that stays unknown drops the call from the chart —
+    // only connections between case entities are drawn.
+    if (!a && own && c.direction !== "INCOMING") a = own;
+    if (!b && own && c.direction === "INCOMING") b = own;
     if (!a || !b || a === b) continue;
     const key = a < b ? `${a}|${b}` : `${b}|${a}`;
     let agg = callAgg.get(key);
@@ -340,36 +251,11 @@ export function buildEvidenceNetwork(
     }
     agg.count += 1;
     agg.seconds += c.durationSeconds;
-    for (const side of [a, b]) {
-      if (side.startsWith("xp:")) {
-        extCallCount.set(side, (extCallCount.get(side) ?? 0) + 1);
-      }
-    }
   }
-
-  const keptExtPhones = new Set([...extCallCount.entries()]
-    .sort((p, q) => q[1] - p[1])
-    .slice(0, MAX_EXTERNAL)
-    .map(([k]) => k));
-  hiddenExternal += extCallCount.size - keptExtPhones.size;
 
   const phoneTotals = new Map<string, {count: number; seconds: number}>();
   for (const agg of callAgg.values()) {
-    const drop = [agg.a, agg.b].some(
-      (s) => s.startsWith("xp:") && !keptExtPhones.has(s));
-    if (drop) continue;
     for (const side of [agg.a, agg.b]) {
-      if (side.startsWith("xp:") && !nodes.has(side)) {
-        const other = side === agg.a ? agg.b : agg.a;
-        nodes.set(side, {
-          id      : side,
-          label   : side.slice(3),
-          type    : "EXTERNAL",
-          weight  : 0.75,
-          cluster : nodes.get(other)?.cluster ?? side,
-          stats   : [],
-        });
-      }
       const st = phoneTotals.get(side) ?? {count: 0, seconds: 0};
       st.count += agg.count;
       st.seconds += agg.seconds;
@@ -385,8 +271,7 @@ export function buildEvidenceNetwork(
   }
   for (const [id, st] of phoneTotals) {
     const n = nodes.get(id);
-    if (!n || (n.type !== "PHONE" && n.type !== "EXTERNAL")) continue;
-    if (n.stats.some(([l]) => l === "Дуудлага")) continue;
+    if (!n || n.type !== "PHONE") continue;
     n.stats.push(
       ["Дуудлага", formatNum(st.count)],
       ["Нийт хугацаа", `${Math.round(st.seconds / 60)} мин`]);
@@ -411,5 +296,5 @@ export function buildEvidenceNetwork(
     if (nPhones) person.stats.push(["Утас", formatNum(nPhones)]);
   }
 
-  return {nodes: [...nodes.values()], links, hiddenExternal};
+  return {nodes: [...nodes.values()], links};
 }

@@ -28,6 +28,9 @@ IBM i2-inspired dark forensic workstation. All tokens in `src/styles/app.css`:
 - RULE: NEVER use native <select> or <input type="date"> — use `Select` and
   `DateInput` from src/components/inputs.tsx (styled trigger + popover menu /
   calendar; CSS `.select-*`/`.datepicker-*` in app.css, menu z-index 1200).
+  Menus render in a document.body PORTAL (position:fixed, flip-aware, close
+  on outside/scroll/resize) so overflow:hidden cards can NEVER clip them —
+  that clipping once made the import-type dropdown look like only "auto".
 
 ## Layout shell (App.tsx)
 Sidebar (220px) + right column = `AppHeader` (56px, `--app-header-h`) + main.
@@ -121,6 +124,19 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   fix (nodes used to stack at one point forever). LinkChartPage: click →
   floating detail panel (.graph-detail-*), hidden-externals note.
 
+- 2026-07-02: New-wish batch — Select/DateInput menus portal'd to body
+  (fixes: import type "only auto" + cases status dropdown clipped/unusable);
+  dashboard first in NAV (landing unchanged: / → /dashboard); link chart
+  reduced to case entities only per user wish (NetworkNodeType now
+  PERSON|ACCOUNT|PHONE — org hubs + external counterparty/phone nodes
+  REMOVED, edges only between known entities; hiddenExternal gone).
+
+## Ignore per user (do not touch/improve)
+Settings page, Залилангийн урсгал (fraud) page.
+
 ## Backlog (user wishes, in priority order)
-1. Deeper drilldown breadcrumbs (case → person on detail views) — optional
+1. Make active-case defaulting obvious on data pages (txns/calls) — user
+   confused how the default case is chosen.
+2. Redesign Хүмүүсийн сан page + add-person modal ("design crap / dog shit").
+3. Deeper drilldown breadcrumbs (case → person on detail views) — optional
    refinement of the hierarchy wish; core case → page scope is shipped.

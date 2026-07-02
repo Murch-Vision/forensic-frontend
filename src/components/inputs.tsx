@@ -9,34 +9,81 @@
  *               system instead of the OS widgets.
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
-import {useEffect, useRef, useState} from "react";
+import {useLayoutEffect, useEffect, useRef, useState} from "react";
+import {createPortal} from "react-dom";
 
 export interface SelectOption {
   value: string | number;
   label: string;
 }
 
+// The menu lives in a body portal, so "outside" means outside BOTH the
+// trigger and the floating menu. Page scroll/resize closes the popover
+// instead of leaving it hanging at a stale fixed position.
 function useOutsideClose(
   open: boolean,
   close: () => void,
-): React.RefObject<HTMLDivElement> {
-  const ref = useRef<HTMLDivElement>(null);
+  refs: Array<React.RefObject<HTMLDivElement>>,
+) {
   useEffect(() => {
     if (!open) return;
+    const inside = (t: EventTarget | null) =>
+      refs.some((r) => r.current && r.current.contains(t as Node));
     function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) close();
+      if (!inside(e.target)) close();
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") close();
     }
+    function onScroll(e: Event) {
+      if (!inside(e.target)) close();
+    }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", close);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", close);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, close]);
-  return ref;
+}
+
+// Fixed-position style for a popover anchored to the trigger. Rendering into
+// a body portal means no ancestor's overflow:hidden can clip the menu (which
+// used to cut dropdowns off inside cards). Flips above when the space below
+// the trigger can't fit the estimated menu height.
+function usePopoverStyle(
+  open: boolean,
+  triggerRef: React.RefObject<HTMLDivElement>,
+  estHeight: number,
+): React.CSSProperties | null {
+  const [style, setStyle] = useState<React.CSSProperties | null>(null);
+  useLayoutEffect(() => {
+    if (!open) {
+      setStyle(null);
+      return;
+    }
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const up = spaceBelow < estHeight + 12 && r.top > spaceBelow;
+    setStyle({
+      position : "fixed",
+      left     : Math.max(8, Math.min(r.left, window.innerWidth - r.width - 8)),
+      minWidth : r.width,
+      maxWidth : "calc(100vw - 16px)",
+      ...(up
+        ? {top: "auto", bottom: window.innerHeight - r.top + 4}
+        : {top: r.bottom + 4}),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, estHeight]);
+  return style;
 }
 
 export function Select(props: {
@@ -50,7 +97,11 @@ export function Select(props: {
 }) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
-  const ref = useOutsideClose(open, () => setOpen(false));
+  const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useOutsideClose(open, () => setOpen(false), [ref, menuRef]);
+  const menuStyle = usePopoverStyle(open, ref,
+    Math.min(280, props.options.length * 34 + 10));
 
   const selectedIdx = props.options.findIndex(
     (o) => String(o.value) === String(props.value));
@@ -105,8 +156,9 @@ export function Select(props: {
         </span>
         <span className={`select-chevron${open ? " open" : ""}`}>▾</span>
       </button>
-      {open && (
-        <div className="select-menu" role="listbox">
+      {open && menuStyle && createPortal(
+        <div className="select-menu" role="listbox" ref={menuRef}
+          style={menuStyle}>
           {props.options.map((o, i) => (
             <div key={String(o.value)}
               role="option"
@@ -120,7 +172,8 @@ export function Select(props: {
               {i === selectedIdx && <span className="select-check">✓</span>}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -146,7 +199,10 @@ export function DateInput(props: {
   title?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useOutsideClose(open, () => setOpen(false));
+  const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useOutsideClose(open, () => setOpen(false), [ref, menuRef]);
+  const menuStyle = usePopoverStyle(open, ref, 330);
 
   const parsed = /^\d{4}-\d{2}-\d{2}$/.test(props.value)
     ? new Date(`${props.value}T00:00:00`) : null;
@@ -191,8 +247,9 @@ export function DateInput(props: {
         </span>
         <span className="select-chevron">📅</span>
       </button>
-      {open && (
-        <div className="select-menu datepicker">
+      {open && menuStyle && createPortal(
+        <div className="select-menu datepicker" ref={menuRef}
+          style={menuStyle}>
           <div className="datepicker-head">
             <button type="button" className="datepicker-nav"
               onClick={() => shiftMonth(-1)}>‹</button>
@@ -239,7 +296,8 @@ export function DateInput(props: {
               ЦЭВЭРЛЭХ
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

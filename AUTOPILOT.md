@@ -10,3 +10,4 @@
 - 2026-07-02: Styled Select + DateInput components replace every native select/datepicker app-wide; removed Хандалтын лог import type (user wishes).
 - 2026-07-02: /cases case-management page + header slimmed to scope bar with Кейс › page breadcrumb (hierarchy wish)
 - 2026-07-02: link chart rebuilt as real evidence network (accounts/phones/txn/call edges, node detail panel, layout collapse fix)
+- 2026-07-02: portal dropdowns (fix clipped import-type + cases status menus), dashboard first in nav, link chart trimmed to case entities only

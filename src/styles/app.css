@@ -234,19 +234,6 @@ body {
     color: var(--text-primary);
     text-align: right;
 }
-.graph-hidden-note {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    z-index: 2;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.5px;
-    color: var(--text-muted);
-    background: rgba(10, 12, 24, 0.75);
-    padding: 5px 9px;
-    border-radius: var(--radius-sm);
-}
 
 /* File dropzone (Import page) */
 .dropzone {

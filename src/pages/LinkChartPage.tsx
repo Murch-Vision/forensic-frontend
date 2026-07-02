@@ -82,11 +82,9 @@ interface CallData {
 }
 
 const NODE_TYPE_LABEL: Record<string, string> = {
-  PERSON   : "Сэжигтэн",
-  GROUP    : "Байгууллага",
-  ACCOUNT  : "Данс",
-  PHONE    : "Утас",
-  EXTERNAL : "Гадаад этгээд",
+  PERSON  : "Сэжигтэн",
+  ACCOUNT : "Данс",
+  PHONE   : "Утас",
 };
 
 export default function LinkChartPage() {
@@ -185,12 +183,6 @@ export default function LinkChartPage() {
                     Нэмэлт мэдээлэл алга.
                   </div>
                 )}
-              </div>
-            )}
-            {network.hiddenExternal > 0 && (
-              <div className="graph-hidden-note">
-                Топ 15 гадаад данс/дугаар харуулав ·{" "}
-                {network.hiddenExternal} далд
               </div>
             )}
           </div>
