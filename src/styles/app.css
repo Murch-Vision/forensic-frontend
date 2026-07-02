@@ -158,6 +158,96 @@ body {
     box-shadow: inset 3px 0 0 var(--accent-cyan);
 }
 
+/* Link chart: floating node detail panel over the graph canvas */
+.graph-detail-panel {
+    position: absolute;
+    /* Below the zoom controls so they stay reachable while a node is open */
+    top: 50px;
+    right: 10px;
+    width: 264px;
+    max-height: calc(100% - 100px);
+    overflow-y: auto;
+    z-index: 3;
+    background: rgba(10, 12, 24, 0.92);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 14px;
+}
+.graph-detail-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+.graph-detail-type {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--accent-cyan);
+    margin-bottom: 4px;
+}
+.graph-detail-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+.graph-detail-sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    word-break: break-all;
+}
+.graph-detail-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+.graph-detail-close:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.06);
+}
+.graph-detail-stats {
+    margin-top: 10px;
+    border-top: 1px solid var(--border-primary);
+}
+.graph-detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border-primary);
+}
+.graph-detail-row span:first-child { color: var(--text-muted); }
+.graph-detail-row span:last-child {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    text-align: right;
+}
+.graph-hidden-note {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    z-index: 2;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    background: rgba(10, 12, 24, 0.75);
+    padding: 5px 9px;
+    border-radius: var(--radius-sm);
+}
+
 /* File dropzone (Import page) */
 .dropzone {
     display: flex;

@@ -9,6 +9,7 @@
 import {useEffect, useRef} from "react";
 import type {
   NetworkLink,
+  NetworkLinkKind,
   NetworkNode,
   NetworkNodeType,
 } from "../lib/networkGraph";
@@ -28,19 +29,27 @@ interface TypeStyle {
 }
 
 const TYPE_STYLE: Record<NetworkNodeType, TypeStyle> = {
-  COMMAND  : {ring: "#FF1744", icon: "⚔", r: 26},
+  PERSON   : {ring: "#00C853", icon: "👤", r: 18},
   GROUP    : {ring: "#FF6D00", icon: "👥", r: 22},
-  PERSON   : {ring: "#00C853", icon: "👤", r: 16},
-  LOCATION : {ring: "#00B0FF", icon: "🏛", r: 18},
-  EXTERNAL : {ring: "#2979FF", icon: "🌐", r: 16},
+  ACCOUNT  : {ring: "#00B0FF", icon: "🏦", r: 14},
+  PHONE    : {ring: "#E040FB", icon: "📱", r: 12},
+  EXTERNAL : {ring: "#5C7CFA", icon: "🌐", r: 13},
 };
 
 const TYPE_LABEL: Record<NetworkNodeType, string> = {
-  COMMAND  : "Үндсэн байгууллага",
+  PERSON   : "Сэжигтэн",
   GROUP    : "Байгууллага",
-  PERSON   : "Хувь хүн",
-  LOCATION : "Байршил / банк",
+  ACCOUNT  : "Данс",
+  PHONE    : "Утас",
   EXTERNAL : "Гадаад этгээд",
+};
+
+// Edge palette: money green, calls cyan, intel purple, ownership neutral.
+const LINK_STYLE: Record<NetworkLinkKind, {color: string; label: string}> = {
+  txn   : {color: "#00E676", label: "Гүйлгээ"},
+  call  : {color: "#00E5FF", label: "Дуудлага"},
+  intel : {color: "#E040FB", label: "Хамаарал"},
+  owns  : {color: "#3a4a6a", label: "Эзэмшил"},
 };
 
 interface SimNode extends NetworkNode {
@@ -60,6 +69,8 @@ interface SimLink {
   s        : SimNode;
   t        : SimNode;
   strength : number;
+  kind     : NetworkLinkKind;
+  label?   : string;
 }
 
 interface View {
@@ -106,8 +117,14 @@ function tick(nodes: SimNode[], links: SimLink[], alpha: number): number {
       const charge = (same ? 2600 : 6500) / d2 * alpha;
       const min = radiusOf(a) + radiusOf(b) + 14;
       const dist = Math.sqrt(d2);
-      const ux = dx / dist;
-      const uy = dy / dist;
+      let ux = dx / dist;
+      let uy = dy / dist;
+      // Coincident nodes have no separation direction — invent one from the
+      // pair's indices so they can't stay stacked forever.
+      if (ux === 0 && uy === 0) {
+        ux = Math.cos(i * 3.1 + j);
+        uy = Math.sin(i * 3.1 + j);
+      }
       // Hard collision push keeps node bodies from overlapping.
       const overlap = dist < min ? (min - dist) * 0.5 * alpha : 0;
       a.vx += ux * (charge + overlap);
@@ -152,6 +169,8 @@ function tick(nodes: SimNode[], links: SimLink[], alpha: number): number {
 export default function NetworkGraph(props: {
   nodes : NetworkNode[];
   links : NetworkLink[];
+  // Fired with the clicked node, or null when clicking empty canvas.
+  onNodeClick? : (node: NetworkNode | null) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const nodesRef = useRef<SimNode[]>([]);
@@ -163,6 +182,9 @@ export default function NetworkGraph(props: {
   const clusterDragRef = useRef<
     {members: SimNode[]; lastX: number; lastY: number} | null>(null);
   const panRef = useRef<{x: number; y: number} | null>(null);
+  // Pointer-down snapshot: a release within a few px is a click.
+  const clickRef = useRef<
+    {x: number; y: number; node: SimNode | null} | null>(null);
   const hoverRef = useRef<string | null>(null);
   const viewRef = useRef<View>({k: 1, tx: 0, ty: 0});
   // Graph→screen mapping captured at draw time, reused for hit testing.
@@ -208,16 +230,37 @@ export default function NetworkGraph(props: {
       }
     }
 
-    // Links.
+    // Links, colored by evidence kind.
     for (const l of links) {
       const active = hover && (l.s.id === hover || l.t.id === hover);
+      const st = LINK_STYLE[l.kind];
       ctx.beginPath();
       ctx.moveTo(l.s.x, l.s.y);
       ctx.lineTo(l.t.x, l.t.y);
-      ctx.strokeStyle = active ? "#5ec8ff" : "#3a4a6a";
-      ctx.globalAlpha = hover ? (active ? 0.9 : 0.06) : 0.32;
-      ctx.lineWidth = active ? l.strength * 0.8 + 1 : l.strength * 0.5;
+      ctx.strokeStyle = st.color;
+      ctx.globalAlpha = hover
+        ? (active ? 0.95 : 0.05)
+        : (l.kind === "owns" ? 0.45 : 0.4);
+      ctx.lineWidth = active ? l.strength * 0.8 + 1.2 : l.strength * 0.6;
       ctx.stroke();
+    }
+    // Aggregate labels on the hovered node's edges.
+    if (hover) {
+      ctx.font = "600 10px 'Cascadia Mono', Consolas, monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      for (const l of links) {
+        if (!l.label || (l.s.id !== hover && l.t.id !== hover)) continue;
+        const mx = (l.s.x + l.t.x) / 2;
+        const my = (l.s.y + l.t.y) / 2;
+        const w = ctx.measureText(l.label).width + 10;
+        ctx.globalAlpha = 0.88;
+        ctx.fillStyle = "#0b0e1a";
+        ctx.fillRect(mx - w / 2, my - 8, w, 16);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = LINK_STYLE[l.kind].color;
+        ctx.fillText(l.label, mx, my);
+      }
     }
     ctx.globalAlpha = 1;
 
@@ -255,6 +298,10 @@ export default function NetworkGraph(props: {
         ctx.textBaseline = "top";
         ctx.fillStyle = "#c8cce0";
         ctx.fillText(n.label, n.x, n.y + r + 3);
+        if (n.sub && (showAll || hover === n.id)) {
+          ctx.fillStyle = "#7a7fa0";
+          ctx.fillText(n.sub, n.x, n.y + r + 15);
+        }
       }
     }
     ctx.globalAlpha = 1;
@@ -292,29 +339,39 @@ export default function NetworkGraph(props: {
 
   // Build the simulation graph once per dataset.
   useEffect(() => {
-    // Assign every cluster an anchor — the COMMAND cell sits in the middle,
-    // the operational cells ring it on an ellipse.
-    const clusters = [...new Set(props.nodes.map((n) => n.cluster))];
-    const coreKey = props.nodes.find((n) => n.type === "COMMAND")?.cluster
-      ?? clusters[0];
-    const ring = clusters.filter((c) => c !== coreKey);
+    // Assign every cluster an anchor — the most populated cell sits in the
+    // middle, the rest ring it on an ellipse.
+    const counts = new Map<string, number>();
+    for (const n of props.nodes) {
+      counts.set(n.cluster, (counts.get(n.cluster) ?? 0) + 1);
+    }
+    const clusters = [...counts.keys()]
+      .sort((a, b) => counts.get(b)! - counts.get(a)!);
+    const coreKey = clusters[0];
+    const ring = clusters.slice(1);
     const anchors = new Map<string, {x: number; y: number}>();
     anchors.set(coreKey, {x: WIDTH / 2, y: HEIGHT / 2});
     ring.forEach((c, i) => {
       const angle = (i / ring.length) * Math.PI * 2;
+      // Alternate two radii so many small cells don't crowd one ellipse.
+      const spread = ring.length > 6 && i % 2 === 1 ? 0.62 : 1;
       anchors.set(c, {
-        x: WIDTH / 2 + Math.cos(angle) * 470,
-        y: HEIGHT / 2 + Math.sin(angle) * 250,
+        x: WIDTH / 2 + Math.cos(angle) * 470 * spread,
+        y: HEIGHT / 2 + Math.sin(angle) * 250 * spread,
       });
     });
 
     const map = new Map<string, SimNode>();
-    const sim: SimNode[] = props.nodes.map((node) => {
+    const sim: SimNode[] = props.nodes.map((node, i) => {
       const anchor = anchors.get(node.cluster)!;
+      // Golden-angle spiral gives every node a unique, deterministic spawn
+      // offset — coincident spawns would leave repulsion with no direction.
+      const angle = i * 2.399963;
+      const rad = 26 + (i % 9) * 7;
       const s: SimNode = {
         ...node,
-        x  : anchor.x + Math.cos(node.id.length * 1.7) * 40,
-        y  : anchor.y + Math.sin(node.id.length * 2.3) * 40,
+        x  : anchor.x + Math.cos(angle) * rad,
+        y  : anchor.y + Math.sin(angle) * rad,
         vx : 0,
         vy : 0,
         ax : anchor.x,
@@ -327,7 +384,7 @@ export default function NetworkGraph(props: {
     });
     const lk: SimLink[] = props.links
       .map((l) => ({s: map.get(l.source)!, t: map.get(l.target)!,
-        strength: l.strength}))
+        strength: l.strength, kind: l.kind, label: l.label}))
       .filter((l) => l.s && l.t);
 
     nodesRef.current = sim;
@@ -417,11 +474,12 @@ export default function NetworkGraph(props: {
   function onPointerDown(e: React.PointerEvent) {
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     const node = nodeAt(e.clientX, e.clientY);
+    clickRef.current = {x: e.clientX, y: e.clientY, node};
     if (node) {
       const p = toGraph(e.clientX, e.clientY);
-      // Grabbing a hub (org / command node) drags the whole cluster; grabbing
-      // a person drags just that node.
-      if (node.type === "COMMAND" || node.type === "GROUP") {
+      // Grabbing a hub (org / person node) drags its whole constellation;
+      // grabbing an account/phone/external drags just that node.
+      if (node.type === "GROUP" || node.type === "PERSON") {
         const members = nodesRef.current.filter(
           (m) => m.cluster === node.cluster);
         members.forEach((m) => {
@@ -482,7 +540,7 @@ export default function NetworkGraph(props: {
     const node = nodeAt(e.clientX, e.clientY);
     const id = node ? node.id : null;
     const isHub = node
-      && (node.type === "COMMAND" || node.type === "GROUP");
+      && (node.type === "GROUP" || node.type === "PERSON");
     setCursor(node ? (isHub ? "move" : "pointer") : "grab");
     if (id !== hoverRef.current) {
       hoverRef.current = id;
@@ -490,7 +548,12 @@ export default function NetworkGraph(props: {
     }
   }
 
-  function onPointerUp() {
+  function onPointerUp(e: React.PointerEvent) {
+    const c = clickRef.current;
+    clickRef.current = null;
+    if (c && Math.abs(e.clientX - c.x) < 5 && Math.abs(e.clientY - c.y) < 5) {
+      props.onNodeClick?.(c.node);
+    }
     if (clusterDragRef.current) {
       for (const m of clusterDragRef.current.members) {
         m.fx = null;
@@ -563,6 +626,16 @@ export default function NetworkGraph(props: {
               background: "#0b0e1a", display: "inline-block",
             }} />
             <span style={{color: "#9aa0b5"}}>{TYPE_LABEL[t]}</span>
+          </div>
+        ))}
+        <div style={{height: 1, background: "#252a45", margin: "3px 0"}} />
+        {(Object.keys(LINK_STYLE) as NetworkLinkKind[]).map((k) => (
+          <div key={k} style={{display: "flex", alignItems: "center", gap: 6}}>
+            <span style={{
+              width: 12, height: 3, borderRadius: 2,
+              background: LINK_STYLE[k].color, display: "inline-block",
+            }} />
+            <span style={{color: "#9aa0b5"}}>{LINK_STYLE[k].label}</span>
           </div>
         ))}
       </div>

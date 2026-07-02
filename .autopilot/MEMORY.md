@@ -109,6 +109,18 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   STATUS_BADGE). Addresses wishes "don't change case status in app header"
   + "hierarchy for all pages".
 
+- 2026-07-02: Link chart = evidence network (GOAL core) —
+  lib/networkGraph.ts buildEvidenceNetwork(): suspects + owned accounts/
+  phones + txns aggregated per account↔counterparty pair (counterparty
+  numbers matched to known accounts → inter-suspect money edges) + calls
+  per phone pair (last-8 match; unmatched side falls back to person by
+  direction); top-15 externals by volume, hiddenExternal reported.
+  NetworkGraph.tsx: node types PERSON/GROUP/ACCOUNT/PHONE/EXTERNAL, edges
+  colored by kind (txn green/call cyan/intel purple/owns gray) with hover
+  midpoint labels, onNodeClick, golden-angle spawn + zero-distance repulsion
+  fix (nodes used to stack at one point forever). LinkChartPage: click →
+  floating detail panel (.graph-detail-*), hidden-externals note.
+
 ## Backlog (user wishes, in priority order)
 1. Deeper drilldown breadcrumbs (case → person on detail views) — optional
    refinement of the hierarchy wish; core case → page scope is shipped.
