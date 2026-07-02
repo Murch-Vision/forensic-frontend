@@ -203,65 +203,6 @@ body {
 .case-gate-select { width: min(360px, 100%); margin-bottom: 8px; }
 .case-gate-select .select-trigger { width: 100%; }
 
-/* Case scope bar — data pages state which case's evidence is listed */
-.scope-bar {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px 16px;
-    padding: 8px 16px;
-    margin-bottom: 16px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-primary);
-    border-left: 3px solid var(--accent-cyan);
-    border-radius: var(--radius-sm);
-}
-.scope-bar-all {
-    border-left-color: var(--accent-amber);
-}
-.scope-bar-label {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    white-space: nowrap;
-}
-.scope-bar-case {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--accent-cyan);
-    white-space: nowrap;
-}
-.scope-bar-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-.scope-bar-all .scope-bar-name {
-    color: var(--accent-amber);
-}
-.scope-bar-summary {
-    font-size: 12px;
-    color: var(--text-secondary);
-    white-space: nowrap;
-}
-.scope-bar-hint {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-left: auto;
-}
-.scope-bar-link {
-    color: var(--accent-cyan);
-    text-decoration: none;
-}
-.scope-bar-link:hover {
-    text-decoration: underline;
-}
-@media (max-width: 720px) {
-    .scope-bar-hint { margin-left: 0; flex-basis: 100%; }
-}
-
 /* Cases page: highlight the row of the case the session is scoped to */
 .data-grid tr.case-row-active td {
     background: rgba(0, 229, 255, 0.05);

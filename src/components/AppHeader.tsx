@@ -51,9 +51,10 @@ export default function AppHeader() {
   const [statusFilter, setStatusFilter] = useState(
     () => localStorage.getItem("caseStatusFilter") ?? ""
   );
+  // STRICT: the menu lists only matching cases; the trigger still names the
+  // current case via triggerLabel even when it falls outside the filter.
   const visibleCases = statusFilter
-    ? caseFiles.filter((c) =>
-      c.status === statusFilter || c.id === activeCase?.id)
+    ? caseFiles.filter((c) => c.status === statusFilter)
     : caseFiles;
 
   function onFilterChange(v: string) {
@@ -89,6 +90,10 @@ export default function AppHeader() {
           value={activeCase?.id ?? ""}
           onChange={(v) => onSelectCase(v ? Number(v) : null)}
           title="Идэвхтэй кейс — бүх хуудсанд үйлчилнэ"
+          triggerLabel={activeCase
+            ? `${activeCase.caseId} · ${activeCase.caseName} (${
+              STATUS_LABELS[activeCase.status] ?? activeCase.status})`
+            : "Кейс сонгоогүй"}
           options={[
             {value: "", label: "Кейс сонгоогүй"},
             ...visibleCases.map((c) => ({value: c.id,

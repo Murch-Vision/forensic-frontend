@@ -194,6 +194,16 @@ Settings page, Залилангийн урсгал (fraud) page.
   dashboard + calls. zmin/zmax also pinned. RULE: heatmaps get numeric axes
   with labeled ticks.
 
+- 2026-07-03: import-works batch (user wishes) — CaseScopeBar DELETED
+  (component + css; redundant with the header; CaseGate stays), header case
+  filter now STRICT (menu only matching cases; new Select `triggerLabel`
+  prop keeps the current case named on the trigger), ImportPage: preview
+  runs AUTOMATICALLY on file/sheet pick (button removed), AUTO kind removed
+  (Банк/CDR only; detected domain auto-selects the kind), SettingsPage
+  stripped to a title-only placeholder (nuke button + CLEAR_ALL_DATA gone),
+  apollo.ts typePolicies replace-merge root list fields (silences "cache
+  data may be lost" warnings).
+
 ## Backlog (user wishes, in priority order)
 (empty — all user wishes shipped; FIXED BACKLOG fully done 2026-07-02)
 

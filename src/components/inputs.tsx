@@ -94,6 +94,9 @@ export function Select(props: {
   title?: string;
   style?: React.CSSProperties;
   className?: string;
+  // Overrides the trigger text — lets the current value stay visible even
+  // when it is not among the (e.g. filtered) options.
+  triggerLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
@@ -151,8 +154,9 @@ export function Select(props: {
           setHighlight(selectedIdx);
           setOpen((v) => !v);
         }}>
-        <span className={selected ? "" : "select-placeholder"}>
-          {selected?.label ?? "—"}
+        <span className={
+          props.triggerLabel || selected ? "" : "select-placeholder"}>
+          {props.triggerLabel ?? selected?.label ?? "—"}
         </span>
         <span className={`select-chevron${open ? " open" : ""}`}>▾</span>
       </button>

@@ -26,7 +26,6 @@ import {
   StatCard,
 } from "../components/kit";
 import {Select} from "../components/inputs";
-import CaseScopeBar from "../components/CaseScopeBar";
 import CaseGate from "../components/CaseGate";
 import {useDrilldown} from "../lib/drilldown";
 import Plot from "../components/Plot";
@@ -212,8 +211,6 @@ export default function CallRecordsPage() {
       <PageHeader icon="📞" title="Дуудлагын дэлгэрэнгүй бүртгэл"
         subtitle="CDR АНАЛИЗ БА ХОЛБООНЫ ЗАГВАР" />
       <CaseGate>
-      <CaseScopeBar summary={`${allCalls.length} дуудлага · ${
-        suspects.length} сэжигтэн`} />
 
       <Card title="Сэжигтнээр шүүх" style={{marginBottom: 16}}>
         <div style={{display: "flex", gap: 12, alignItems: "center",

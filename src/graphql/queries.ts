@@ -435,12 +435,6 @@ export const CREATE_CASE_FILE = gql`
   }
 `;
 
-export const CLEAR_ALL_DATA = gql`
-  mutation ClearAllData {
-    clearAllData
-  }
-`;
-
 export const CASE_FILES_QUERY = gql`
   query CaseFilesFull {
     caseFiles {

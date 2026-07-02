@@ -27,7 +27,21 @@ const uri =
 
 export const client = new ApolloClient({
   link: new HttpLink({uri}),
-  cache: new InMemoryCache(),
+  cache: new InMemoryCache({
+    typePolicies: {
+      Query: {
+        fields: Object.fromEntries(
+          // Root list queries are replaced wholesale on refetch; an explicit
+          // replace-merge silences apollo's "cache data may be lost" warning.
+          ["suspects", "transactions", "bankAccounts", "callRecords",
+            "caseFiles", "suspectLinks", "correlations", "evidenceForCase",
+            "globalPeople", "analysisResults", "patterns",
+            "travelCorrelations", "accessLogEntries", "auditEvents"]
+            .map((f) => [f, {merge: (_e: unknown, i: unknown) => i}])
+        ),
+      },
+    },
+  }),
 });
 
 export default client;

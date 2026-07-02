@@ -21,7 +21,6 @@ import {
 } from "../components/kit";
 import type {Column} from "../components/kit";
 import {Select} from "../components/inputs";
-import CaseScopeBar from "../components/CaseScopeBar";
 import CaseGate from "../components/CaseGate";
 import {useDrilldown} from "../lib/drilldown";
 import {
@@ -177,7 +176,6 @@ export default function TimelinePage() {
       <PageHeader icon="🕒" title="Он цагийн хэлхээ"
         subtitle="ЦАГИЙН ХОЛБОО БА ҮЙЛ ЯВДЛЫН ДАРААЛАЛ" />
       <CaseGate>
-      <CaseScopeBar summary={`${visible.length} үйл явдал`} />
 
       <div className="metrics-grid">
         <StatCard label="Үйл явдал" value={visible.length} />

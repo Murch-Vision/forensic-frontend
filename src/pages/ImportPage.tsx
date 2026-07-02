@@ -16,7 +16,7 @@ import {
 import {Badge, Card, Empty, PageHeader} from "../components/kit";
 import {Select} from "../components/inputs";
 
-type ImportKind = "AUTO" | "BANK" | "CDR";
+type ImportKind = "BANK" | "CDR";
 
 interface Preview {
   headers: string[];
@@ -53,7 +53,6 @@ interface Summary {
 }
 
 const KINDS: {value: ImportKind; label: string}[] = [
-  {value: "AUTO", label: "Автомат таних"},
   {value: "BANK", label: "Банкны хуулга"},
   {value: "CDR", label: "Дуудлагын бүртгэл (CDR)"},
 ];
@@ -87,7 +86,7 @@ export default function ImportPage() {
   const [fileSize, setFileSize] = useState(0);
   const [sheets, setSheets] = useState<string[]>([]);
   const [sheetName, setSheetName] = useState<string | null>(null);
-  const [kind, setKind] = useState<ImportKind>("AUTO");
+  const [kind, setKind] = useState<ImportKind>("BANK");
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -116,10 +115,12 @@ export default function ImportPage() {
       const sh = res.data.excelSheets;
       setSheets(sh);
       setSheetName(sh[0] ?? null);
+      await doPreview(b64, file.name, sh[0] ?? null);
     } else {
       const text = await file.text();
       setContent(text);
       setFilename(file.name);
+      await doPreview(text, file.name, null);
     }
   }
 
@@ -144,17 +145,27 @@ export default function ImportPage() {
     return {content, filename, sheetName};
   }
 
-  async function onPreview() {
-    if (!content) return;
+  // Preview runs AUTOMATICALLY when a file (or Excel sheet) is picked.
+  async function doPreview(
+    contentArg: string,
+    filenameArg: string | null,
+    sheetArg: string | null
+  ) {
+    if (!contentArg) return;
     setBusy(true);
     try {
       const res = await client.query<{previewImport: Preview}>({
         query: PREVIEW_IMPORT,
-        variables: vars(),
+        variables: {content: contentArg, filename: filenameArg,
+          sheetName: sheetArg},
         fetchPolicy: "no-cache",
       });
       const pv = res.data.previewImport;
       setPreview(pv);
+      // Follow the detected domain so the analyst rarely touches the select.
+      if (pv.domain === "BANK" || pv.domain === "CDR") {
+        setKind(pv.domain);
+      }
       // Seed the editable mapping from what the detector proposed.
       const seed: Record<string, string> = {};
       for (const m of pv.mapping) seed[m.field] = m.column;
@@ -184,8 +195,7 @@ export default function ImportPage() {
     setMapping((prev) => ({...prev, [field]: column}));
   }
 
-  const isBank = kind === "BANK"
-    || (kind === "AUTO" && preview?.domain === "BANK");
+  const isBank = kind === "BANK";
 
   return (
     <div className="page-container">
@@ -245,7 +255,10 @@ export default function ImportPage() {
             <div onClick={(e) => e.stopPropagation()}
               style={{display: "inline-block"}}>
               <Select value={sheetName ?? ""}
-                onChange={(v) => setSheetName(v)}
+                onChange={(v) => {
+                  setSheetName(v);
+                  void doPreview(content, filename, v);
+                }}
                 options={sheets.map((s) => ({value: s, label: s}))}
                 style={{maxWidth: 240}}
                 title="Excel хуудас сонгох" />
@@ -261,12 +274,10 @@ export default function ImportPage() {
               options={KINDS}
               style={{minWidth: 220}} />
           </div>
-          <button className="btn" onClick={onPreview} disabled={busy || !content}>
-            УРЬДЧИЛАН ХАРАХ
-          </button>
           <button className="btn btn-primary" onClick={onImport}
-            disabled={importQ.loading || !content}>
-            {importQ.loading ? "ИМПОРТЛОЖ БАЙНА..." : "ИМПОРТЛОХ"}
+            disabled={importQ.loading || busy || !content}>
+            {importQ.loading ? "ИМПОРТЛОЖ БАЙНА..."
+              : busy ? "ШИНЖИЛЖ БАЙНА..." : "ИМПОРТЛОХ"}
           </button>
         </div>
         <div style={{fontSize: 11, color: "var(--text-muted)", marginTop: 8}}>
