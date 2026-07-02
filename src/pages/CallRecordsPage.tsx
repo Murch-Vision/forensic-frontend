@@ -25,6 +25,7 @@ import {
   PageHeader,
   StatCard,
 } from "../components/kit";
+import {Select} from "../components/inputs";
 import Plot from "../components/Plot";
 import {formatDateTime, formatDuration, riskClass} from "../lib/format";
 import type {CallRecord} from "../types";
@@ -205,16 +206,14 @@ export default function CallRecordsPage() {
       <Card title="Сэжигтнээр шүүх" style={{marginBottom: 16}}>
         <div style={{display: "flex", gap: 12, alignItems: "center",
           flexWrap: "wrap"}}>
-          <select className="form-input" value={selectedSuspectId}
-            onChange={(e) => setSelectedSuspectId(Number(e.target.value))}
-            style={{minWidth: 240}}>
-            <option value={0}>Бүх дуудлага ({allCalls.length} бичлэг)</option>
-            {suspects.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.fullName} ({callCount(s)} дуудлага)
-              </option>
-            ))}
-          </select>
+          <Select value={selectedSuspectId}
+            onChange={(v) => setSelectedSuspectId(Number(v))}
+            style={{minWidth: 240}}
+            options={[
+              {value: 0, label: `Бүх дуудлага (${allCalls.length} бичлэг)`},
+              ...suspects.map((s) => ({value: s.id,
+                label: `${s.fullName} (${callCount(s)} дуудлага)`})),
+            ]} />
           {selected && (
             <>
               <Badge text={selected.riskLevel}

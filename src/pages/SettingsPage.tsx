@@ -14,6 +14,7 @@ import {
   UPDATE_SETTINGS,
 } from "../graphql/queries";
 import {Card, Loading, PageHeader} from "../components/kit";
+import {Select} from "../components/inputs";
 
 interface Aml {
   cashReportingThreshold: number;
@@ -154,18 +155,20 @@ export default function SettingsPage() {
       <Card title="ХЭЛ & ХАРАГДАЛТ" style={{marginBottom: 16}}>
         <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14}}>
           <Field label="Хэл">
-            <select className="form-input" value={form.language}
-              onChange={(e) => setForm({...form, language: e.target.value})}>
-              <option value="mongolian">Монгол</option>
-              <option value="english">English</option>
-            </select>
+            <Select value={form.language} style={{width: "100%"}}
+              onChange={(v) => setForm({...form, language: v})}
+              options={[
+                {value: "mongolian", label: "Монгол"},
+                {value: "english", label: "English"},
+              ]} />
           </Field>
           <Field label="Загвар">
-            <select className="form-input" value={form.theme}
-              onChange={(e) => setForm({...form, theme: e.target.value})}>
-              <option value="dark">Хар (dark)</option>
-              <option value="light">Цайвар (light)</option>
-            </select>
+            <Select value={form.theme} style={{width: "100%"}}
+              onChange={(v) => setForm({...form, theme: v})}
+              options={[
+                {value: "dark", label: "Хар (dark)"},
+                {value: "light", label: "Цайвар (light)"},
+              ]} />
           </Field>
           <Field label="Аудит хадгалах хугацаа (өдөр)">
             <input type="number" className="form-input"
@@ -174,13 +177,14 @@ export default function SettingsPage() {
                 auditRetentionDays: Number(e.target.value)})} />
           </Field>
           <Field label="Телеметр">
-            <select className="form-input"
-              value={form.telemetryEnabled ? "on" : "off"}
-              onChange={(e) => setForm({...form,
-                telemetryEnabled: e.target.value === "on"})}>
-              <option value="off">Идэвхгүй</option>
-              <option value="on">Идэвхтэй</option>
-            </select>
+            <Select value={form.telemetryEnabled ? "on" : "off"}
+              style={{width: "100%"}}
+              onChange={(v) => setForm({...form,
+                telemetryEnabled: v === "on"})}
+              options={[
+                {value: "off", label: "Идэвхгүй"},
+                {value: "on", label: "Идэвхтэй"},
+              ]} />
           </Field>
         </div>
       </Card>
@@ -193,11 +197,12 @@ export default function SettingsPage() {
               onChange={(e) => setAml("currencySymbol", e.target.value)} />
           </Field>
           <Field label="Форматын загвар">
-            <select className="form-input" value={form.aml.currencyFormat}
-              onChange={(e) => setAml("currencyFormat", e.target.value)}>
-              <option value="N0">N0</option>
-              <option value="N2">N2</option>
-            </select>
+            <Select value={form.aml.currencyFormat} style={{width: "100%"}}
+              onChange={(v) => setAml("currencyFormat", v)}
+              options={[
+                {value: "N0", label: "N0"},
+                {value: "N2", label: "N2"},
+              ]} />
           </Field>
           {AML_FIELDS.map((f) => (
             <Field key={f.key} label={f.label}>
@@ -212,13 +217,14 @@ export default function SettingsPage() {
       <Card title="OSINT — САНКЦЫН ШИНЭЧЛЭЛ">
         <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14}}>
           <Field label="Авто шинэчлэл">
-            <select className="form-input"
-              value={form.osint.autoRefreshEnabled ? "on" : "off"}
-              onChange={(e) => setForm({...form, osint: {...form.osint,
-                autoRefreshEnabled: e.target.value === "on"}})}>
-              <option value="off">Идэвхгүй</option>
-              <option value="on">Идэвхтэй</option>
-            </select>
+            <Select value={form.osint.autoRefreshEnabled ? "on" : "off"}
+              style={{width: "100%"}}
+              onChange={(v) => setForm({...form, osint: {...form.osint,
+                autoRefreshEnabled: v === "on"}})}
+              options={[
+                {value: "off", label: "Идэвхгүй"},
+                {value: "on", label: "Идэвхтэй"},
+              ]} />
           </Field>
           <Field label="Интервал (цаг)">
             <input type="number" className="form-input"

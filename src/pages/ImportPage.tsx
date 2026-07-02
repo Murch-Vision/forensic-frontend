@@ -14,8 +14,9 @@ import {
   PREVIEW_IMPORT,
 } from "../graphql/queries";
 import {Badge, Card, Empty, PageHeader} from "../components/kit";
+import {Select} from "../components/inputs";
 
-type ImportKind = "AUTO" | "BANK" | "CDR" | "ACCESS_LOG";
+type ImportKind = "AUTO" | "BANK" | "CDR";
 
 interface Preview {
   headers: string[];
@@ -55,7 +56,6 @@ const KINDS: {value: ImportKind; label: string}[] = [
   {value: "AUTO", label: "Автомат таних"},
   {value: "BANK", label: "Банкны хуулга"},
   {value: "CDR", label: "Дуудлагын бүртгэл (CDR)"},
-  {value: "ACCESS_LOG", label: "Хандалтын лог"},
 ];
 
 function isExcelName(name: string): boolean {
@@ -242,26 +242,24 @@ export default function ImportPage() {
             </>
           )}
           {isExcel && sheets.length > 0 && (
-            <select className="form-input" value={sheetName ?? ""}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => setSheetName(e.target.value)}
-              style={{maxWidth: 240}}
-              title="Excel хуудас сонгох">
-              {sheets.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <div onClick={(e) => e.stopPropagation()}
+              style={{display: "inline-block"}}>
+              <Select value={sheetName ?? ""}
+                onChange={(v) => setSheetName(v)}
+                options={sheets.map((s) => ({value: s, label: s}))}
+                style={{maxWidth: 240}}
+                title="Excel хуудас сонгох" />
+            </div>
           )}
         </div>
         <div style={{display: "flex", gap: 12, marginTop: 16,
           alignItems: "flex-end", flexWrap: "wrap"}}>
           <div>
             <label className="form-label">Төрөл</label>
-            <select className="form-input" value={kind}
-              onChange={(e) => setKind(e.target.value as ImportKind)}
-              style={{minWidth: 220}}>
-              {KINDS.map((k) => (
-                <option key={k.value} value={k.value}>{k.label}</option>
-              ))}
-            </select>
+            <Select value={kind}
+              onChange={(v) => setKind(v as ImportKind)}
+              options={KINDS}
+              style={{minWidth: 220}} />
           </div>
           <button className="btn" onClick={onPreview} disabled={busy || !content}>
             УРЬДЧИЛАН ХАРАХ
@@ -327,14 +325,11 @@ export default function ImportPage() {
             {BANK_FIELDS.map((f) => (
               <div key={f.key}>
                 <label className="form-label">{f.label}</label>
-                <select className="form-input" value={mapping[f.key] ?? ""}
-                  onChange={(e) => setMap(f.key, e.target.value)}
-                  style={{width: "100%"}}>
-                  <option value="">—</option>
-                  {preview.headers.map((h) => (
-                    <option key={h} value={h}>{h}</option>
-                  ))}
-                </select>
+                <Select value={mapping[f.key] ?? ""}
+                  onChange={(v) => setMap(f.key, v)}
+                  options={[{value: "", label: "—"},
+                    ...preview.headers.map((h) => ({value: h, label: h}))]}
+                  style={{width: "100%"}} />
               </div>
             ))}
           </div>

@@ -25,6 +25,9 @@ IBM i2-inspired dark forensic workstation. All tokens in `src/styles/app.css`:
   `.modal-overlay/.modal-content`, `.page-container`, `.page-header`,
   `.toolbar`, `.metrics-grid`/`.metric-card`. Kit: `src/components/kit.tsx`
   (PageHeader, Card, StatCard, DataTable, Empty, Loading, charts via Plotly).
+- RULE: NEVER use native <select> or <input type="date"> — use `Select` and
+  `DateInput` from src/components/inputs.tsx (styled trigger + popover menu /
+  calendar; CSS `.select-*`/`.datepicker-*` in app.css, menu z-index 1200).
 
 ## Layout shell (App.tsx)
 Sidebar (220px) + right column = `AppHeader` (56px, `--app-header-h`) + main.
@@ -90,6 +93,11 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   profile card (risk-ringed avatar, InfoField grid, notes callout). Mutations
   from graphql/suspects.ts (CRUD) + queries.ts. Actions target the person's
   PRIMARY (first) record; multi-record persons get per-row ЗАСАХ/УСТГАХ.
+
+- 2026-07-02: Styled Select/DateInput rolled out app-wide (user wish: no
+  native selects/datepickers) — 19 selects + 2 date inputs replaced across
+  AppHeader, Transactions, Import, Settings, People, Calls, Timeline.
+  Import: removed "Хандалтын лог" (ACCESS_LOG) import kind (user wish).
 
 ## Backlog (user wishes, in priority order)
 1. Hierarchy for all pages (case → suspect → …).

@@ -15,6 +15,7 @@ import {
   SET_ACTIVE_CASE,
   SET_CASE_STATUS,
 } from "../graphql/queries";
+import {Select} from "./inputs";
 
 // Global case session bar shown on every page: the analyst picks the case
 // once here and every page (evidence tagging, exhibits, …) follows it via
@@ -138,35 +139,29 @@ export default function AppHeader() {
     <header className="app-header">
       <div className="app-header-group">
         <span className="app-header-label">Идэвхтэй кейс</span>
-        <select
-          className="form-input app-header-select"
+        <Select
+          className="app-header-select"
           value={activeCase?.id ?? ""}
-          onChange={(e) =>
-            onSelectCase(e.target.value ? Number(e.target.value) : null)}
+          onChange={(v) => onSelectCase(v ? Number(v) : null)}
           title="Идэвхтэй кейс — бүх хуудсанд үйлчилнэ"
-        >
-          <option value="">Кейс сонгоогүй</option>
-          {caseFiles.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.caseId} · {c.caseName} ({STATUS_LABELS[c.status] ?? c.status})
-            </option>
-          ))}
-        </select>
+          options={[
+            {value: "", label: "Кейс сонгоогүй"},
+            ...caseFiles.map((c) => ({value: c.id,
+              label: `${c.caseId} · ${c.caseName} (${
+                STATUS_LABELS[c.status] ?? c.status})`})),
+          ]} />
         {activeCase && (
           <>
             <span className={`badge ${STATUS_BADGE[status] ?? "unknown"}`}>
               {STATUS_LABELS[status] ?? status}
             </span>
-            <select
-              className="form-input app-header-status"
+            <Select
+              className="app-header-status"
               value={status}
-              onChange={(e) => onChangeStatus(e.target.value)}
+              onChange={(v) => onChangeStatus(v)}
               title="Кейсийн төлөв солих"
-            >
-              {["OPEN", "ACTIVE", "CLOSED", "ARCHIVED"].map((s) => (
-                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-              ))}
-            </select>
+              options={["OPEN", "ACTIVE", "CLOSED", "ARCHIVED"].map((s) =>
+                ({value: s, label: STATUS_LABELS[s]}))} />
           </>
         )}
       </div>
@@ -196,11 +191,10 @@ export default function AppHeader() {
                 <div className="form-error-box">{mergeError}</div>
               )}
               <label className="form-label">Хүлээн авах кейс (үндсэн)</label>
-              <select
-                className="form-input"
+              <Select
                 value={mergeTarget ?? ""}
-                onChange={(e) => {
-                  const id = Number(e.target.value);
+                onChange={(v) => {
+                  const id = Number(v);
                   setMergeTarget(id);
                   setMergeSources((prev) => {
                     const next = new Set(prev);
@@ -208,14 +202,9 @@ export default function AppHeader() {
                     return next;
                   });
                 }}
-                style={{marginBottom: 14}}
-              >
-                {caseFiles.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.caseId} · {c.caseName}
-                  </option>
-                ))}
-              </select>
+                style={{marginBottom: 14, width: "100%"}}
+                options={caseFiles.map((c) => ({value: c.id,
+                  label: `${c.caseId} · ${c.caseName}`}))} />
               <label className="form-label">Нэгтгэх кейсүүд</label>
               <div style={{maxHeight: 240, overflowY: "auto",
                 border: "1px solid var(--border-primary)",

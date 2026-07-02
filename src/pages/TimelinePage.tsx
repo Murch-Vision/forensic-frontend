@@ -19,6 +19,7 @@ import {
   StatCard,
 } from "../components/kit";
 import type {Column} from "../components/kit";
+import {Select} from "../components/inputs";
 import {
   formatDateTime,
   formatDuration,
@@ -168,14 +169,13 @@ export default function TimelinePage() {
 
       <div className="toolbar" style={{marginBottom: 16, display: "flex",
         gap: 16, alignItems: "center", flexWrap: "wrap"}}>
-        <select className="form-input" value={selectedSuspectId}
-          onChange={(e) => setSelectedSuspectId(e.target.value)}
-          style={{minWidth: 200}}>
-          <option value="">Бүх сэжигтэн</option>
-          {data.suspects.map((s) => (
-            <option key={s.id} value={s.id}>{s.fullName}</option>
-          ))}
-        </select>
+        <Select value={selectedSuspectId}
+          onChange={(v) => setSelectedSuspectId(v)}
+          style={{minWidth: 200}}
+          options={[
+            {value: "", label: "Бүх сэжигтэн"},
+            ...data.suspects.map((s) => ({value: s.id, label: s.fullName})),
+          ]} />
         <label style={{fontSize: 12, display: "flex", alignItems: "center",
           gap: 4, cursor: "pointer"}}>
           <input

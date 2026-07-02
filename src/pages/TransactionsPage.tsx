@@ -24,6 +24,7 @@ import {
   PageHeader,
   StatCard,
 } from "../components/kit";
+import {DateInput, Select} from "../components/inputs";
 import Plot from "../components/Plot";
 import {formatDateTime, formatMoney, sevClass} from "../lib/format";
 import type {BankTransaction} from "../types";
@@ -396,45 +397,47 @@ export default function TransactionsPage() {
           alignItems: "flex-end"}}>
           <div>
             <label className="form-label">Данс</label>
-            <select className="form-input" value={filterAccount}
-              onChange={(e) => setFilterAccount(e.target.value)}
-              style={{minWidth: 180}}>
-              <option value="All">Бүх данс</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={String(a.id)}>{a.maskedNumber}</option>
-              ))}
-            </select>
+            <Select value={filterAccount}
+              onChange={(v) => setFilterAccount(v)}
+              style={{minWidth: 180}}
+              options={[
+                {value: "All", label: "Бүх данс"},
+                ...accounts.map((a) =>
+                  ({value: String(a.id), label: a.maskedNumber})),
+              ]} />
           </div>
           <div>
             <label className="form-label">Төрөл</label>
-            <select className="form-input" value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              style={{minWidth: 160}}>
-              <option value="">Бүх төрөл</option>
-              <option value="credit">Орлогын гүйлгээ</option>
-              <option value="debit">Зарлагын гүйлгээ</option>
-            </select>
+            <Select value={filterType}
+              onChange={(v) => setFilterType(v)}
+              style={{minWidth: 160}}
+              options={[
+                {value: "", label: "Бүх төрөл"},
+                {value: "credit", label: "Орлогын гүйлгээ"},
+                {value: "debit", label: "Зарлагын гүйлгээ"},
+              ]} />
           </div>
           <div>
             <label className="form-label">Туг</label>
-            <select className="form-input" value={filterFlag}
-              onChange={(e) => setFilterFlag(e.target.value)}
-              style={{minWidth: 160}}>
-              <option value="">Бүх туг</option>
-              <option value="FLAGGED">Тугтай</option>
-              <option value="SUSPICIOUS">Сэжигтэй</option>
-            </select>
+            <Select value={filterFlag}
+              onChange={(v) => setFilterFlag(v)}
+              style={{minWidth: 160}}
+              options={[
+                {value: "", label: "Бүх туг"},
+                {value: "FLAGGED", label: "Тугтай"},
+                {value: "SUSPICIOUS", label: "Сэжигтэй"},
+              ]} />
           </div>
           <div>
             <label className="form-label">Эхлэх огноо</label>
-            <input type="date" className="form-input" value={filterFrom}
-              onChange={(e) => setFilterFrom(e.target.value)}
+            <DateInput value={filterFrom}
+              onChange={(v) => setFilterFrom(v)}
               style={{minWidth: 160}} />
           </div>
           <div>
             <label className="form-label">Дуусах огноо</label>
-            <input type="date" className="form-input" value={filterTo}
-              onChange={(e) => setFilterTo(e.target.value)}
+            <DateInput value={filterTo}
+              onChange={(v) => setFilterTo(v)}
               style={{minWidth: 160}} />
           </div>
           <div style={{flex: 1, minWidth: 220}}>
@@ -451,13 +454,11 @@ export default function TransactionsPage() {
         <Card
           title={`Давхардсан гүйлгээний утга (${dupDescs.length})`}
           actions={
-            <select className="form-input" value={topN}
-              onChange={(e) => setTopN(Number(e.target.value))}
-              title="Топ N" style={{width: 110}}>
-              {[5, 10, 20, 50].map((n) => (
-                <option key={n} value={n}>Топ {n}</option>
-              ))}
-            </select>
+            <Select value={topN}
+              onChange={(v) => setTopN(Number(v))}
+              title="Топ N" style={{width: 110}}
+              options={[5, 10, 20, 50].map((n) =>
+                ({value: n, label: `Топ ${n}`}))} />
           }
           noPadding
         >
@@ -502,13 +503,11 @@ export default function TransactionsPage() {
       <Card
         title={`Дуудлагын дараах гүйлгээ (${corrRows.length}) — дуудлагаас хойш мөнгөн гүйлгээ`}
         actions={
-          <select className="form-input" value={corrMin}
-            onChange={(e) => setCorrMin(Number(e.target.value))}
-            title="Дуудлагаас хойших хугацааны цонх" style={{width: 130}}>
-            {[5, 15, 30, 60, 120].map((m) => (
-              <option key={m} value={m}>{m} мин дотор</option>
-            ))}
-          </select>
+          <Select value={corrMin}
+            onChange={(v) => setCorrMin(Number(v))}
+            title="Дуудлагаас хойших хугацааны цонх" style={{width: 150}}
+            options={[5, 15, 30, 60, 120].map((m) =>
+              ({value: m, label: `${m} мин дотор`}))} />
         }
         style={{marginBottom: 16}}
         noPadding

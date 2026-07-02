@@ -34,6 +34,7 @@ import {
   PageHeader,
   StatCard,
 } from "../components/kit";
+import {Select} from "../components/inputs";
 import type {RiskLevel, SuspectInput, SuspectStatus} from "../types";
 
 interface PersonSuspect {
@@ -758,14 +759,10 @@ export default function PeoplePage() {
               </div>
               <div>
                 <label className="form-label">Эрсдэлийн түвшин</label>
-                <select className="form-input" style={{width: "100%"}}
+                <Select style={{width: "100%"}}
                   value={form.riskLevel ?? "UNKNOWN"}
-                  onChange={(e) =>
-                    setField("riskLevel", e.target.value as RiskLevel)}>
-                  {RISK_LEVELS.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
+                  onChange={(v) => setField("riskLevel", v as RiskLevel)}
+                  options={RISK_LEVELS.map((r) => ({value: r, label: r}))} />
               </div>
               <div style={{gridColumn: "1 / -1"}}>
                 <label className="form-label">Тэмдэглэл</label>
