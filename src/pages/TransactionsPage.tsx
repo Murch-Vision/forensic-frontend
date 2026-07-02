@@ -10,6 +10,7 @@ import {useState} from "react";
 import {useLazyQuery, useMutation, useQuery} from "@apollo/client";
 import {
   ACTIVE_CASE_QUERY,
+  CALL_RECORDS_QUERY,
   EVIDENCE_FOR_CASE,
   TAG_EVIDENCE,
   TRANSACTIONS_QUERY,
@@ -32,6 +33,20 @@ interface TxnAccount {
   accountNumber : string;
   bankName      : string | null;
   maskedNumber  : string;
+  suspectId     : number | null;
+}
+
+interface CorrCall {
+  id            : number;
+  callerNumber  : string;
+  calledNumber  : string;
+  startTime     : string;
+  suspectId     : number | null;
+}
+
+interface CorrData {
+  callRecords : CorrCall[];
+  suspects    : {id: number; fullName: string}[];
 }
 
 interface TxnData {
@@ -62,6 +77,7 @@ const ROW: React.CSSProperties = {
 
 export default function TransactionsPage() {
   const {data, loading} = useQuery<TxnData>(TRANSACTIONS_QUERY);
+  const callsQ = useQuery<CorrData>(CALL_RECORDS_QUERY);
   const caseQ = useQuery<{activeCase: {id: number} | null}>(ACTIVE_CASE_QUERY);
   const activeCase = caseQ.data?.activeCase ?? null;
   const evidenceQ = useQuery<{evidenceForCase: {sourceType: string;
@@ -75,6 +91,7 @@ export default function TransactionsPage() {
   const [filterTo, setFilterTo] = useState("");
   const [filterDesc, setFilterDesc] = useState("");
   const [topN, setTopN] = useState(10);
+  const [corrMin, setCorrMin] = useState(30);
   const [drill, drillQ] = useLazyQuery<{transactionDrillDown: DrillDown}>(
     TRANSACTION_DRILLDOWN, {fetchPolicy: "no-cache"});
   const [drillOpen, setDrillOpen] = useState(false);
@@ -186,6 +203,41 @@ export default function TransactionsPage() {
     .filter((a) => a.dupes > 0)
     .sort((a, b) => b.dupes - a.dupes)
     .slice(0, topN);
+
+  // Дуудлагын дараах гүйлгээ: for each filtered transaction, the same
+  // suspect's nearest preceding call within the chosen window.
+  const suspectByAcct = new Map(accounts.map((a) => [a.id, a.suspectId]));
+  const nameBySuspect = new Map(
+    (callsQ.data?.suspects ?? []).map((s) => [s.id, s.fullName]));
+  const calls = callsQ.data?.callRecords ?? [];
+  interface CorrRow {
+    call: CorrCall; txn: BankTransaction;
+    suspectName: string; deltaMin: number;
+  }
+  const corrRows: CorrRow[] = [];
+  for (const t of filtered) {
+    const sid = suspectByAcct.get(t.bankAccountId);
+    if (sid == null) continue;
+    const tt = new Date(t.timestamp).getTime();
+    let best: CorrCall | null = null;
+    let bestDelta = Infinity;
+    for (const c of calls) {
+      if (c.suspectId !== sid) continue;
+      const delta = (tt - new Date(c.startTime).getTime()) / 60000;
+      if (delta >= 0 && delta <= corrMin && delta < bestDelta) {
+        best = c;
+        bestDelta = delta;
+      }
+    }
+    if (best) {
+      corrRows.push({call: best, txn: t,
+        suspectName: nameBySuspect.get(sid) ?? `#${sid}`,
+        deltaMin: bestDelta});
+    }
+  }
+  corrRows.sort((a, b) => a.deltaMin - b.deltaMin);
+  const corrClass = (m: number) =>
+    m <= 5 ? "tight" : m <= 15 ? "close" : "near";
 
   const totalCount   = filtered.length;
   const credits = filtered.filter((t) => t.type === "credit");
@@ -446,6 +498,50 @@ export default function TransactionsPage() {
           />
         </Card>
       </div>
+
+      <Card
+        title={`Дуудлагын дараах гүйлгээ (${corrRows.length}) — дуудлагаас хойш мөнгөн гүйлгээ`}
+        actions={
+          <select className="form-input" value={corrMin}
+            onChange={(e) => setCorrMin(Number(e.target.value))}
+            title="Дуудлагаас хойших хугацааны цонх" style={{width: 130}}>
+            {[5, 15, 30, 60, 120].map((m) => (
+              <option key={m} value={m}>{m} мин дотор</option>
+            ))}
+          </select>
+        }
+        style={{marginBottom: 16}}
+        noPadding
+      >
+        <DataTable<(typeof corrRows)[number]>
+          columns={[
+            {header: "Дуудлага", render: (r) => formatDateTime(r.call.startTime)},
+            {header: "Дугаар",
+              render: (r) => `${r.call.callerNumber} → ${r.call.calledNumber}`},
+            {header: "Сэжигтэн", render: (r) => r.suspectName},
+            {header: "Зөрүү", align: "center" as const,
+              render: (r) => (
+                <span className={`correlation-badge ${corrClass(r.deltaMin)}`}>
+                  +{r.deltaMin.toFixed(0)} мин
+                </span>
+              )},
+            {header: "Гүйлгээ", render: (r) => formatDateTime(r.txn.timestamp)},
+            {header: "Дүн", align: "right" as const,
+              render: (r) => (
+                <span style={{color: r.txn.type === "credit"
+                  ? "var(--accent-green)" : "var(--accent-red)"}}>
+                  {formatMoney(r.txn.amount)}
+                </span>
+              )},
+            {header: "Гүйлгээний утга",
+              render: (r) => r.txn.description ?? "—"},
+          ]}
+          rows={corrRows}
+          rowKey={(r) => `${r.call.id}-${r.txn.id}`}
+          empty={`${corrMin} минутын дотор дуудлагын дараах гүйлгээ алга`}
+          onRowClick={(r) => openDrill(r.txn)}
+        />
+      </Card>
 
       <div style={ROW}>
         <Card title="Гүйлгээний дэлгэц (дүн vs хугацаа)">

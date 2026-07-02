@@ -56,9 +56,14 @@ Unknown paths redirect to /dashboard.
   (click row → sets desc filter) and данс↔харьцсан данс duplicated-amount
   pairs. All client-side over TRANSACTIONS_QUERY.
 
+- 2026-07-02: TransactionsPage — "Дуудлагын дараах гүйлгээ" card: per
+  filtered txn, same suspect's nearest preceding call within N min
+  (5-120 select, default 30), `.correlation-badge tight/close/near`,
+  row click → drilldown. Uses CALL_RECORDS_QUERY + suspectId added to
+  TRANSACTIONS_QUERY bankAccounts.
+
 ## Backlog (user wishes, in priority order)
-1. Call→transaction correlation filter (transactions within N min after call).
-2. UI consistency sweep: uniform button sizes in every toolbar.
-3. Merge cases feature.
-4. Global people database (person appears across cases → full profile).
-5. Hierarchy for all pages (case → suspect → …).
+1. UI consistency sweep: uniform button sizes in every toolbar.
+2. Merge cases feature.
+3. Global people database (person appears across cases → full profile).
+4. Hierarchy for all pages (case → suspect → …).

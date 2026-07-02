@@ -31,7 +31,7 @@ export const DASHBOARD_QUERY = gql`
 
 export const TRANSACTIONS_QUERY = gql`
   query Transactions {
-    bankAccounts { id accountNumber bankName maskedNumber }
+    bankAccounts { id accountNumber bankName maskedNumber suspectId }
     transactions {
       id bankAccountId timestamp amount type category description
       counterpartyAccount counterpartyName channel runningBalance flagStatus
