@@ -17,6 +17,7 @@ import {
   Loading,
   PageHeader,
   StatCard,
+  ToggleChip,
 } from "../components/kit";
 import type {Column} from "../components/kit";
 import {Select} from "../components/inputs";
@@ -56,6 +57,11 @@ interface TimelineData {
   callRecords: CallRecord[];
   correlations: CorrelationHit[];
 }
+
+const TYPE_META: Record<string, {label: string; color: string; kind: string}> = {
+  TRANSACTION: {label: "Гүйлгээ", color: "var(--accent-green)", kind: "low"},
+  CALL: {label: "Дуудлага", color: "var(--accent-cyan)", kind: "info"},
+};
 
 interface TimelineItem {
   timestamp: string;
@@ -98,7 +104,7 @@ export default function TimelinePage() {
   if (loading || !data) {
     return (
       <div className="page-container">
-        <PageHeader icon="🕒" title="Цагийн хугацааны анализ"
+        <PageHeader icon="🕒" title="Он цагийн хэлхээ"
           subtitle="ЦАГИЙН ХОЛБОО БА ҮЙЛ ЯВДЛЫН ДАРААЛАЛ" />
         <Loading />
       </div>
@@ -165,61 +171,37 @@ export default function TimelinePage() {
 
   return (
     <div className="page-container">
-      <PageHeader icon="🕒" title="Цагийн хугацааны анализ"
+      <PageHeader icon="🕒" title="Он цагийн хэлхээ"
         subtitle="ЦАГИЙН ХОЛБОО БА ҮЙЛ ЯВДЛЫН ДАРААЛАЛ" />
       <CaseScopeBar summary={`${visible.length} үйл явдал`} />
 
       <div className="metrics-grid">
         <StatCard label="Үйл явдал" value={visible.length} />
+        <StatCard label="Гүйлгээ" value={data.transactions.length} />
+        <StatCard label="Дуудлага" value={data.callRecords.length} />
         <StatCard label="Хамаарал" value={correlations.length} />
       </div>
 
-      <div className="toolbar" style={{marginBottom: 16, display: "flex",
-        gap: 16, alignItems: "center", flexWrap: "wrap"}}>
-        <Select value={selectedSuspectId}
-          onChange={(v) => setSelectedSuspectId(v)}
-          style={{minWidth: 200}}
-          options={[
-            {value: "", label: "Бүх сэжигтэн"},
-            ...data.suspects.map((s) => ({value: s.id, label: s.fullName})),
-          ]} />
-        <label style={{fontSize: 12, display: "flex", alignItems: "center",
-          gap: 4, cursor: "pointer"}}>
-          <input
-            type="checkbox"
-            checked={showTransactions}
-            onChange={(e) => setShowTransactions(e.target.checked)}
-          />
-          Гүйлгээ
-        </label>
-        <label style={{fontSize: 12, display: "flex", alignItems: "center",
-          gap: 4, cursor: "pointer"}}>
-          <input
-            type="checkbox"
-            checked={showCalls}
-            onChange={(e) => setShowCalls(e.target.checked)}
-          />
-          Дуудлага
-        </label>
-        <label style={{fontSize: 12, display: "flex", alignItems: "center",
-          gap: 4, cursor: "pointer"}}>
-          <input
-            type="checkbox"
-            checked={showCorrelations}
-            onChange={(e) => setShowCorrelations(e.target.checked)}
-          />
-          Холбоо
-        </label>
-        <label style={{fontSize: 12, display: "flex", alignItems: "center",
-          gap: 4, cursor: "pointer"}}>
-          <input
-            type="checkbox"
-            checked={showTravel}
-            onChange={(e) => setShowTravel(e.target.checked)}
-          />
-          Зорчилт
-        </label>
-      </div>
+      <Card title="Шүүлтүүр" style={{marginBottom: 16}}>
+        <div style={{display: "flex", gap: 12, alignItems: "center",
+          flexWrap: "wrap"}}>
+          <Select value={selectedSuspectId}
+            onChange={(v) => setSelectedSuspectId(v)}
+            style={{minWidth: 220}}
+            options={[
+              {value: "", label: "Бүх сэжигтэн"},
+              ...data.suspects.map((s) => ({value: s.id, label: s.fullName})),
+            ]} />
+          <ToggleChip label="Гүйлгээ" on={showTransactions}
+            onToggle={() => setShowTransactions((v) => !v)} />
+          <ToggleChip label="Дуудлага" on={showCalls}
+            onToggle={() => setShowCalls((v) => !v)} />
+          <ToggleChip label="Холбоо" on={showCorrelations}
+            onToggle={() => setShowCorrelations((v) => !v)} />
+          <ToggleChip label="Зорчилт" on={showTravel}
+            onToggle={() => setShowTravel((v) => !v)} />
+        </div>
+      </Card>
 
       <Card title={`Үйл явдлын цагийн хугацаа (${visible.length})`} noPadding
         style={{marginBottom: 16}}>
@@ -227,38 +209,48 @@ export default function TimelinePage() {
           {visible.length === 0 ? (
             <Empty message="Цагийн хугацааны үйл явдал алга" />
           ) : (
-            visible.map((item, i) => (
-              <div key={i} style={{
-                display: "flex",
-                gap: 12,
-                alignItems: "flex-start",
-                padding: "10px 14px",
-                borderBottom: "1px solid var(--border-primary)",
-              }}>
-                <div style={{
-                  fontSize: 10,
-                  fontFamily: "var(--font-mono)",
-                  color: "var(--text-muted)",
-                  minWidth: 110,
+            visible.map((item, i) => {
+              const meta = TYPE_META[item.type]
+                ?? {label: item.type, color: "var(--border-secondary)",
+                  kind: "unknown"};
+              return (
+                <div key={i} style={{
+                  display: "flex",
+                  gap: 12,
+                  alignItems: "flex-start",
+                  padding: "10px 14px",
+                  borderBottom: "1px solid var(--border-primary)",
+                  boxShadow: `inset 3px 0 0 ${meta.color}`,
                 }}>
-                  {formatDateTime(item.timestamp)}
-                </div>
-                <Badge text={item.type} kind={sevClass(item.severity)} />
-                <div style={{flex: 1, minWidth: 0}}>
-                  <div style={{fontSize: 12, fontWeight: 600}}>
-                    {item.title}
+                  <div style={{
+                    fontSize: 10,
+                    fontFamily: "var(--font-mono)",
+                    color: "var(--text-muted)",
+                    minWidth: 110,
+                    paddingTop: 2,
+                  }}>
+                    {formatDateTime(item.timestamp)}
                   </div>
-                  <div style={{fontSize: 11, color: "var(--text-secondary)"}}>
-                    {item.description}
+                  <Badge text={meta.label}
+                    kind={item.severity === "ALERT" ? "warning" : meta.kind} />
+                  <div style={{flex: 1, minWidth: 0}}>
+                    <div style={{fontSize: 12, fontWeight: 600}}>
+                      {item.title}
+                    </div>
+                    <div style={{fontSize: 11,
+                      color: "var(--text-secondary)"}}>
+                      {item.description}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </Card>
 
-      <Card title="Хамаарал (Correlation)" noPadding style={{marginBottom: 16}}>
+      <Card title="Хамаарал (дуудлага ↔ гүйлгээ)" noPadding
+        style={{marginBottom: 16}}>
         <DataTable
           columns={columns}
           rows={correlations}

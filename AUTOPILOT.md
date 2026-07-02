@@ -15,3 +15,4 @@
 - 2026-07-02: data pages now truly case-scoped — CaseScopeBar strip (case vs "Бүх кейс") on txns/calls/timeline/linkchart; case switch refetches everything.
 - 2026-07-02: Хүмүүсийн сан redesigned — sticky list panel with inline stats, profile stat strip (rainbow metric cards gone), proper modal chrome with photo drop-well + form sections.
 - 2026-07-02: breadcrumb drilldown — header now shows Кейс › Хуудас › <хүн/зангилаа> on people, calls, timeline and link chart detail views.
+- 2026-07-02: timeline polished — nav-matching title, 4 stat cards, ToggleChip filters (native checkboxes gone), colored event rails + MN badges. Fraud page left untouched per user wish.

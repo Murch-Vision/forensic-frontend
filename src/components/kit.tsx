@@ -91,6 +91,22 @@ export function Badge({text, kind}: {text: string; kind: string}) {
   return <span className={`badge ${kind}`}>{text}</span>;
 }
 
+// On/off filter pill — use instead of native checkboxes in toolbars.
+export function ToggleChip({label, on, onToggle}: {
+  label: string;
+  on: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button type="button" aria-pressed={on}
+      className={on ? "toggle-chip on" : "toggle-chip"}
+      onClick={onToggle}>
+      <span className="toggle-chip-dot" />
+      {label}
+    </button>
+  );
+}
+
 export interface Column<T> {
   header: string;
   render: (row: T) => ReactNode;

@@ -876,6 +876,46 @@ body {
 @media (max-width: 640px) {
     .form-grid-2 { grid-template-columns: 1fr; }
 }
+
+/* Toggle chip — styled on/off filter pill (replaces native checkboxes) */
+.toggle-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-primary);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.toggle-chip:hover {
+    border-color: var(--border-secondary);
+    color: var(--text-primary);
+}
+.toggle-chip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border-secondary);
+    transition: var(--transition);
+    flex-shrink: 0;
+}
+.toggle-chip.on {
+    border-color: rgba(0, 229, 255, 0.5);
+    color: var(--accent-cyan);
+    background: rgba(0, 229, 255, 0.06);
+}
+.toggle-chip.on .toggle-chip-dot {
+    background: var(--accent-cyan);
+    box-shadow: 0 0 6px rgba(0, 229, 255, 0.8);
+}
 .id-chip {
     display: inline-block;
     padding: 3px 8px;

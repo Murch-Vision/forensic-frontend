@@ -162,8 +162,14 @@ Settings page, Залилангийн урсгал (fraud) page.
   People (person on display), Calls + Timeline (suspect filter), LinkChart
   (selected node). Call the hook BEFORE loading early-returns.
 
+- 2026-07-02: Timeline polish (last backlog item) — page retitled to its nav
+  name "Он цагийн хэлхээ", 4 StatCards (events/txns/calls/correlations),
+  filter card with new shared `ToggleChip` (kit.tsx, `.toggle-chip*` css —
+  RULE: use it instead of native checkboxes in toolbars), event rows get
+  TYPE_META colored inset rail + MN badges. Fraud page untouched per user.
+
 ## Backlog (user wishes, in priority order)
-(empty — all user wishes shipped)
+(empty — all user wishes shipped; FIXED BACKLOG fully done 2026-07-02)
 
 ## Parked (NOT in this run's backlog)
 - Import doesn't tag suspects into the active case → freshly imported data
