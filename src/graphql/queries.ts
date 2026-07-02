@@ -516,8 +516,9 @@ export const GLOBAL_PEOPLE_QUERY = gql`
       key fullName aliases riskLevel photoData occupation nationalId
       matchedBy phoneNumbers accountNumbers transactionCount callRecordCount
       suspects {
-        id suspectId fullName primaryPhone riskLevel occupation
-        organization createdAt
+        id suspectId fullName aliases nationalId passportNumber dateOfBirth
+        gender address city country primaryPhone email occupation
+        organization riskLevel notes photoData status createdAt age
       }
       cases {
         suspectId exhibitNumber severity taggedAtUtc

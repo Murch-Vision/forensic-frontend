@@ -6,3 +6,4 @@
 - 2026-07-02: Import — removed mandatory Эзэн (сэжигтэн); files can hold multiple suspects, rows self-attribute (user wish).
 - 2026-07-02: UI consistency sweep — uniform full-size buttons in all toolbars/headers/modal footers, new .modal-actions class, btn-sm reserved for table rows (user wish).
 - 2026-07-02: People database page — /people master-detail: every person across all cases, duplicates grouped, full profile with cases/phones/accounts (user wish).
+- 2026-07-02: Merged Хувийн мэдээлэл into Хүмүүсийн сан — one people page with full management + redesigned profile; /suspects removed (user wish).

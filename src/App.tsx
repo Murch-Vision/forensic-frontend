@@ -8,7 +8,6 @@
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {NavLink, Navigate, Route, Routes} from "react-router-dom";
 import AppHeader from "./components/AppHeader";
-import SuspectsPage from "./pages/SuspectsPage";
 import PeoplePage from "./pages/PeoplePage";
 import DashboardPage from "./pages/DashboardPage";
 import ImportPage from "./pages/ImportPage";
@@ -25,8 +24,6 @@ import FraudWorkflowPage from "./pages/FraudWorkflowPage";
 const NAV = [
   {path: "/dashboard", label: "Хяналтын самбар", icon: "\u{1F4CA}",
     el: <DashboardPage />},
-  {path: "/suspects", label: "Хувийн мэдээлэл", icon: "\u{1F471}",
-    el: <SuspectsPage />},
   {path: "/people", label: "Хүмүүсийн сан", icon: "\u{1F465}",
     el: <PeoplePage />},
   {path: "/import", label: "Өгөгдөл импорт", icon: "\u{1F4E5}",
@@ -100,6 +97,8 @@ export default function App() {
         <main style={{flex: 1, overflow: "hidden", minHeight: 0}}>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/suspects"
+              element={<Navigate to="/people" replace />} />
             {NAV.map((n) => (
               <Route key={n.path} path={n.path} element={n.el} />
             ))}

@@ -36,10 +36,11 @@ select (SET_CASE_STATUS → api mutation `setCaseStatus`), "+ ШИНЭ КЕЙС"
 (CREATE_CASE_FILE). All pages follow it via the shared Apollo cache entry.
 
 ## Routes (post-cleanup)
-/dashboard /suspects /people /import /transactions /calls /timeline
+/dashboard /people /import /transactions /calls /timeline
 /linkchart /fraud /reports /settings. REMOVED per user wish (files
 deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
-(Мэдээллийн самбар). Unknown paths redirect to /dashboard.
+(Мэдээллийн самбар), suspects (Хувийн мэдээлэл — merged into /people,
+/suspects redirects there). Unknown paths redirect to /dashboard.
 
 ## Done
 - 2026-07-02: Global case system — AppHeader case switcher on all pages,
@@ -82,6 +83,13 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   name / phone last-8 / nationalId; per person: cases (via SUSPECT evidence
   entries), phones, accounts, txn+call counts, matchedBy chips. Master-detail
   via new `.master-detail`/`.person-row`/`.person-avatar`/`.id-chip` (app.css).
+- 2026-07-02: SuspectsPage deleted, merged into PeoplePage (user wish): full
+  person management now lives there — create/edit/delete (modal form, photo
+  resize→256px JPEG data-URI), + УТАС / + ДАНС inline forms, evidence tagging
+  into active case (КЕЙСТ ТЭМДЭГЛЭХ ↔ НОТЛОХ БАРИМТ №N badge), redesigned
+  profile card (risk-ringed avatar, InfoField grid, notes callout). Mutations
+  from graphql/suspects.ts (CRUD) + queries.ts. Actions target the person's
+  PRIMARY (first) record; multi-record persons get per-row ЗАСАХ/УСТГАХ.
 
 ## Backlog (user wishes, in priority order)
 1. Hierarchy for all pages (case → suspect → …).
