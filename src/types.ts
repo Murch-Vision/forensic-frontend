@@ -135,6 +135,7 @@ export interface BankTransaction {
   channel             : string | null;
   location            : string | null;
   runningBalance      : number;
+  currency            : string;
   flagStatus          : FlagStatus;
 }
 

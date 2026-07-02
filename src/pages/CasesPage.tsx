@@ -7,7 +7,7 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useState} from "react";
-import {useMutation, useQuery} from "@apollo/client";
+import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {
   ACTIVE_CASE_QUERY,
   CASE_FILES_QUERY,
@@ -53,6 +53,7 @@ const PRIORITY_BADGE: Record<string, string> = {
 };
 
 export default function CasesPage() {
+  const client = useApolloClient();
   const casesQ = useQuery<{caseFiles: CaseRow[]}>(CASE_FILES_QUERY);
   const activeQ = useQuery<{activeCase: {id: number} | null}>(ACTIVE_CASE_QUERY);
 
@@ -237,8 +238,15 @@ export default function CasesPage() {
                   <td>
                     <Select
                       value={c.status}
-                      onChange={(v) => setCaseStatus({
-                        variables: {caseFileId: c.id, status: v}})}
+                      onChange={async (v) => {
+                        await setCaseStatus({
+                          variables: {caseFileId: c.id, status: v}});
+                        // Closing/archiving the selected case unselects it
+                        // server-side — refetch everything to follow.
+                        if (v === "CLOSED" || v === "ARCHIVED") {
+                          await client.resetStore();
+                        }
+                      }}
                       title="Кейсийн төлөв солих"
                       style={{width: 150}}
                       options={["OPEN", "ACTIVE", "CLOSED", "ARCHIVED"].map(

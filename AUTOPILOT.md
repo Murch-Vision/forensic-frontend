@@ -20,3 +20,4 @@
 - 2026-07-03: cases page — СОНГОХ/СОНГОГДСОН scope action (was ИДЭВХЖҮҮЛЭХ), Үйлдэл column with ЗАСАХ → case edit modal (user wish).
 - 2026-07-03: header case dropdown gained status filter; redundant СОНГОХ removed from cases table; plotly heatmap NaN console spam fixed (numeric y axis).
 - 2026-07-03: scope bar removed, strict header filter, auto-preview import (no AUTO kind), settings emptied (nuke gone), apollo cache warnings silenced.
+- 2026-07-03: transactions show currency, noise columns dropped, archive unselects case in UI. (co-authored with owner)

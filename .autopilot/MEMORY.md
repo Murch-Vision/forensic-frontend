@@ -204,6 +204,12 @@ Settings page, Залилангийн урсгал (fraud) page.
   apollo.ts typePolicies replace-merge root list fields (silences "cache
   data may be lost" warnings).
 
+- 2026-07-03 (co-authored with the OWNER's uncommitted working-tree code —
+  check `git status` before any reset!): TransactionsPage shows Валют column
+  (mono, MNT default), Категори/Суваг/Төлөв columns + Туг filter REMOVED
+  (never-imported noise), CasesPage resetStore after CLOSED/ARCHIVED status
+  change (api unselects the working case).
+
 ## Backlog (user wishes, in priority order)
 (empty — all user wishes shipped; FIXED BACKLOG fully done 2026-07-02)
 

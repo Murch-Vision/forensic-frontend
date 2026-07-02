@@ -88,7 +88,6 @@ export default function TransactionsPage() {
   const [tagEvidence] = useMutation(TAG_EVIDENCE);
   const [filterAccount, setFilterAccount] = useState("All");
   const [filterType, setFilterType] = useState("");
-  const [filterFlag, setFilterFlag] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
   const [filterDesc, setFilterDesc] = useState("");
@@ -144,16 +143,13 @@ export default function TransactionsPage() {
     && (!descNeedle
       || (t.description ?? "").toLowerCase().includes(descNeedle)));
   const tableRows = filtered.filter((t) =>
-    (!filterType || t.type === filterType)
-    && (!filterFlag || t.flagStatus === filterFlag));
+    (!filterType || t.type === filterType));
   const hasFilter = filterAccount !== "All" || filterType !== ""
-    || filterFlag !== "" || filterFrom !== "" || filterTo !== ""
-    || filterDesc !== "";
+    || filterFrom !== "" || filterTo !== "" || filterDesc !== "";
 
   function clearFilters() {
     setFilterAccount("All");
     setFilterType("");
-    setFilterFlag("");
     setFilterFrom("");
     setFilterTo("");
     setFilterDesc("");
@@ -354,8 +350,13 @@ export default function TransactionsPage() {
       render: (t: BankTransaction) => formatMoney(t.amount),
     },
     {
-      header: "Категори",
-      render: (t: BankTransaction) => t.category ?? "—",
+      header: "Валют",
+      render: (t: BankTransaction) => (
+        <span style={{fontFamily: "var(--font-mono)", fontSize: 11,
+          color: "var(--text-secondary)"}}>
+          {t.currency || "MNT"}
+        </span>
+      ),
     },
     {
       header: "Харьцагч",
@@ -366,16 +367,6 @@ export default function TransactionsPage() {
       header: "Баланс",
       align: "right" as const,
       render: (t: BankTransaction) => formatMoney(t.runningBalance),
-    },
-    {
-      header: "Суваг",
-      render: (t: BankTransaction) => t.channel,
-    },
-    {
-      header: "Төлөв",
-      render: (t: BankTransaction) => (
-        <Badge text={t.flagStatus} kind={sevClass(t.flagStatus)} />
-      ),
     },
   ];
 
@@ -419,17 +410,6 @@ export default function TransactionsPage() {
                 {value: "", label: "Бүх төрөл"},
                 {value: "credit", label: "Орлогын гүйлгээ"},
                 {value: "debit", label: "Зарлагын гүйлгээ"},
-              ]} />
-          </div>
-          <div>
-            <label className="form-label">Туг</label>
-            <Select value={filterFlag}
-              onChange={(v) => setFilterFlag(v)}
-              style={{minWidth: 160}}
-              options={[
-                {value: "", label: "Бүх туг"},
-                {value: "FLAGGED", label: "Тугтай"},
-                {value: "SUSPICIOUS", label: "Сэжигтэй"},
               ]} />
           </div>
           <div>

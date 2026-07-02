@@ -35,6 +35,7 @@ export const TRANSACTIONS_QUERY = gql`
     transactions {
       id bankAccountId timestamp amount type category description
       counterpartyAccount counterpartyName channel runningBalance flagStatus
+      currency
     }
   }
 `;
