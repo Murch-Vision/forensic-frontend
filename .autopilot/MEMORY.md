@@ -33,13 +33,15 @@ IBM i2-inspired dark forensic workstation. All tokens in `src/styles/app.css`:
 Sidebar (220px) + right column = `AppHeader` (56px, `--app-header-h`) + main.
 `.page-container` is height:100% (NOT 100vh). Any page-level vh math must
 subtract `var(--app-header-h)`.
-`src/components/AppHeader.tsx` = GLOBAL case session bar on every page:
-case switcher (ACTIVE_CASE_QUERY / SET_ACTIVE_CASE), status badge + status
-select (SET_CASE_STATUS → api mutation `setCaseStatus`), "+ ШИНЭ КЕЙС" modal
-(CREATE_CASE_FILE). All pages follow it via the shared Apollo cache entry.
+`src/components/AppHeader.tsx` = case SCOPE bar only (user wish): case
+switcher (ACTIVE_CASE_QUERY / SET_ACTIVE_CASE), read-only status badge,
+breadcrumb `Кейс › <page>` (labels from `src/nav.ts` — single source shared
+with the sidebar), "КЕЙС УДИРДАХ →" link. NO mutations besides switching:
+create / merge / status changes live on /cases (CasesPage.tsx,
+CASE_FILES_QUERY). All pages follow the scope via the shared Apollo cache.
 
 ## Routes (post-cleanup)
-/dashboard /people /import /transactions /calls /timeline
+/cases /dashboard /people /import /transactions /calls /timeline
 /linkchart /fraud /reports /settings. REMOVED per user wish (files
 deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
 (Мэдээллийн самбар), suspects (Хувийн мэдээлэл — merged into /people,
@@ -99,5 +101,14 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   AppHeader, Transactions, Import, Settings, People, Calls, Timeline.
   Import: removed "Хандалтын лог" (ACCESS_LOG) import kind (user wish).
 
+- 2026-07-02: Case hierarchy — new /cases page (CasesPage.tsx): metrics row,
+  full case table (status Select per row, priority badge, dates, activate,
+  active row highlighted `.case-row-active`), create + merge modals MOVED
+  here from AppHeader. AppHeader slimmed to scope bar + breadcrumb
+  `Кейс › <page>` (nav.ts = shared path/label/icon meta + STATUS_LABELS/
+  STATUS_BADGE). Addresses wishes "don't change case status in app header"
+  + "hierarchy for all pages".
+
 ## Backlog (user wishes, in priority order)
-1. Hierarchy for all pages (case → suspect → …).
+1. Deeper drilldown breadcrumbs (case → person on detail views) — optional
+   refinement of the hierarchy wish; core case → page scope is shipped.

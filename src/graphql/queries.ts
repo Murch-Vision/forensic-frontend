@@ -441,6 +441,15 @@ export const CLEAR_ALL_DATA = gql`
   }
 `;
 
+export const CASE_FILES_QUERY = gql`
+  query CaseFilesFull {
+    caseFiles {
+      id caseId caseName description status priority
+      leadInvestigator createdAt closedAt
+    }
+  }
+`;
+
 export const ACTIVE_CASE_QUERY = gql`
   query ActiveCase {
     activeCase { id caseId caseName status priority }

@@ -7,7 +7,10 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {NavLink, Navigate, Route, Routes} from "react-router-dom";
+import type {ReactNode} from "react";
 import AppHeader from "./components/AppHeader";
+import {NAV_META} from "./nav";
+import CasesPage from "./pages/CasesPage";
 import PeoplePage from "./pages/PeoplePage";
 import DashboardPage from "./pages/DashboardPage";
 import ImportPage from "./pages/ImportPage";
@@ -19,30 +22,24 @@ import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
 import FraudWorkflowPage from "./pages/FraudWorkflowPage";
 
-// Case-centric page set: the analyst works inside the case picked in the
-// global AppHeader; every page below follows that session.
-const NAV = [
-  {path: "/dashboard", label: "Хяналтын самбар", icon: "\u{1F4CA}",
-    el: <DashboardPage />},
-  {path: "/people", label: "Хүмүүсийн сан", icon: "\u{1F465}",
-    el: <PeoplePage />},
-  {path: "/import", label: "Өгөгдөл импорт", icon: "\u{1F4E5}",
-    el: <ImportPage />},
-  {path: "/transactions", label: "Гүйлгээ", icon: "\u{1F4B0}",
-    el: <TransactionsPage />},
-  {path: "/calls", label: "Дуудлагын бүртгэл", icon: "\u{1F4DE}",
-    el: <CallRecordsPage />},
-  {path: "/timeline", label: "Он цагийн хэлхээ", icon: "\u{23F1}",
-    el: <TimelinePage />},
-  {path: "/linkchart", label: "Холбоосын зураглал", icon: "\u{1F578}",
-    el: <LinkChartPage />},
-  {path: "/fraud", label: "Залилангийн урсгал", icon: "\u{1F6E1}",
-    el: <FraudWorkflowPage />},
-  {path: "/reports", label: "Тайлан", icon: "\u{1F4C4}",
-    el: <ReportsPage />},
-  {path: "/settings", label: "Тохиргоо", icon: "\u{2699}",
-    el: <SettingsPage />},
-];
+// Case-centric page set: /cases is the hierarchy root (case management);
+// every other page works inside the case picked in the global AppHeader.
+// Labels/paths live in nav.ts, shared with the AppHeader breadcrumb.
+const PAGE_ELEMENTS: Record<string, ReactNode> = {
+  "/cases": <CasesPage />,
+  "/dashboard": <DashboardPage />,
+  "/people": <PeoplePage />,
+  "/import": <ImportPage />,
+  "/transactions": <TransactionsPage />,
+  "/calls": <CallRecordsPage />,
+  "/timeline": <TimelinePage />,
+  "/linkchart": <LinkChartPage />,
+  "/fraud": <FraudWorkflowPage />,
+  "/reports": <ReportsPage />,
+  "/settings": <SettingsPage />,
+};
+
+const NAV = NAV_META.map((n) => ({...n, el: PAGE_ELEMENTS[n.path]}));
 
 export default function App() {
   return (

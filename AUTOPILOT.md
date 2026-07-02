@@ -8,3 +8,4 @@
 - 2026-07-02: People database page — /people master-detail: every person across all cases, duplicates grouped, full profile with cases/phones/accounts (user wish).
 - 2026-07-02: Merged Хувийн мэдээлэл into Хүмүүсийн сан — one people page with full management + redesigned profile; /suspects removed (user wish).
 - 2026-07-02: Styled Select + DateInput components replace every native select/datepicker app-wide; removed Хандалтын лог import type (user wishes).
+- 2026-07-02: /cases case-management page + header slimmed to scope bar with Кейс › page breadcrumb (hierarchy wish)
