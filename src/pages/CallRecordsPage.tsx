@@ -27,6 +27,7 @@ import {
 } from "../components/kit";
 import {Select} from "../components/inputs";
 import CaseScopeBar from "../components/CaseScopeBar";
+import {useDrilldown} from "../lib/drilldown";
 import Plot from "../components/Plot";
 import {formatDateTime, formatDuration, riskClass} from "../lib/format";
 import type {CallRecord} from "../types";
@@ -77,6 +78,10 @@ export default function CallRecordsPage() {
 
   const allCalls = data?.callRecords ?? [];
   const suspects = data?.suspects ?? [];
+  // Suspect filter = a drilldown; surface it in the header breadcrumb.
+  useDrilldown(selectedSuspectId !== 0
+    ? suspects.find((s) => s.id === selectedSuspectId)?.fullName ?? null
+    : null);
 
   // suspectId → phone numbers, for mapping calls to a person.
   const suspectPhones = useMemo(() => {

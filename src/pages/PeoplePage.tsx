@@ -33,6 +33,7 @@ import {
   PageHeader,
 } from "../components/kit";
 import {Select} from "../components/inputs";
+import {useDrilldown} from "../lib/drilldown";
 import type {RiskLevel, SuspectInput, SuspectStatus} from "../types";
 
 interface PersonSuspect {
@@ -251,6 +252,8 @@ export default function PeoplePage() {
     filtered.find((p) => p.key === selectedKey) ?? filtered[0] ?? null;
   // Management actions operate on the person's primary (first) record.
   const primary = selected?.suspects[0] ?? null;
+  // The person on display = a drilldown; surface it in the breadcrumb.
+  useDrilldown(selected?.fullName ?? null);
   const activeCaseRef = selected && activeCase
     ? selected.cases.find((c) => c.caseFile.id === activeCase.id) ?? null
     : null;

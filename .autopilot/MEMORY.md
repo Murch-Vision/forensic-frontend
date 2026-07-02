@@ -156,9 +156,14 @@ Settings page, Залилангийн урсгал (fraud) page.
   photo drop-well (+`.avatar-remove`), `.form-section-label` hairline section
   titles, `.form-grid-2` (collapses <640px), Хүйс + Хот fields added.
 
+- 2026-07-02: drilldown breadcrumb — lib/drilldown.ts (`drilldownVar`
+  reactive var + `useDrilldown(label)` hook, clears on unmount). AppHeader
+  renders `Кейс › Хуудас › <entity>` (`.app-header-drill`, cyan). Wired:
+  People (person on display), Calls + Timeline (suspect filter), LinkChart
+  (selected node). Call the hook BEFORE loading early-returns.
+
 ## Backlog (user wishes, in priority order)
-1. Deeper drilldown breadcrumbs (case → person on detail views) — optional
-   refinement of the hierarchy wish; core case → page scope is shipped.
+(empty — all user wishes shipped)
 
 ## Parked (NOT in this run's backlog)
 - Import doesn't tag suspects into the active case → freshly imported data

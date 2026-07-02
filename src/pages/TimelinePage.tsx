@@ -21,6 +21,7 @@ import {
 import type {Column} from "../components/kit";
 import {Select} from "../components/inputs";
 import CaseScopeBar from "../components/CaseScopeBar";
+import {useDrilldown} from "../lib/drilldown";
 import {
   formatDateTime,
   formatDuration,
@@ -89,6 +90,10 @@ export default function TimelinePage() {
   const travelQ = useQuery<{travelCorrelations: TravelHit[]}>(TRAVEL_QUERY, {
     variables: {suspectId, hourWindow: 4},
   });
+  // Suspect filter = a drilldown; surface it in the header breadcrumb.
+  useDrilldown(suspectId != null
+    ? data?.suspects.find((s) => s.id === suspectId)?.fullName ?? null
+    : null);
 
   if (loading || !data) {
     return (

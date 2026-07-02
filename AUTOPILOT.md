@@ -14,3 +14,4 @@
 - 2026-07-02: sidebar brand bar aligned to app-header height; link chart zoom-under-cursor drift fixed (letterbox offset in zoom math)
 - 2026-07-02: data pages now truly case-scoped — CaseScopeBar strip (case vs "Бүх кейс") on txns/calls/timeline/linkchart; case switch refetches everything.
 - 2026-07-02: Хүмүүсийн сан redesigned — sticky list panel with inline stats, profile stat strip (rainbow metric cards gone), proper modal chrome with photo drop-well + form sections.
+- 2026-07-02: breadcrumb drilldown — header now shows Кейс › Хуудас › <хүн/зангилаа> on people, calls, timeline and link chart detail views.

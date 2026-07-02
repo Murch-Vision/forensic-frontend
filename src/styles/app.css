@@ -121,6 +121,10 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.app-header-drill {
+    color: var(--accent-cyan);
+    max-width: 220px;
+}
 .app-header-manage {
     font-family: var(--font-mono);
     font-size: 10px;

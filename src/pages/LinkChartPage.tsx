@@ -25,6 +25,7 @@ import {
 } from "../components/kit";
 import NetworkGraph from "../components/NetworkGraph";
 import CaseScopeBar from "../components/CaseScopeBar";
+import {useDrilldown} from "../lib/drilldown";
 import {buildEvidenceNetwork} from "../lib/networkGraph";
 import type {NetworkNode} from "../lib/networkGraph";
 import type {SuspectLinkType} from "../types";
@@ -98,6 +99,8 @@ export default function LinkChartPage() {
   }}>(NETWORK_FLOW_QUERY);
   const [generate, {loading: generating}] = useMutation(GENERATE_LINKS);
   const [selected, setSelected] = useState<NetworkNode | null>(null);
+  // Selected node = a drilldown; surface it in the header breadcrumb.
+  useDrilldown(selected?.label ?? null);
 
   async function onGenerate() {
     await generate();

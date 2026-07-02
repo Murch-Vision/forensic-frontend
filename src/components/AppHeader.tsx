@@ -7,9 +7,15 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {Link, useLocation} from "react-router-dom";
-import {useApolloClient, useMutation, useQuery} from "@apollo/client";
+import {
+  useApolloClient,
+  useMutation,
+  useQuery,
+  useReactiveVar,
+} from "@apollo/client";
 import {ACTIVE_CASE_QUERY, SET_ACTIVE_CASE} from "../graphql/queries";
 import {NAV_META, STATUS_BADGE, STATUS_LABELS} from "../nav";
+import {drilldownVar} from "../lib/drilldown";
 import {Select} from "./inputs";
 
 // Global case SCOPE bar shown on every page: the analyst picks the case once
@@ -36,6 +42,7 @@ export default function AppHeader() {
   const activeCase = caseQ.data?.activeCase ?? null;
   const caseFiles = caseQ.data?.caseFiles ?? [];
   const page = NAV_META.find((n) => location.pathname.startsWith(n.path));
+  const drill = useReactiveVar(drilldownVar);
 
   async function onSelectCase(id: number | null) {
     await setActiveCase({variables: {caseFileId: id}});
@@ -71,6 +78,15 @@ export default function AppHeader() {
           <>
             <span className="app-header-crumb">›</span>
             <span className="app-header-page">{page.label}</span>
+            {drill && (
+              <>
+                <span className="app-header-crumb">›</span>
+                <span className="app-header-page app-header-drill"
+                  title={drill}>
+                  {drill}
+                </span>
+              </>
+            )}
           </>
         )}
       </div>
