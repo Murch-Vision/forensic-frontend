@@ -242,8 +242,8 @@ export default function AppHeader() {
                 Нотлох баримт, тэмдэглэл үндсэн кейс рүү шилжиж, нэгтгэсэн
                 кейсүүд архивлагдана.
               </div>
-              <div style={{display: "flex", justifyContent: "flex-end", gap: 8}}>
-                <button className="btn btn-sm"
+              <div className="modal-actions">
+                <button className="btn"
                   onClick={() => setShowMerge(false)}>ЦУЦЛАХ</button>
                 <button className="btn btn-accent"
                   disabled={merging || mergeSources.size === 0}
@@ -293,8 +293,8 @@ export default function AppHeader() {
                 placeholder="Кейсийн нэр (заавал биш)"
                 style={{marginBottom: 18}}
               />
-              <div style={{display: "flex", justifyContent: "flex-end", gap: 8}}>
-                <button className="btn btn-sm"
+              <div className="modal-actions">
+                <button className="btn"
                   onClick={() => setShowForm(false)}>ЦУЦЛАХ</button>
                 <button className="btn btn-accent" onClick={submitCase}>
                   ҮҮСГЭХ

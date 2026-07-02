@@ -108,18 +108,18 @@ export default function ReportsPage() {
   const actions = (
     <>
       <button className="btn btn-primary" onClick={onPdf}
-        disabled={pdfQ.loading} style={{marginRight: 6}}>
+        disabled={pdfQ.loading}>
         {pdfQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "PDF ЭКСПОРТ"}
       </button>
-      <button className="btn btn-sm" onClick={onExcel}
-        disabled={excelQ.loading} style={{marginRight: 6}}>
+      <button className="btn" onClick={onExcel}
+        disabled={excelQ.loading}>
         {excelQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "EXCEL ЭКСПОРТ"}
       </button>
-      <button className="btn btn-sm" onClick={onBundle}
-        disabled={bundleQ.loading} style={{marginRight: 6}}>
+      <button className="btn" onClick={onBundle}
+        disabled={bundleQ.loading}>
         {bundleQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "БҮРДЭЛ (ZIP)"}
       </button>
-      <button className="btn btn-sm" onClick={onWord}
+      <button className="btn" onClick={onWord}
         disabled={wordQ.loading}>
         {wordQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "WORD БОЛОВСРУУЛАХ"}
       </button>

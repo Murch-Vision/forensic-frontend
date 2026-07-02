@@ -70,8 +70,13 @@ Unknown paths redirect to /dashboard.
   suspect phone-number suffix match, bank rows by "Данс" column (accounts
   find-or-created, mapping field "account"/"Өөрийн данс"); fallback
   ХУУЛГА-ИМПОРТ bucket. subjectSuspectId now optional API fallback only.
+- 2026-07-02: Button consistency sweep — RULE: `.btn-sm` ONLY for row-level
+  actions inside tables/grids; toolbars, page/card headers and modal footers
+  always full-size `.btn` (one emphasized variant max, plain `.btn` secondary,
+  cancel-left/primary-right). Spacing via `.toolbar` gap / new `.modal-actions`
+  class (app.css) — NO inline marginRight between buttons. Swept Reports,
+  Settings, Suspects, Transactions, AppHeader modals, NetworkGraph.
 
 ## Backlog (user wishes, in priority order)
-1. UI consistency sweep: uniform button sizes in every toolbar.
-2. Global people database (person appears across cases → full profile).
-3. Hierarchy for all pages (case → suspect → …).
+1. Global people database (person appears across cases → full profile).
+2. Hierarchy for all pages (case → suspect → …).

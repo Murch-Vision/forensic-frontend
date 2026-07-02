@@ -129,10 +129,10 @@ export default function SettingsPage() {
 
   const actions = (
     <>
-      <button className="btn" onClick={() => applyPreset("MN")}
-        style={{marginRight: 6}}>Монгол (₮)</button>
-      <button className="btn" onClick={() => applyPreset("US")}
-        style={{marginRight: 6}}>АНУ ($)</button>
+      <button className="btn" onClick={() => applyPreset("MN")}>
+        Монгол (₮)</button>
+      <button className="btn" onClick={() => applyPreset("US")}>
+        АНУ ($)</button>
       <button className="btn btn-primary" onClick={onSave}
         disabled={saveM.loading}>
         {saveM.loading ? "ХАДГАЛЖ БАЙНА..." : "ХАДГАЛАХ"}

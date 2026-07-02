@@ -262,11 +262,7 @@ export default function SuspectsPage() {
           <div className="page-subtitle">ХУВИЙН МЭДЭЭЛЭЛ & АЛБАН ТУШААЛ</div>
         </div>
         <div className="toolbar">
-          <button
-            className="btn btn-success"
-            onClick={startAddSubject}
-            style={{marginRight: 8}}
-          >
+          <button className="btn btn-success" onClick={startAddSubject}>
             + ХҮН НЭМЭХ
           </button>
           <button className="btn btn-primary" onClick={() => refetch()}>
@@ -364,7 +360,7 @@ export default function SuspectsPage() {
                       ) : (
                         <button
                           className="btn btn-sm"
-                          style={{marginLeft: 6, fontSize: 9, padding: "3px 8px"}}
+                          style={{marginLeft: 6}}
                           title="Идэвхтэй кейст нотлох баримт болгож тэмдэглэх"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -441,15 +437,11 @@ function SuspectForm(props: FormProps) {
           {isEditing ? "МЭДЭЭЛЭЛ ЗАСАХ" : "ШИНЭ ХҮН НЭМЭХ"}
         </span>
         <div className="toolbar">
-          <button
-            className="btn btn-success"
-            onClick={onSave}
-            style={{marginRight: 6}}
-          >
-            {isEditing ? "ШИНЭЧЛЭХ" : "ҮҮСГЭХ"}
-          </button>
-          <button className="btn btn-sm" onClick={onCancel}>
+          <button className="btn" onClick={onCancel}>
             ЦУЦЛАХ
+          </button>
+          <button className="btn btn-success" onClick={onSave}>
+            {isEditing ? "ШИНЭЧЛЭХ" : "ҮҮСГЭХ"}
           </button>
         </div>
       </div>
@@ -519,7 +511,7 @@ function SuspectForm(props: FormProps) {
             {form.photoData && (
               <button
                 type="button"
-                className="btn btn-sm"
+                className="btn"
                 style={{marginTop: 6}}
                 onClick={() => onField("photoData", null)}
               >
@@ -741,14 +733,10 @@ function SuspectDetailPanel(props: DetailProps) {
         <div className="card-header">
           <span className="card-title">{suspect.fullName}</span>
           <div className="toolbar">
-            <button
-              className="btn btn-sm"
-              onClick={onEdit}
-              style={{marginRight: 6}}
-            >
+            <button className="btn" onClick={onEdit}>
               ЗАСАХ
             </button>
-            <button className="btn btn-sm btn-danger" onClick={onDelete}>
+            <button className="btn btn-danger" onClick={onDelete}>
               УСТГАХ
             </button>
           </div>
@@ -811,7 +799,7 @@ function SuspectDetailPanel(props: DetailProps) {
             {suspect.recordCounts.callRecordCount}
           </span>
           <div className="toolbar">
-            <button className="btn btn-sm"
+            <button className="btn"
               onClick={() => setShowAccountForm((v) => !v)}>
               + ДАНС
             </button>
@@ -879,7 +867,7 @@ function SuspectDetailPanel(props: DetailProps) {
             Утасны дугаар ({suspect.phoneNumbers.length})
           </span>
           <div className="toolbar">
-            <button className="btn btn-sm"
+            <button className="btn"
               onClick={() => setShowPhoneForm((v) => !v)}>
               + УТАС
             </button>

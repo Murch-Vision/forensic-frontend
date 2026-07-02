@@ -545,7 +545,9 @@ export default function NetworkGraph(props: {
           onClick={() => zoomButton(1.2)}>+</button>
         <button className="btn" style={btnStyle}
           onClick={() => zoomButton(1 / 1.2)}>−</button>
-        <button className="btn" onClick={onReset}>↺ Дахин эхлүүлэх</button>
+        <button className="btn" style={{height: 30}} onClick={onReset}>
+          ↺ Дахин эхлүүлэх
+        </button>
       </div>
       <div style={{
         position: "absolute", top: 10, left: 10, zIndex: 2,

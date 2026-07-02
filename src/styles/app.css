@@ -489,6 +489,12 @@ body {
 .btn-danger { border-color: var(--accent-red); color: var(--accent-red); }
 .btn-danger:hover { background: rgba(255,23,68,0.1); }
 .btn-sm { padding: 4px 10px; font-size: 10px; }
+/* Modal footer action row — full-size .btn only, primary variant last */
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
 
 /* Grid Layouts */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

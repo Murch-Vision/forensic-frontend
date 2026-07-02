@@ -390,7 +390,7 @@ export default function TransactionsPage() {
 
       <Card title="Шүүлтүүр" style={{marginBottom: 16}}
         actions={hasFilter ? (
-          <button className="btn btn-sm" onClick={clearFilters}>ЦЭВЭРЛЭХ</button>
+          <button className="btn" onClick={clearFilters}>ЦЭВЭРЛЭХ</button>
         ) : undefined}>
         <div style={{display: "flex", gap: 12, flexWrap: "wrap",
           alignItems: "flex-end"}}>
@@ -652,7 +652,7 @@ export default function TransactionsPage() {
             <div style={{display: "flex", justifyContent: "space-between",
               alignItems: "center", marginBottom: 12}}>
               <span className="card-title">Гүйлгээний нягтлал</span>
-              <button className="btn btn-sm" onClick={() => setDrillOpen(false)}>
+              <button className="btn" onClick={() => setDrillOpen(false)}>
                 ХААХ
               </button>
             </div>
