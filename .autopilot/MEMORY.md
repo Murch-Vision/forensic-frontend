@@ -36,10 +36,10 @@ select (SET_CASE_STATUS → api mutation `setCaseStatus`), "+ ШИНЭ КЕЙС"
 (CREATE_CASE_FILE). All pages follow it via the shared Apollo cache entry.
 
 ## Routes (post-cleanup)
-/dashboard /suspects /import /transactions /calls /timeline /linkchart
-/fraud /reports /settings. REMOVED per user wish (files deleted): map,
-analysis (Шинжилгээ), osint, audit, intelboard (Мэдээллийн самбар).
-Unknown paths redirect to /dashboard.
+/dashboard /suspects /people /import /transactions /calls /timeline
+/linkchart /fraud /reports /settings. REMOVED per user wish (files
+deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
+(Мэдээллийн самбар). Unknown paths redirect to /dashboard.
 
 ## Done
 - 2026-07-02: Global case system — AppHeader case switcher on all pages,
@@ -77,6 +77,11 @@ Unknown paths redirect to /dashboard.
   class (app.css) — NO inline marginRight between buttons. Swept Reports,
   Settings, Suspects, Transactions, AppHeader modals, NetworkGraph.
 
+- 2026-07-02: People database — /people (PeoplePage.tsx), api `globalPeople`
+  (peopleService.ts): suspect records union-found into persons by normalized
+  name / phone last-8 / nationalId; per person: cases (via SUSPECT evidence
+  entries), phones, accounts, txn+call counts, matchedBy chips. Master-detail
+  via new `.master-detail`/`.person-row`/`.person-avatar`/`.id-chip` (app.css).
+
 ## Backlog (user wishes, in priority order)
-1. Global people database (person appears across cases → full profile).
-2. Hierarchy for all pages (case → suspect → …).
+1. Hierarchy for all pages (case → suspect → …).

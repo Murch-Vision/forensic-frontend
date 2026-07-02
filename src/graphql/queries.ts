@@ -509,3 +509,20 @@ export const SET_AML = gql`
     }
   }
 `;
+
+export const GLOBAL_PEOPLE_QUERY = gql`
+  query GlobalPeople {
+    globalPeople {
+      key fullName aliases riskLevel photoData occupation nationalId
+      matchedBy phoneNumbers accountNumbers transactionCount callRecordCount
+      suspects {
+        id suspectId fullName primaryPhone riskLevel occupation
+        organization createdAt
+      }
+      cases {
+        suspectId exhibitNumber severity taggedAtUtc
+        caseFile { id caseId caseName status priority }
+      }
+    }
+  }
+`;
