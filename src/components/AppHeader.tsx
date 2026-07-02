@@ -46,13 +46,10 @@ export default function AppHeader() {
   const drill = useReactiveVar(drilldownVar);
 
   // Status filter for the case dropdown (user wish: e.g. only open cases).
-  // Sticky across sessions; the active case always stays listed so the
-  // trigger can render it even when it falls outside the filter.
+  // Sticky across sessions.
   const [statusFilter, setStatusFilter] = useState(
     () => localStorage.getItem("caseStatusFilter") ?? ""
   );
-  // STRICT: the menu lists only matching cases; the trigger still names the
-  // current case via triggerLabel even when it falls outside the filter.
   const visibleCases = statusFilter
     ? caseFiles.filter((c) => c.status === statusFilter)
     : caseFiles;
@@ -60,6 +57,11 @@ export default function AppHeader() {
   function onFilterChange(v: string) {
     setStatusFilter(v);
     localStorage.setItem("caseStatusFilter", v);
+    // The filter defines the working scope: an active case that falls
+    // outside it must not silently stay selected — deselect it.
+    if (v && activeCase && activeCase.status !== v) {
+      void onSelectCase(null);
+    }
   }
 
   async function onSelectCase(id: number | null) {

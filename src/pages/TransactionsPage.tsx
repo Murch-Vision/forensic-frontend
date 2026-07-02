@@ -333,21 +333,26 @@ export default function TransactionsPage() {
       render: (t: BankTransaction) => formatDateTime(t.timestamp),
     },
     {
-      header: "Төрөл",
-      render: (t: BankTransaction) => (
-        <span style={{
-          color: t.type === "credit"
-            ? "var(--accent-green)"
-            : "var(--accent-red)",
-        }}>
-          {t.type}
-        </span>
-      ),
+      header: "Орлого",
+      align: "right" as const,
+      render: (t: BankTransaction) => t.type === "credit"
+        ? (
+          <span style={{color: "var(--accent-green)"}}>
+            {formatMoney(t.amount)}
+          </span>
+        )
+        : "—",
     },
     {
-      header: "Дүн",
+      header: "Зарлага",
       align: "right" as const,
-      render: (t: BankTransaction) => formatMoney(t.amount),
+      render: (t: BankTransaction) => t.type === "debit"
+        ? (
+          <span style={{color: "var(--accent-red)"}}>
+            {formatMoney(t.amount)}
+          </span>
+        )
+        : "—",
     },
     {
       header: "Валют",
@@ -653,7 +658,8 @@ export default function TransactionsPage() {
                     <div style={{fontSize: 20, fontWeight: 700,
                       color: target.type === "credit"
                         ? "var(--accent-green)" : "var(--risk-high)"}}>
-                      {formatMoney(target.amount)} ({target.type})
+                      {formatMoney(target.amount)}
+                      {" "}({target.type === "credit" ? "Орлого" : "Зарлага"})
                     </div>
                     <div style={{color: "var(--text-secondary)"}}>
                       {target.description ?? ""}
@@ -687,7 +693,8 @@ export default function TransactionsPage() {
                   {dd.relatedWindow.map((r) => (
                     <div key={r.id} style={{fontSize: 11,
                       color: "var(--text-secondary)"}}>
-                      {formatDateTime(r.timestamp)} · {r.type} ·{" "}
+                      {formatDateTime(r.timestamp)} ·{" "}
+                      {r.type === "credit" ? "Орлого" : "Зарлага"} ·{" "}
                       {formatMoney(r.amount)}
                     </div>
                   ))}

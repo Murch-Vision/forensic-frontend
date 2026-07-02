@@ -32,14 +32,19 @@ interface Preview {
 const BANK_FIELDS: {key: string; label: string}[] = [
   {key: "date", label: "Огноо *"},
   {key: "account", label: "Өөрийн данс"},
+  {key: "ownerName", label: "Данс эзэмшигчийн нэр"},
+  {key: "nationalId", label: "Регистрийн дугаар"},
   {key: "amount", label: "Дүн (нэг багана)"},
   {key: "credit", label: "Орлого"},
   {key: "debit", label: "Зарлага"},
+  {key: "currency", label: "Валют (хоосон бол MNT)"},
   {key: "description", label: "Тайлбар"},
   {key: "reference", label: "Гүйлгээний дугаар"},
-  {key: "counterpartyName", label: "Харилцагчийн нэр"},
-  {key: "counterpartyAccount", label: "Харилцагчийн данс"},
-  {key: "balance", label: "Үлдэгдэл"},
+  {key: "counterpartyName", label: "Харьцсан харилцагчийн нэр"},
+  {key: "counterpartyAccount", label: "Харьцсан данс"},
+  {key: "counterpartyNationalId", label: "Харьцсан регистрийн дугаар"},
+  {key: "balance", label: "Гүйлгээний дараах үлдэгдэл"},
+  {key: "balanceBefore", label: "Гүйлгээний өмнөх үлдэгдэл"},
 ];
 
 interface Summary {
