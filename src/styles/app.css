@@ -121,6 +121,79 @@ body {
     .app-header-select { max-width: 100%; flex: 1; }
 }
 
+/* File dropzone (Import page) */
+.dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 168px;
+    padding: 24px;
+    background: var(--bg-input);
+    border: 1.5px dashed var(--border-secondary);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+}
+.dropzone:hover, .dropzone:focus-visible, .dropzone.dragover {
+    border-color: var(--accent-cyan);
+    background: rgba(0, 229, 255, 0.04);
+    outline: none;
+}
+.dropzone-icon {
+    color: var(--text-muted);
+    transition: var(--transition);
+}
+.dropzone:hover .dropzone-icon, .dropzone.dragover .dropzone-icon {
+    color: var(--accent-cyan);
+}
+.dropzone-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.dropzone-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    letter-spacing: 0.5px;
+}
+.file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--text-primary);
+}
+.file-chip .file-chip-size {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+.file-chip .file-chip-remove {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+.file-chip .file-chip-remove:hover {
+    color: var(--accent-red);
+    background: var(--bg-card-hover);
+}
+
 /* Inline form error box (modals / forms) */
 .form-error-box {
     background: rgba(255, 23, 68, 0.1);

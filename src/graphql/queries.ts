@@ -330,9 +330,6 @@ export const SETTINGS_QUERY = gql`
 export const IMPORT_ACCOUNTS_QUERY = gql`
   query ImportAccounts {
     suspects { id suspectId fullName }
-    bankAccounts {
-      id accountNumber bankName accountHolderName maskedNumber suspectId
-    }
   }
 `;
 

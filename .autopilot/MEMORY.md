@@ -45,15 +45,17 @@ Unknown paths redirect to /dashboard.
 - 2026-07-02: Global case system — AppHeader case switcher on all pages,
   case status (OPEN/ACTIVE/CLOSED/ARCHIVED, api `setCaseStatus` mutation),
   removed 5 pages, per-page case pickers stripped from SuspectsPage.
+- 2026-07-02: Import page rework — `.dropzone`/`.file-chip` CSS (app.css),
+  drag&drop upload only (textarea removed), account picker removed (api
+  auto-resolves/creates the subject's account: importService
+  resolveSubjectAccount), message log removed (errors still shown).
 
 ## Backlog (user wishes, in priority order)
-1. Import page rework: drop textarea (upload only), remove "Данс (банкны
-   хуулгад)" field, remove log output, pretty file button + drag&drop.
-2. Bank transaction page filters: date range, гүйлгээний утга filter,
+1. Bank transaction page filters: date range, гүйлгээний утга filter,
    top-N duplicated гүйлгээний утга analysis.
-3. Duplicated-transaction counts between accounts.
-4. Call→transaction correlation filter (transactions within N min after call).
-5. UI consistency sweep: uniform button sizes in every toolbar.
-6. Merge cases feature.
-7. Global people database (person appears across cases → full profile).
-8. Hierarchy for all pages (case → suspect → …).
+2. Duplicated-transaction counts between accounts.
+3. Call→transaction correlation filter (transactions within N min after call).
+4. UI consistency sweep: uniform button sizes in every toolbar.
+5. Merge cases feature.
+6. Global people database (person appears across cases → full profile).
+7. Hierarchy for all pages (case → suspect → …).

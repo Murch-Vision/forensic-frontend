@@ -6,7 +6,7 @@
  * Purpose     :
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
-import {useState} from "react";
+import {useRef, useState} from "react";
 import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {
   EXCEL_SHEETS,
@@ -22,14 +22,6 @@ interface ImSuspect {
   id: number;
   suspectId: string;
   fullName: string;
-}
-
-interface ImAccount {
-  id: number;
-  maskedNumber: string;
-  bankName: string | null;
-  accountHolderName: string | null;
-  suspectId: number | null;
 }
 
 interface Preview {
@@ -87,36 +79,39 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
   return btoa(binary);
 }
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 export default function ImportPage() {
   const client = useApolloClient();
+  const fileInput = useRef<HTMLInputElement>(null);
   const [content, setContent] = useState("");
   const [filename, setFilename] = useState<string | null>(null);
+  const [fileSize, setFileSize] = useState(0);
   const [sheets, setSheets] = useState<string[]>([]);
   const [sheetName, setSheetName] = useState<string | null>(null);
   const [kind, setKind] = useState<ImportKind>("AUTO");
   const [subjectId, setSubjectId] = useState<number | null>(null);
-  const [accountId, setAccountId] = useState<number | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
-  const accountsQ = useQuery<{suspects: ImSuspect[]; bankAccounts: ImAccount[]}>(
-    IMPORT_ACCOUNTS_QUERY);
+  const accountsQ = useQuery<{suspects: ImSuspect[]}>(IMPORT_ACCOUNTS_QUERY);
   const [runImport, importQ] = useMutation<{importData: Summary}>(IMPORT_DATA);
 
   const summary = importQ.data?.importData;
   const suspects = accountsQ.data?.suspects ?? [];
-  const accounts = accountsQ.data?.bankAccounts ?? [];
-  const subjectAccounts = subjectId == null
-    ? accounts : accounts.filter((a) => a.suspectId === subjectId);
   const isExcel = !!filename && isExcelName(filename);
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handleFile(file: File) {
     setPreview(null);
     setSheets([]);
     setSheetName(null);
+    setFileSize(file.size);
     if (isExcelName(file.name)) {
       const buf = await file.arrayBuffer();
       const b64 = arrayBufferToBase64(buf);
@@ -135,6 +130,23 @@ export default function ImportPage() {
       setContent(text);
       setFilename(file.name);
     }
+  }
+
+  function clearFile() {
+    setContent("");
+    setFilename(null);
+    setFileSize(0);
+    setSheets([]);
+    setSheetName(null);
+    setPreview(null);
+    if (fileInput.current) fileInput.current.value = "";
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) void handleFile(file);
   }
 
   function vars() {
@@ -171,70 +183,93 @@ export default function ImportPage() {
         ...vars(),
         kind,
         subjectSuspectId: subjectId,
-        bankAccountId: needsAccount ? accountId : null,
+        bankAccountId: null,
         mapping: mappingArg.length > 0 ? mappingArg : null,
       },
     });
   }
 
   function onSubject(e: React.ChangeEvent<HTMLSelectElement>) {
-    const id = e.target.value ? Number(e.target.value) : null;
-    setSubjectId(id);
-    // Drop a stale account that no longer belongs to the chosen subject.
-    setAccountId(null);
+    setSubjectId(e.target.value ? Number(e.target.value) : null);
   }
 
   function setMap(field: string, column: string) {
     setMapping((prev) => ({...prev, [field]: column}));
   }
 
-  const needsAccount = kind === "BANK"
+  const isBank = kind === "BANK"
     || (kind === "AUTO" && preview?.domain === "BANK");
-  const isBank = needsAccount;
 
   return (
     <div className="page-container">
       <PageHeader icon="📥" title="Өгөгдөл импорт"
         subtitle="CSV / TSV / EXCEL ХУУЛГА · CDR · ХАНДАЛТЫН ЛОГ" />
 
-      <Card title="1 — Файл сонгох эсвэл доор буулгах" style={{marginBottom: 16}}>
-        <div style={{display: "flex", gap: 12, alignItems: "center",
-          marginBottom: 12, flexWrap: "wrap"}}>
-          <input type="file" className="form-input"
-            accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm" onChange={onFile} />
-          {filename && (
-            <span style={{fontSize: 11, color: "var(--accent-cyan)"}}>
-              {filename}{isExcel ? " (Excel)" : ""}
-            </span>
+      <Card title="1 — Файл оруулах" style={{marginBottom: 16}}>
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm"
+          style={{display: "none"}}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void handleFile(file);
+          }}
+        />
+        <div
+          className={dragOver ? "dropzone dragover" : "dropzone"}
+          role="button"
+          tabIndex={0}
+          onClick={() => fileInput.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileInput.current?.click();
+            }
+          }}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+        >
+          <svg className="dropzone-icon" width="36" height="36"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          {filename ? (
+            <div className="file-chip" onClick={(e) => e.stopPropagation()}>
+              <span>{filename}</span>
+              {isExcel && <Badge text="EXCEL" kind="low" />}
+              <span className="file-chip-size">{formatSize(fileSize)}</span>
+              <button className="file-chip-remove" onClick={clearFile}
+                title="Файл арилгах" aria-label="Файл арилгах">✕</button>
+            </div>
+          ) : (
+            <>
+              <div className="dropzone-title">
+                Файлаа энд чирж оруулах эсвэл дарж сонгоно уу
+              </div>
+              <div className="dropzone-hint">CSV · TSV · EXCEL (.XLSX / .XLS)</div>
+            </>
           )}
           {isExcel && sheets.length > 0 && (
             <select className="form-input" value={sheetName ?? ""}
+              onClick={(e) => e.stopPropagation()}
               onChange={(e) => setSheetName(e.target.value)}
-              style={{maxWidth: 200}}>
+              style={{maxWidth: 240}}
+              title="Excel хуудас сонгох">
               {sheets.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           )}
         </div>
-        {!isExcel && (
-          <textarea
-            className="form-input"
-            value={content}
-            onChange={(e) => {
-              setContent(e.target.value);
-              setFilename(null);
-            }}
-            placeholder="...эсвэл CSV/TSV-г энд буулгана уу"
-            spellCheck={false}
-            style={{width: "100%", height: 140, fontFamily: "var(--font-mono)",
-              fontSize: 11, resize: "vertical"}}
-          />
-        )}
-        <div style={{display: "flex", gap: 12, marginTop: 12,
+        <div style={{display: "flex", gap: 12, marginTop: 16,
           alignItems: "flex-end", flexWrap: "wrap"}}>
           <div>
             <label className="form-label">Эзэн (сэжигтэн) *</label>
             <select className="form-input" value={subjectId ?? ""}
-              onChange={onSubject} style={{minWidth: 200}}>
+              onChange={onSubject} style={{minWidth: 220}}>
               <option value="">— Сэжигтэн сонгох —</option>
               {suspects.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -247,46 +282,23 @@ export default function ImportPage() {
             <label className="form-label">Төрөл</label>
             <select className="form-input" value={kind}
               onChange={(e) => setKind(e.target.value as ImportKind)}
-              style={{minWidth: 180}}>
+              style={{minWidth: 220}}>
               {KINDS.map((k) => (
                 <option key={k.value} value={k.value}>{k.label}</option>
               ))}
             </select>
           </div>
-          {needsAccount && (
-            <div>
-              <label className="form-label">Данс (банкны хуулгад)</label>
-              <select className="form-input"
-                value={accountId ?? ""}
-                onChange={(e) =>
-                  setAccountId(e.target.value ? Number(e.target.value) : null)}
-                style={{minWidth: 220}}>
-                <option value="">— Данс сонгох —</option>
-                {subjectAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.maskedNumber} · {a.accountHolderName ?? a.bankName ?? ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           <button className="btn" onClick={onPreview} disabled={busy || !content}>
             УРЬДЧИЛАН ХАРАХ
           </button>
           <button className="btn btn-primary" onClick={onImport}
-            disabled={importQ.loading || !content || subjectId === null
-              || (needsAccount && accountId === null)}>
+            disabled={importQ.loading || !content || subjectId === null}>
             {importQ.loading ? "ИМПОРТЛОЖ БАЙНА..." : "ИМПОРТЛОХ"}
           </button>
         </div>
         {subjectId === null && (
           <div style={{fontSize: 11, color: "var(--text-muted)", marginTop: 8}}>
             Импортлох өгөгдөл бүр энэ этгээдэд хамаарна — заавал сонгоно уу.
-          </div>
-        )}
-        {needsAccount && subjectId !== null && subjectAccounts.length === 0 && (
-          <div style={{fontSize: 11, color: "var(--risk-high)", marginTop: 8}}>
-            Энэ сэжигтэнд данс алга — Хувийн мэдээлэл хэсэгт данс үүсгэнэ үү.
           </div>
         )}
       </Card>
@@ -366,11 +378,6 @@ export default function ImportPage() {
               Алгассан: <strong>{summary.skippedRows}</strong>
             </span>
           </div>
-          {summary.messages.map((m, i) => (
-            <div key={i} style={{fontSize: 11, color: "var(--accent-cyan)"}}>
-              {m}
-            </div>
-          ))}
           {summary.errors.map((e, i) => (
             <div key={i} style={{fontSize: 11, color: "var(--risk-high)"}}>
               {e}
