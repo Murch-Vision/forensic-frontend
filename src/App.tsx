@@ -56,7 +56,12 @@ export default function App() {
       >
         <div
           style={{
-            padding: "16px 18px",
+            // Same height as the app header so the two top bars align.
+            height: "var(--app-header-h)",
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            padding: "0 18px",
             fontWeight: 700,
             fontSize: 13,
             color: "var(--accent-cyan)",

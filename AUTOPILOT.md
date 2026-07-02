@@ -11,3 +11,4 @@
 - 2026-07-02: /cases case-management page + header slimmed to scope bar with Кейс › page breadcrumb (hierarchy wish)
 - 2026-07-02: link chart rebuilt as real evidence network (accounts/phones/txn/call edges, node detail panel, layout collapse fix)
 - 2026-07-02: portal dropdowns (fix clipped import-type + cases status menus), dashboard first in nav, link chart trimmed to case entities only
+- 2026-07-02: sidebar brand bar aligned to app-header height; link chart zoom-under-cursor drift fixed (letterbox offset in zoom math)

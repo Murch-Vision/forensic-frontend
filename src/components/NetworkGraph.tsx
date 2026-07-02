@@ -435,13 +435,18 @@ export default function NetworkGraph(props: {
     return found;
   }
 
-  // Zoom about a screen point (CSS px relative to the canvas). The fit factor
-  // cancels out, so this is the plain zoom-about-cursor formula.
+  // Zoom about a screen point (CSS px relative to the canvas). The full
+  // screen mapping is screen = graph·(fit·k) + t + off — the fit factor
+  // cancels between old and new zoom, but the letterbox offset does NOT:
+  // leaving it out made every wheel step drift the point under the cursor
+  // by off·(1 − k'/k) px, so zooming visibly slid away from the cursor.
   function zoomAt(sx: number, sy: number, factor: number) {
+    const {offX, offY} = fitRef.current;
     const v = viewRef.current;
     const k = clamp(v.k * factor, 0.3, 5);
-    const tx = sx - ((sx - v.tx) / v.k) * k;
-    const ty = sy - ((sy - v.ty) / v.k) * k;
+    const r = k / v.k;
+    const tx = sx - offX - (sx - v.tx - offX) * r;
+    const ty = sy - offY - (sy - v.ty - offY) * r;
     viewRef.current = {k, tx, ty};
     ensureRunning();
   }

@@ -131,6 +131,10 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   PERSON|ACCOUNT|PHONE — org hubs + external counterparty/phone nodes
   REMOVED, edges only between known entities; hiddenExternal gone).
 
+- 2026-07-02: sidebar brand bar = var(--app-header-h) (56px, matches app
+  header); NetworkGraph zoomAt() must include fitRef letterbox offX/offY —
+  screen = graph·(fit·k) + t + off, the offset does NOT cancel between zooms.
+
 ## Ignore per user (do not touch/improve)
 Settings page, Залилангийн урсгал (fraud) page.
 
