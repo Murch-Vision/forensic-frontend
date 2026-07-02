@@ -147,9 +147,17 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
 ## Ignore per user (do not touch/improve)
 Settings page, Залилангийн урсгал (fraud) page.
 
+- 2026-07-02: Хүмүүсийн сан redesigned — NO metric-card rows anymore (page
+  stats folded into `.people-panel-stats` line under the list search; person
+  counts = `.stat-strip` inside the profile card). Left list = `.people-panel`
+  (sticky, `.person-list` scroll area). Profile: `.person-avatar.xl` (80px),
+  suspectId `.id-chip`, MN risk labels (RISK_LABELS map). Add/edit modal now
+  uses the standard modal-header/body/footer chrome + `.avatar-upload` round
+  photo drop-well (+`.avatar-remove`), `.form-section-label` hairline section
+  titles, `.form-grid-2` (collapses <640px), Хүйс + Хот fields added.
+
 ## Backlog (user wishes, in priority order)
-1. Redesign Хүмүүсийн сан page + add-person modal ("design crap / dog shit").
-2. Deeper drilldown breadcrumbs (case → person on detail views) — optional
+1. Deeper drilldown breadcrumbs (case → person on detail views) — optional
    refinement of the hierarchy wish; core case → page scope is shipped.
 
 ## Parked (NOT in this run's backlog)

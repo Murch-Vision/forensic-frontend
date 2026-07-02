@@ -30,9 +30,7 @@ import {
   DataTable,
   Empty,
   Loading,
-  MetricsGrid,
   PageHeader,
-  StatCard,
 } from "../components/kit";
 import {Select} from "../components/inputs";
 import type {RiskLevel, SuspectInput, SuspectStatus} from "../types";
@@ -126,6 +124,19 @@ const MATCH_LABEL: Record<string, string> = {
   NATIONAL_ID: "РД давхцсан",
 };
 
+const RISK_LABELS: Record<RiskLevel, string> = {
+  UNKNOWN: "Тодорхойгүй",
+  LOW: "Бага",
+  MEDIUM: "Дунд",
+  HIGH: "Өндөр",
+  CRITICAL: "Маш өндөр",
+};
+
+const GENDER_OPTIONS = [
+  {value: "Male", label: "Эрэгтэй"},
+  {value: "Female", label: "Эмэгтэй"},
+];
+
 interface FormState extends SuspectInput {
   id?: number;
 }
@@ -163,14 +174,16 @@ function initials(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
-function Avatar({name, photoData, riskLevel, lg}: {
+function Avatar({name, photoData, riskLevel, lg, xl}: {
   name: string;
   photoData: string | null;
   riskLevel: string;
   lg?: boolean;
+  xl?: boolean;
 }) {
   return (
-    <div className={lg ? "person-avatar lg" : "person-avatar"}
+    <div className={xl ? "person-avatar xl"
+      : lg ? "person-avatar lg" : "person-avatar"}
       style={{borderColor: RISK_COLOR[riskLevel] ?? "var(--border-secondary)"}}>
       {photoData ? <img src={photoData} alt={name} /> : initials(name)}
     </div>
@@ -185,7 +198,7 @@ function InfoField({label, value}: {label: string; value: string | null}) {
         marginBottom: 3}}>
         {label}
       </div>
-      <div style={{fontSize: 12, color: value ? "var(--text-primary)"
+      <div style={{fontSize: 13, color: value ? "var(--text-primary)"
         : "var(--text-muted)"}}>
         {value || "—"}
       </div>
@@ -392,82 +405,94 @@ export default function PeoplePage() {
     <div className="page-container">
       {header}
 
-      <MetricsGrid>
-        <StatCard label="Нийт хүн" value={people.length} color="cyan" />
-        <StatCard label="Олон кейст оролцсон" value={crossCase}
-          color="amber" />
-        <StatCard label="Давхардсан бүртгэлтэй" value={grouped}
-          color="purple" />
-        <StatCard label="Өндөр эрсдэлтэй" value={highRisk} color="red" />
-      </MetricsGrid>
-
       {people.length === 0 ? (
-        <div style={{marginTop: 16}}>
-          <Empty message="Бүртгэлтэй хүн алга — «+ ХҮН НЭМЭХ» дарж эхэлнэ үү" />
-        </div>
+        <Empty message="Бүртгэлтэй хүн алга — «+ ХҮН НЭМЭХ» дарж эхэлнэ үү" />
       ) : (
-        <div className="master-detail" style={{marginTop: 16}}>
-          <Card noPadding>
-            <div style={{padding: 12,
-              borderBottom: "1px solid var(--border-primary)"}}>
-              <input className="form-input" style={{width: "100%"}}
-                placeholder="Нэр, утас, данс, РД-гаар хайх..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <div style={{maxHeight: "62vh", overflowY: "auto"}}>
-              {filtered.length === 0 ? (
-                <Empty message="Хайлтад тохирох хүн олдсонгүй" />
-              ) : filtered.map((p) => (
-                <div key={p.key}
-                  className={`person-row${
-                    selected?.key === p.key ? " selected" : ""}`}
-                  onClick={() => setSelectedKey(p.key)}>
-                  <Avatar name={p.fullName} photoData={p.photoData}
-                    riskLevel={p.riskLevel} />
-                  <div style={{flex: 1, minWidth: 0}}>
-                    <div style={{fontSize: 12, fontWeight: 600,
-                      overflow: "hidden", textOverflow: "ellipsis",
-                      whiteSpace: "nowrap"}}>
-                      {p.fullName}
-                    </div>
-                    <div style={{fontSize: 10,
-                      color: "var(--text-muted)", marginTop: 2}}>
-                      {p.phoneNumbers[0] ?? p.occupation ?? "—"}
-                    </div>
-                  </div>
-                  <div style={{display: "flex", gap: 4, flexShrink: 0}}>
-                    {p.suspects.length > 1 && (
-                      <span className="badge info"
-                        title="Хэд хэдэн бүртгэл нэг хүнд нэгтгэгдсэн">
-                        {p.suspects.length} бүртгэл
-                      </span>
-                    )}
-                    <span className={`badge ${
-                      p.cases.length > 1 ? "warning" : "unknown"}`}>
-                      {p.cases.length} кейс
-                    </span>
-                  </div>
+        <div className="master-detail">
+          <div className="people-panel">
+            <Card noPadding>
+              <div style={{padding: 16,
+                borderBottom: "1px solid var(--border-primary)"}}>
+                <input className="form-input" style={{width: "100%"}}
+                  placeholder="Нэр, утас, данс, РД-гаар хайх..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)} />
+                <div className="people-panel-stats">
+                  <span><b>{people.length}</b> хүн</span>
+                  <span><b>{crossCase}</b> олон кейст</span>
+                  <span><b>{grouped}</b> давхардсан</span>
+                  <span className="risk"><b>{highRisk}</b> эрсдэлтэй</span>
                 </div>
-              ))}
-            </div>
-          </Card>
+              </div>
+              <div className="person-list">
+                {filtered.length === 0 ? (
+                  <Empty message="Хайлтад тохирох хүн олдсонгүй" />
+                ) : filtered.map((p) => (
+                  <div key={p.key}
+                    className={`person-row${
+                      selected?.key === p.key ? " selected" : ""}`}
+                    onClick={() => setSelectedKey(p.key)}>
+                    <Avatar name={p.fullName} photoData={p.photoData}
+                      riskLevel={p.riskLevel} />
+                    <div style={{flex: 1, minWidth: 0}}>
+                      <div style={{fontSize: 13, fontWeight: 600,
+                        overflow: "hidden", textOverflow: "ellipsis",
+                        whiteSpace: "nowrap"}}>
+                        {p.fullName}
+                      </div>
+                      <div style={{fontSize: 11,
+                        color: "var(--text-muted)", marginTop: 2,
+                        overflow: "hidden", textOverflow: "ellipsis",
+                        whiteSpace: "nowrap"}}>
+                        {[p.phoneNumbers[0], p.occupation]
+                          .filter(Boolean).join(" · ") || "Мэдээлэл алга"}
+                      </div>
+                    </div>
+                    <div style={{display: "flex", gap: 4, flexShrink: 0}}>
+                      {p.suspects.length > 1 && (
+                        <span className="badge info"
+                          title="Хэд хэдэн бүртгэл нэг хүнд нэгтгэгдсэн">
+                          {p.suspects.length} бүртгэл
+                        </span>
+                      )}
+                      {p.cases.length > 0 && (
+                        <span className={`badge ${
+                          p.cases.length > 1 ? "warning" : "unknown"}`}>
+                          {p.cases.length} кейс
+                        </span>
+                      )}
+                      {(p.riskLevel === "HIGH"
+                        || p.riskLevel === "CRITICAL") && (
+                        <span className={`badge ${
+                          RISK_BADGE[p.riskLevel]}`}>
+                          {RISK_LABELS[p.riskLevel as RiskLevel]}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
 
           {selected && primary ? (
             <div style={{minWidth: 0}}>
               <Card style={{marginBottom: 16}}>
-                <div style={{display: "flex", gap: 20,
+                <div style={{display: "flex", gap: 24,
                   alignItems: "flex-start", flexWrap: "wrap"}}>
                   <Avatar name={selected.fullName}
                     photoData={selected.photoData}
-                    riskLevel={selected.riskLevel} lg />
+                    riskLevel={selected.riskLevel} xl />
                   <div style={{flex: 1, minWidth: 260}}>
                     <div style={{display: "flex", alignItems: "center",
                       gap: 10, flexWrap: "wrap"}}>
-                      <span style={{fontSize: 18, fontWeight: 700}}>
+                      <span style={{fontSize: 20, fontWeight: 700}}>
                         {selected.fullName}
                       </span>
-                      <Badge text={selected.riskLevel}
+                      <span className="id-chip">{primary.suspectId}</span>
+                      <Badge text={RISK_LABELS[
+                        selected.riskLevel as RiskLevel]
+                        ?? selected.riskLevel}
                         kind={RISK_BADGE[selected.riskLevel] ?? "unknown"} />
                       {selected.matchedBy.map((m) => (
                         <span key={m} className="badge info">
@@ -481,10 +506,10 @@ export default function PeoplePage() {
                         Өөр нэр: {selected.aliases.join(", ")}
                       </div>
                     )}
-                    <div style={{display: "grid", gap: "12px 20px",
+                    <div style={{display: "grid", gap: "14px 24px",
                       gridTemplateColumns:
-                        "repeat(auto-fill, minmax(160px, 1fr))",
-                      marginTop: 14}}>
+                        "repeat(auto-fill, minmax(170px, 1fr))",
+                      marginTop: 16}}>
                       <InfoField label="Регистр" value={primary.nationalId} />
                       <InfoField label="Утас" value={primary.primaryPhone} />
                       <InfoField label="И-мэйл" value={primary.email} />
@@ -497,8 +522,8 @@ export default function PeoplePage() {
                           .filter(Boolean).join(", ") || null} />
                     </div>
                     {primary.notes && (
-                      <div style={{fontSize: 11, marginTop: 12,
-                        padding: "8px 10px",
+                      <div style={{fontSize: 12, marginTop: 14,
+                        padding: "8px 12px",
                         borderLeft: "2px solid var(--accent-cyan)",
                         background: "rgba(0,229,255,0.04)",
                         color: "var(--text-secondary)"}}>
@@ -533,18 +558,40 @@ export default function PeoplePage() {
                     )}
                   </div>
                 </div>
+                <div className="stat-strip">
+                  <div className="stat-strip-item">
+                    <div className="stat-strip-value">
+                      {selected.cases.length}
+                    </div>
+                    <div className="stat-strip-label">Кейс</div>
+                  </div>
+                  <div className="stat-strip-item">
+                    <div className="stat-strip-value">
+                      {selected.suspects.length}
+                    </div>
+                    <div className="stat-strip-label">Бүртгэл</div>
+                  </div>
+                  <div className="stat-strip-item">
+                    <div className="stat-strip-value">
+                      {selected.transactionCount}
+                    </div>
+                    <div className="stat-strip-label">Гүйлгээ</div>
+                  </div>
+                  <div className="stat-strip-item">
+                    <div className="stat-strip-value">
+                      {selected.callRecordCount}
+                    </div>
+                    <div className="stat-strip-label">Дуудлага</div>
+                  </div>
+                  <div className="stat-strip-item">
+                    <div className="stat-strip-value">
+                      {selected.phoneNumbers.length +
+                        selected.accountNumbers.length}
+                    </div>
+                    <div className="stat-strip-label">Таниулбар</div>
+                  </div>
+                </div>
               </Card>
-
-              <MetricsGrid>
-                <StatCard label="Кейс" value={selected.cases.length}
-                  color="cyan" />
-                <StatCard label="Бүртгэл" value={selected.suspects.length}
-                  color="purple" />
-                <StatCard label="Гүйлгээ" value={selected.transactionCount}
-                  color="green" />
-                <StatCard label="Дуудлага" value={selected.callRecordCount}
-                  color="amber" />
-              </MetricsGrid>
 
               <Card title="Холбогдсон кейсүүд" noPadding
                 style={{marginTop: 16}}>
@@ -702,109 +749,148 @@ export default function PeoplePage() {
 
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal-content" style={{maxWidth: 640}}
+          <div className="modal-content" style={{width: "min(720px, 92vw)"}}
             onClick={(e) => e.stopPropagation()}>
-            <div style={{fontSize: 14, fontWeight: 700, marginBottom: 16}}>
-              {isEditing ? "МЭДЭЭЛЭЛ ЗАСАХ" : "ШИНЭ ХҮН НЭМЭХ"}
+            <div className="modal-header">
+              <span className="modal-title">
+                {isEditing ? "МЭДЭЭЛЭЛ ЗАСАХ" : "ШИНЭ ХҮН НЭМЭХ"}
+              </span>
+              <button className="modal-close" title="Хаах"
+                onClick={() => setShowForm(false)}>
+                ×
+              </button>
             </div>
-            <div style={{display: "grid", gap: 12,
-              gridTemplateColumns: "1fr 1fr"}}>
-              <div style={{gridColumn: "1 / -1"}}>
-                <label className="form-label">Бүтэн нэр *</label>
-                <input className="form-input" style={{width: "100%"}}
-                  value={form.fullName}
-                  onChange={(e) => setField("fullName", e.target.value)} />
-              </div>
-              <div>
-                <label className="form-label">Өөр нэр</label>
-                <input className="form-input" style={{width: "100%"}}
-                  value={form.aliases ?? ""}
-                  onChange={(e) => setField("aliases", e.target.value)} />
-              </div>
-              <div>
-                <label className="form-label">Регистрийн дугаар</label>
-                <input className="form-input" style={{width: "100%"}}
-                  value={form.nationalId ?? ""}
-                  onChange={(e) => setField("nationalId", e.target.value)} />
-              </div>
-              <div>
-                <label className="form-label">Утас</label>
-                <input className="form-input" style={{width: "100%"}}
-                  value={form.primaryPhone ?? ""}
-                  onChange={(e) => setField("primaryPhone", e.target.value)} />
-              </div>
-              <div>
-                <label className="form-label">И-мэйл</label>
-                <input className="form-input" style={{width: "100%"}}
-                  value={form.email ?? ""}
-                  onChange={(e) => setField("email", e.target.value)} />
-              </div>
-              <div>
-                <label className="form-label">Ажил мэргэжил</label>
-                <input className="form-input" style={{width: "100%"}}
-                  value={form.occupation ?? ""}
-                  onChange={(e) => setField("occupation", e.target.value)} />
-              </div>
-              <div>
-                <label className="form-label">Байгууллага</label>
-                <input className="form-input" style={{width: "100%"}}
-                  value={form.organization ?? ""}
-                  onChange={(e) => setField("organization", e.target.value)} />
-              </div>
-              <div>
-                <label className="form-label">Хаяг</label>
-                <input className="form-input" style={{width: "100%"}}
-                  value={form.address ?? ""}
-                  onChange={(e) => setField("address", e.target.value)} />
-              </div>
-              <div>
-                <label className="form-label">Эрсдэлийн түвшин</label>
-                <Select style={{width: "100%"}}
-                  value={form.riskLevel ?? "UNKNOWN"}
-                  onChange={(v) => setField("riskLevel", v as RiskLevel)}
-                  options={RISK_LEVELS.map((r) => ({value: r, label: r}))} />
-              </div>
-              <div style={{gridColumn: "1 / -1"}}>
-                <label className="form-label">Тэмдэглэл</label>
-                <textarea className="form-input"
-                  style={{width: "100%", minHeight: 60, resize: "vertical"}}
-                  value={form.notes ?? ""}
-                  onChange={(e) => setField("notes", e.target.value)} />
-              </div>
-              <div style={{gridColumn: "1 / -1"}}>
-                <label className="form-label">
-                  Зураг (холбоосын зураглалд ашиглана)
-                </label>
-                <div style={{display: "flex", gap: 12,
-                  alignItems: "center"}}>
+            <div className="modal-body">
+              <div style={{display: "flex", gap: 24, flexWrap: "wrap"}}>
+                <div style={{width: 96, flexShrink: 0}}>
+                  <label className={`avatar-upload${
+                    form.photoData ? " has-photo" : ""}`}
+                    title="Зураг сонгох — холбоосын зураглалд ашиглана">
+                    {form.photoData ? (
+                      <>
+                        <img src={form.photoData} alt="preview" />
+                        <span className="avatar-upload-overlay">СОЛИХ</span>
+                      </>
+                    ) : (
+                      <span className="avatar-upload-hint">
+                        Зураг<br />сонгох
+                      </span>
+                    )}
+                    <input type="file" accept="image/*"
+                      style={{display: "none"}} onChange={onPhotoSelected} />
+                  </label>
                   {form.photoData && (
-                    <div className="person-avatar lg">
-                      <img src={form.photoData} alt="preview" />
-                    </div>
-                  )}
-                  <input type="file" accept="image/*" className="form-input"
-                    style={{flex: 1}} onChange={onPhotoSelected} />
-                  {form.photoData && (
-                    <button type="button" className="btn"
+                    <button type="button" className="avatar-remove"
                       onClick={() => setField("photoData", null)}>
-                      Зураг устгах
+                      Устгах
                     </button>
                   )}
                 </div>
+                <div className="form-grid-2"
+                  style={{flex: 1, minWidth: 260, alignContent: "start"}}>
+                  <div style={{gridColumn: "1 / -1"}}>
+                    <label className="form-label">Бүтэн нэр *</label>
+                    <input className="form-input" autoFocus
+                      value={form.fullName}
+                      onChange={(e) => setField("fullName", e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="form-label">Өөр нэр</label>
+                    <input className="form-input"
+                      value={form.aliases ?? ""}
+                      onChange={(e) => setField("aliases", e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="form-label">Регистрийн дугаар</label>
+                    <input className="form-input"
+                      value={form.nationalId ?? ""}
+                      onChange={(e) =>
+                        setField("nationalId", e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="form-label">Хүйс</label>
+                    <Select style={{width: "100%"}}
+                      value={form.gender ?? "Male"}
+                      onChange={(v) => setField("gender", String(v))}
+                      options={GENDER_OPTIONS} />
+                  </div>
+                  <div>
+                    <label className="form-label">Эрсдэлийн түвшин</label>
+                    <Select style={{width: "100%"}}
+                      value={form.riskLevel ?? "UNKNOWN"}
+                      onChange={(v) => setField("riskLevel", v as RiskLevel)}
+                      options={RISK_LEVELS.map((r) => ({
+                        value: r, label: RISK_LABELS[r]}))} />
+                  </div>
+                </div>
               </div>
+
+              <div className="form-section-label">Холбоо барих</div>
+              <div className="form-grid-2">
+                <div>
+                  <label className="form-label">Утас</label>
+                  <input className="form-input"
+                    value={form.primaryPhone ?? ""}
+                    onChange={(e) =>
+                      setField("primaryPhone", e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">И-мэйл</label>
+                  <input className="form-input"
+                    value={form.email ?? ""}
+                    onChange={(e) => setField("email", e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Хаяг</label>
+                  <input className="form-input"
+                    value={form.address ?? ""}
+                    onChange={(e) => setField("address", e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Хот</label>
+                  <input className="form-input"
+                    value={form.city ?? ""}
+                    onChange={(e) => setField("city", e.target.value)} />
+                </div>
+              </div>
+
+              <div className="form-section-label">Ажил / тэмдэглэл</div>
+              <div className="form-grid-2">
+                <div>
+                  <label className="form-label">Ажил мэргэжил</label>
+                  <input className="form-input"
+                    value={form.occupation ?? ""}
+                    onChange={(e) => setField("occupation", e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Байгууллага</label>
+                  <input className="form-input"
+                    value={form.organization ?? ""}
+                    onChange={(e) =>
+                      setField("organization", e.target.value)} />
+                </div>
+                <div style={{gridColumn: "1 / -1"}}>
+                  <label className="form-label">Тэмдэглэл</label>
+                  <textarea className="form-input"
+                    style={{minHeight: 72, resize: "vertical"}}
+                    value={form.notes ?? ""}
+                    onChange={(e) => setField("notes", e.target.value)} />
+                </div>
+              </div>
+
+              {formError && (
+                <div className="form-error-box"
+                  style={{marginTop: 16, marginBottom: 0}}>
+                  {formError}
+                </div>
+              )}
             </div>
-            {formError && (
-              <div style={{color: "var(--accent-red)", fontSize: 11,
-                marginTop: 12}}>
-                {formError}
-              </div>
-            )}
-            <div className="modal-actions" style={{marginTop: 20}}>
+            <div className="modal-footer">
               <button className="btn" onClick={() => setShowForm(false)}>
                 ЦУЦЛАХ
               </button>
               <button className="btn btn-accent" onClick={savePerson}>
-                {isEditing ? "ШИНЭЧЛЭХ" : "ҮҮСГЭХ"}
+                {isEditing ? "ХАДГАЛАХ" : "ҮҮСГЭХ"}
               </button>
             </div>
           </div>

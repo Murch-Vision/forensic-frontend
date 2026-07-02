@@ -695,8 +695,8 @@ body {
     border-left-color: var(--accent-cyan);
 }
 .person-avatar {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     flex-shrink: 0;
     display: flex;
@@ -712,6 +712,166 @@ body {
 }
 .person-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .person-avatar.lg { width: 64px; height: 64px; font-size: 20px; }
+.person-avatar.xl {
+    width: 80px;
+    height: 80px;
+    font-size: 24px;
+    border-width: 2px;
+}
+
+/* People page — sticky master list panel */
+.people-panel {
+    position: sticky;
+    top: 0;
+}
+.people-panel .person-list {
+    overflow-y: auto;
+    max-height: calc(100vh - var(--app-header-h) - 250px);
+    min-height: 320px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-secondary) transparent;
+}
+.people-panel-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-top: 10px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.people-panel-stats b {
+    color: var(--accent-cyan);
+    font-weight: 700;
+    margin-right: 3px;
+}
+.people-panel-stats .risk b { color: var(--accent-red); }
+@media (max-width: 900px) {
+    .people-panel { position: static; }
+    .people-panel .person-list { max-height: 40vh; min-height: 0; }
+}
+
+/* Profile card stat strip — inline counters, no rainbow metric cards */
+.stat-strip {
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 16px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-primary);
+}
+.stat-strip-item {
+    flex: 1;
+    min-width: 110px;
+    padding: 0 24px;
+    border-left: 1px solid var(--border-primary);
+}
+.stat-strip-item:first-child { border-left: none; padding-left: 0; }
+.stat-strip-value {
+    font-family: var(--font-mono);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+.stat-strip-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* Add/edit person modal — round photo drop-well + form sections */
+.avatar-upload {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    flex-shrink: 0;
+    border: 2px dashed var(--border-secondary);
+    background: var(--bg-input);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+.avatar-upload:hover { border-color: var(--accent-cyan); }
+.avatar-upload.has-photo { border-style: solid; }
+.avatar-upload img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-upload-hint {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 0 8px;
+    line-height: 1.6;
+}
+.avatar-upload-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(5, 5, 16, 0.68);
+    opacity: 0;
+    transition: var(--transition);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--accent-cyan);
+}
+.avatar-upload:hover .avatar-upload-overlay { opacity: 1; }
+.avatar-remove {
+    appearance: none;
+    background: transparent;
+    border: none;
+    width: 100%;
+    margin-top: 8px;
+    padding: 4px 0;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    transition: var(--transition);
+}
+.avatar-remove:hover { color: var(--accent-red); }
+.form-section-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 20px 0 12px;
+}
+.form-section-label::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border-primary);
+}
+.form-grid-2 {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 640px) {
+    .form-grid-2 { grid-template-columns: 1fr; }
+}
 .id-chip {
     display: inline-block;
     padding: 3px 8px;
