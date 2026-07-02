@@ -327,12 +327,6 @@ export const SETTINGS_QUERY = gql`
   }
 `;
 
-export const IMPORT_ACCOUNTS_QUERY = gql`
-  query ImportAccounts {
-    suspects { id suspectId fullName }
-  }
-`;
-
 export const EXCEL_SHEETS = gql`
   query ExcelSheets($content: String!, $filename: String!) {
     excelSheets(content: $content, filename: $filename)

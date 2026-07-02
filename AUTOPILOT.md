@@ -3,3 +3,4 @@
 - 2026-07-02: Transactions page — date-range + гүйлгээний утга filters, top-N duplicated descriptions, account-pair duplicate counts (user wishes).
 - 2026-07-02: Transactions page — 'Дуудлагын дараах гүйлгээ': money moving within N minutes after a suspect's phone call (user wish).
 - 2026-07-02: Merge cases — header button + modal; evidence/notes move to the target case, sources archived (user wish).
+- 2026-07-02: Import — removed mandatory Эзэн (сэжигтэн); files can hold multiple suspects, rows self-attribute (user wish).

@@ -10,19 +10,12 @@ import {useRef, useState} from "react";
 import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {
   EXCEL_SHEETS,
-  IMPORT_ACCOUNTS_QUERY,
   IMPORT_DATA,
   PREVIEW_IMPORT,
 } from "../graphql/queries";
 import {Badge, Card, Empty, PageHeader} from "../components/kit";
 
 type ImportKind = "AUTO" | "BANK" | "CDR" | "ACCESS_LOG";
-
-interface ImSuspect {
-  id: number;
-  suspectId: string;
-  fullName: string;
-}
 
 interface Preview {
   headers: string[];
@@ -37,6 +30,7 @@ interface Preview {
 // Editable bank column mapping — mirrors the C# ImportView mapping card.
 const BANK_FIELDS: {key: string; label: string}[] = [
   {key: "date", label: "Огноо *"},
+  {key: "account", label: "Өөрийн данс"},
   {key: "amount", label: "Дүн (нэг багана)"},
   {key: "credit", label: "Орлого"},
   {key: "debit", label: "Зарлага"},
@@ -94,17 +88,14 @@ export default function ImportPage() {
   const [sheets, setSheets] = useState<string[]>([]);
   const [sheetName, setSheetName] = useState<string | null>(null);
   const [kind, setKind] = useState<ImportKind>("AUTO");
-  const [subjectId, setSubjectId] = useState<number | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
-  const accountsQ = useQuery<{suspects: ImSuspect[]}>(IMPORT_ACCOUNTS_QUERY);
   const [runImport, importQ] = useMutation<{importData: Summary}>(IMPORT_DATA);
 
   const summary = importQ.data?.importData;
-  const suspects = accountsQ.data?.suspects ?? [];
   const isExcel = !!filename && isExcelName(filename);
 
   async function handleFile(file: File) {
@@ -182,15 +173,11 @@ export default function ImportPage() {
       variables: {
         ...vars(),
         kind,
-        subjectSuspectId: subjectId,
+        subjectSuspectId: null,
         bankAccountId: null,
         mapping: mappingArg.length > 0 ? mappingArg : null,
       },
     });
-  }
-
-  function onSubject(e: React.ChangeEvent<HTMLSelectElement>) {
-    setSubjectId(e.target.value ? Number(e.target.value) : null);
   }
 
   function setMap(field: string, column: string) {
@@ -267,18 +254,6 @@ export default function ImportPage() {
         <div style={{display: "flex", gap: 12, marginTop: 16,
           alignItems: "flex-end", flexWrap: "wrap"}}>
           <div>
-            <label className="form-label">Эзэн (сэжигтэн) *</label>
-            <select className="form-input" value={subjectId ?? ""}
-              onChange={onSubject} style={{minWidth: 220}}>
-              <option value="">— Сэжигтэн сонгох —</option>
-              {suspects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.fullName} · {s.suspectId}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label className="form-label">Төрөл</label>
             <select className="form-input" value={kind}
               onChange={(e) => setKind(e.target.value as ImportKind)}
@@ -292,15 +267,14 @@ export default function ImportPage() {
             УРЬДЧИЛАН ХАРАХ
           </button>
           <button className="btn btn-primary" onClick={onImport}
-            disabled={importQ.loading || !content || subjectId === null}>
+            disabled={importQ.loading || !content}>
             {importQ.loading ? "ИМПОРТЛОЖ БАЙНА..." : "ИМПОРТЛОХ"}
           </button>
         </div>
-        {subjectId === null && (
-          <div style={{fontSize: 11, color: "var(--text-muted)", marginTop: 8}}>
-            Импортлох өгөгдөл бүр энэ этгээдэд хамаарна — заавал сонгоно уу.
-          </div>
-        )}
+        <div style={{fontSize: 11, color: "var(--text-muted)", marginTop: 8}}>
+          Мөр бүр өөрөө эзэндээ холбогдоно — дуудлага бүртгэлтэй дугаараар,
+          хуулга дансны багана эсвэл дансаараа.
+        </div>
       </Card>
 
       {preview && (

@@ -66,6 +66,10 @@ Unknown paths redirect to /dashboard.
   cases) opens modal: target select + source checkboxes; api `mergeCases`
   moves evidence (renumbered, deduped) + notes, archives sources, session
   switches to target if it was a source.
+- 2026-07-02: Import subject picker removed — rows self-attribute: CDR by
+  suspect phone-number suffix match, bank rows by "Данс" column (accounts
+  find-or-created, mapping field "account"/"Өөрийн данс"); fallback
+  ХУУЛГА-ИМПОРТ bucket. subjectSuspectId now optional API fallback only.
 
 ## Backlog (user wishes, in priority order)
 1. UI consistency sweep: uniform button sizes in every toolbar.
