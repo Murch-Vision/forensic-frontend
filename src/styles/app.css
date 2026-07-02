@@ -107,6 +107,13 @@ body {
     width: 300px;
     max-width: 44vw;
 }
+.app-header-status {
+    width: 140px;
+    flex-shrink: 0;
+}
+@media (max-width: 900px) {
+    .app-header-status { display: none; }
+}
 .app-header-crumb {
     color: var(--text-muted);
     font-size: 14px;

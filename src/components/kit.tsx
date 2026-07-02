@@ -192,17 +192,29 @@ export function LineChart(props: {
 }
 
 // Day(7) x Hour(24) heatmap. data[day][hour] = count.
+// Numeric y + labeled ticks, NOT category labels: plotly's raster draw hits
+// c2p(category) before categories register on the first (strict-mode) mount
+// and spams "<image> attribute height: NaN" console errors.
 export function Heatmap(props: {data: number[][]; rowLabels: string[]}) {
+  const zmax = Math.max(1, ...props.data.map((row) => Math.max(0, ...row)));
   return (
     <Plot
       height={props.rowLabels.length * 26 + 60}
+      layout={{yaxis: {
+        gridcolor: "#1A1A3E",
+        zerolinecolor: "#252550",
+        tickvals: props.rowLabels.map((_v, i) => i),
+        ticktext: props.rowLabels,
+      }}}
       data={[{
         type: "heatmap",
         z: props.data,
-        y: props.rowLabels,
+        y: props.rowLabels.map((_v, i) => i),
         x: Array.from({length: props.data[0]?.length ?? 24}, (_v, i) => i),
         colorscale: "Jet",
         showscale: true,
+        zmin: 0,
+        zmax,
       }]}
     />
   );

@@ -218,7 +218,7 @@ export default function CasesPage() {
                 <th>Зэрэглэл</th>
                 <th>Мөрдөгч</th>
                 <th>Үүсгэсэн</th>
-                <th style={{width: 220, textAlign: "right"}}>Үйлдэл</th>
+                <th style={{width: 90, textAlign: "right"}}>Үйлдэл</th>
               </tr>
             </thead>
             <tbody>
@@ -259,21 +259,7 @@ export default function CasesPage() {
                     {formatDate(c.createdAt)}
                   </td>
                   <td style={{textAlign: "right", whiteSpace: "nowrap"}}>
-                    {c.id === activeId ? (
-                      <span className="badge accent"
-                        title="Одоо энэ кейс дотор ажиллаж байна">
-                        СОНГОГДСОН
-                      </span>
-                    ) : (
-                      <button className="btn btn-sm"
-                        title="Энэ кейс дотор ажиллах — бүх өгөгдлийн хуудас энэ кейсийг харуулна"
-                        onClick={() => setActiveCase({
-                          variables: {caseFileId: c.id}})}>
-                        СОНГОХ
-                      </button>
-                    )}
                     <button className="btn btn-sm"
-                      style={{marginLeft: 8}}
                       title="Кейсийн мэдээлэл засах"
                       onClick={() => openEdit(c)}>
                       ЗАСАХ

@@ -183,6 +183,17 @@ Settings page, Залилангийн урсгал (fraud) page.
   "Болд Батбаярын удирдсан санхүүгийн сүлжээ." text the user asked about is
   CASE-0001's seeded demo description — now editable via ЗАСАХ.
 
+- 2026-07-03: Header case UX (user wish) — cases table СОНГОХ/СОНГОГДСОН
+  REMOVED as redundant (scope switching lives ONLY in the AppHeader dropdown;
+  row highlight still marks the selected case; Үйлдэл = ЗАСАХ only). AppHeader
+  gained a case STATUS filter Select (Бүх төлөв/…, persisted in localStorage
+  "caseStatusFilter"; active case always kept in options; hidden <900px).
+- 2026-07-03: plotly console spam fixed — kit Heatmap now uses NUMERIC y +
+  tickvals/ticktext (NOT category labels): category c2p returned NaN during
+  the first strict-mode mount → "<image> attribute height: NaN" errors on
+  dashboard + calls. zmin/zmax also pinned. RULE: heatmaps get numeric axes
+  with labeled ticks.
+
 ## Backlog (user wishes, in priority order)
 (empty — all user wishes shipped; FIXED BACKLOG fully done 2026-07-02)
 

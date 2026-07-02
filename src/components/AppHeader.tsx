@@ -6,6 +6,7 @@
  * Purpose     :
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
+import {useState} from "react";
 import {Link, useLocation} from "react-router-dom";
 import {
   useApolloClient,
@@ -44,6 +45,22 @@ export default function AppHeader() {
   const page = NAV_META.find((n) => location.pathname.startsWith(n.path));
   const drill = useReactiveVar(drilldownVar);
 
+  // Status filter for the case dropdown (user wish: e.g. only open cases).
+  // Sticky across sessions; the active case always stays listed so the
+  // trigger can render it even when it falls outside the filter.
+  const [statusFilter, setStatusFilter] = useState(
+    () => localStorage.getItem("caseStatusFilter") ?? ""
+  );
+  const visibleCases = statusFilter
+    ? caseFiles.filter((c) =>
+      c.status === statusFilter || c.id === activeCase?.id)
+    : caseFiles;
+
+  function onFilterChange(v: string) {
+    setStatusFilter(v);
+    localStorage.setItem("caseStatusFilter", v);
+  }
+
   async function onSelectCase(id: number | null) {
     await setActiveCase({variables: {caseFileId: id}});
     // Every evidence query is case-scoped server-side — refetch them all so
@@ -58,13 +75,23 @@ export default function AppHeader() {
       <div className="app-header-group">
         <span className="app-header-label">Кейс</span>
         <Select
+          className="app-header-status"
+          value={statusFilter}
+          onChange={onFilterChange}
+          title="Кейсийн жагсаалтыг төлвөөр шүүх"
+          options={[
+            {value: "", label: "Бүх төлөв"},
+            ...["OPEN", "ACTIVE", "CLOSED", "ARCHIVED"].map((s) => ({
+              value: s, label: STATUS_LABELS[s] ?? s})),
+          ]} />
+        <Select
           className="app-header-select"
           value={activeCase?.id ?? ""}
           onChange={(v) => onSelectCase(v ? Number(v) : null)}
           title="Идэвхтэй кейс — бүх хуудсанд үйлчилнэ"
           options={[
             {value: "", label: "Кейс сонгоогүй"},
-            ...caseFiles.map((c) => ({value: c.id,
+            ...visibleCases.map((c) => ({value: c.id,
               label: `${c.caseId} · ${c.caseName} (${
                 STATUS_LABELS[c.status] ?? c.status})`})),
           ]} />
