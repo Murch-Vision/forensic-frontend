@@ -154,6 +154,48 @@ body {
     .app-header-page { display: none; }
 }
 
+/* Case gate — data pages require an active case (Кейс → Өгөгдөл) */
+.case-gate {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 8px;
+    padding: 96px 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius);
+}
+.case-gate-icon {
+    font-size: 40px;
+    opacity: 0.5;
+    margin-bottom: 8px;
+}
+.case-gate-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--accent-amber);
+}
+.case-gate-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.case-gate-text {
+    max-width: 440px;
+    margin: 0 0 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+.case-gate-text b { color: var(--accent-cyan); font-weight: 600; }
+.case-gate-select { width: min(360px, 100%); margin-bottom: 8px; }
+.case-gate-select .select-trigger { width: 100%; }
+
 /* Case scope bar — data pages state which case's evidence is listed */
 .scope-bar {
     display: flex;

@@ -26,6 +26,7 @@ import {
 } from "../components/kit";
 import {DateInput, Select} from "../components/inputs";
 import CaseScopeBar from "../components/CaseScopeBar";
+import CaseGate from "../components/CaseGate";
 import Plot from "../components/Plot";
 import {formatDateTime, formatMoney, sevClass} from "../lib/format";
 import type {BankTransaction} from "../types";
@@ -125,7 +126,9 @@ export default function TransactionsPage() {
       <div className="page-container">
         <PageHeader icon="💳" title="Гүйлгээний Анализ"
           subtitle="САНХҮҮГИЙН УРСГАЛЫН АНАЛИЗ" />
-        <Loading />
+        <CaseGate>
+          <Loading />
+        </CaseGate>
       </div>
     );
   }
@@ -381,6 +384,7 @@ export default function TransactionsPage() {
     <div className="page-container">
       <PageHeader icon="💳" title="Гүйлгээний Анализ"
         subtitle="САНХҮҮГИЙН УРСГАЛЫН АНАЛИЗ" />
+      <CaseGate>
       <CaseScopeBar summary={`${allTxns.length} гүйлгээ · ${
         accounts.length} данс`} />
 
@@ -732,6 +736,7 @@ export default function TransactionsPage() {
           </div>
         </div>
       )}
+      </CaseGate>
     </div>
   );
 }

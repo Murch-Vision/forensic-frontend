@@ -141,8 +141,14 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   case = all data). AppHeader case switch calls client.resetStore() so every
   open page refetches. New `CaseScopeBar` (components/CaseScopeBar.tsx,
   `.scope-bar*` css) under PageHeader on Transactions/Calls/Timeline/
-  LinkChart: cyan strip = case id+name+counts, amber "Бүх кейс" variant when
-  no case selected (hint + link to /cases). Dashboard stats remain global.
+  LinkChart: cyan strip = case id+name+counts. Dashboard stats remain global.
+- 2026-07-03: HIERARCHY GATE (user wish: "clear hierarchy, no all-case
+  noise") — data pages show NO data without an active case. New `CaseGate`
+  (components/CaseGate.tsx, `.case-gate*` css) wraps everything below
+  PageHeader on Transactions/Calls/Timeline/LinkChart (in BOTH the loading
+  and main returns): no case → panel with Кейс → Өгөгдөл explanation, case
+  Select (sets case + resetStore) and КЕЙС УДИРДАХ link. CaseScopeBar's
+  amber "Бүх кейс" variant removed (renders null without a case).
 
 ## Ignore per user (do not touch/improve)
 Settings page, Залилангийн урсгал (fraud) page.

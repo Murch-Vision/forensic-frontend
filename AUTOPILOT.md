@@ -16,3 +16,4 @@
 - 2026-07-02: Хүмүүсийн сан redesigned — sticky list panel with inline stats, profile stat strip (rainbow metric cards gone), proper modal chrome with photo drop-well + form sections.
 - 2026-07-02: breadcrumb drilldown — header now shows Кейс › Хуудас › <хүн/зангилаа> on people, calls, timeline and link chart detail views.
 - 2026-07-02: timeline polished — nav-matching title, 4 stat cards, ToggleChip filters (native checkboxes gone), colored event rails + MN badges. Fraud page left untouched per user wish.
+- 2026-07-03: hierarchy gate (user wish) — transactions/calls/timeline/linkchart show a case-picker panel instead of all-case data until a case is selected.

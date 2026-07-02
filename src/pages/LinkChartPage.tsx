@@ -25,6 +25,7 @@ import {
 } from "../components/kit";
 import NetworkGraph from "../components/NetworkGraph";
 import CaseScopeBar from "../components/CaseScopeBar";
+import CaseGate from "../components/CaseGate";
 import {useDrilldown} from "../lib/drilldown";
 import {buildEvidenceNetwork} from "../lib/networkGraph";
 import type {NetworkNode} from "../lib/networkGraph";
@@ -132,7 +133,9 @@ export default function LinkChartPage() {
       <div className="page-container">
         <PageHeader icon="🕸" title="Холбоосын зураглал"
           subtitle="СҮЛЖЭЭНИЙ ШИНЖИЛГЭЭ" actions={actions} />
-        <Loading />
+        <CaseGate>
+          <Loading />
+        </CaseGate>
       </div>
     );
   }
@@ -148,6 +151,7 @@ export default function LinkChartPage() {
     <div className="page-container">
       <PageHeader icon="🕸" title="Холбоосын зураглал"
         subtitle="СҮЛЖЭЭНИЙ ШИНЖИЛГЭЭ" actions={actions} />
+      <CaseGate>
       <CaseScopeBar summary={`${suspects.length} сэжигтэн · ${
         network.nodes.length} зангилаа`} />
 
@@ -229,6 +233,7 @@ export default function LinkChartPage() {
           <Empty message="Мөнгөн урсгал илрээгүй" />
         )}
       </Card>
+      </CaseGate>
     </div>
   );
 }

@@ -27,6 +27,7 @@ import {
 } from "../components/kit";
 import {Select} from "../components/inputs";
 import CaseScopeBar from "../components/CaseScopeBar";
+import CaseGate from "../components/CaseGate";
 import {useDrilldown} from "../lib/drilldown";
 import Plot from "../components/Plot";
 import {formatDateTime, formatDuration, riskClass} from "../lib/format";
@@ -127,7 +128,9 @@ export default function CallRecordsPage() {
       <div className="page-container">
         <PageHeader icon="📞" title="Дуудлагын дэлгэрэнгүй бүртгэл"
           subtitle="CDR АНАЛИЗ БА ХОЛБООНЫ ЗАГВАР" />
-        <Loading />
+        <CaseGate>
+          <Loading />
+        </CaseGate>
       </div>
     );
   }
@@ -208,6 +211,7 @@ export default function CallRecordsPage() {
     <div className="page-container">
       <PageHeader icon="📞" title="Дуудлагын дэлгэрэнгүй бүртгэл"
         subtitle="CDR АНАЛИЗ БА ХОЛБООНЫ ЗАГВАР" />
+      <CaseGate>
       <CaseScopeBar summary={`${allCalls.length} дуудлага · ${
         suspects.length} сэжигтэн`} />
 
@@ -399,6 +403,7 @@ export default function CallRecordsPage() {
           empty="Дуудлага алга"
         />
       </Card>
+      </CaseGate>
     </div>
   );
 }
