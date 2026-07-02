@@ -62,8 +62,12 @@ Unknown paths redirect to /dashboard.
   row click → drilldown. Uses CALL_RECORDS_QUERY + suspectId added to
   TRANSACTIONS_QUERY bankAccounts.
 
+- 2026-07-02: Merge cases — AppHeader "КЕЙС НЭГТГЭХ" button (shown when 2+
+  cases) opens modal: target select + source checkboxes; api `mergeCases`
+  moves evidence (renumbered, deduped) + notes, archives sources, session
+  switches to target if it was a source.
+
 ## Backlog (user wishes, in priority order)
 1. UI consistency sweep: uniform button sizes in every toolbar.
-2. Merge cases feature.
-3. Global people database (person appears across cases → full profile).
-4. Hierarchy for all pages (case → suspect → …).
+2. Global people database (person appears across cases → full profile).
+3. Hierarchy for all pages (case → suspect → …).

@@ -460,6 +460,17 @@ export const SET_ACTIVE_CASE = gql`
   }
 `;
 
+export const MERGE_CASES = gql`
+  mutation MergeCases($sourceCaseFileIds: [Int!]!, $targetCaseFileId: Int!) {
+    mergeCases(
+      sourceCaseFileIds: $sourceCaseFileIds
+      targetCaseFileId: $targetCaseFileId
+    ) {
+      id caseId caseName status
+    }
+  }
+`;
+
 export const SET_CASE_STATUS = gql`
   mutation SetCaseStatus($caseFileId: Int!, $status: CaseStatus!) {
     setCaseStatus(caseFileId: $caseFileId, status: $status) {

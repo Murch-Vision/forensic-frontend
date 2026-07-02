@@ -11,6 +11,7 @@ import {useMutation, useQuery} from "@apollo/client";
 import {
   ACTIVE_CASE_QUERY,
   CREATE_CASE_FILE,
+  MERGE_CASES,
   SET_ACTIVE_CASE,
   SET_CASE_STATUS,
 } from "../graphql/queries";
@@ -50,10 +51,16 @@ export default function AppHeader() {
   const [setActiveCase] = useMutation(SET_ACTIVE_CASE);
   const [setCaseStatus] = useMutation(SET_CASE_STATUS);
   const [createCaseFile] = useMutation(CREATE_CASE_FILE);
+  const [mergeCases] = useMutation(MERGE_CASES);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({caseId: "", caseName: ""});
   const [formError, setFormError] = useState("");
+  const [showMerge, setShowMerge] = useState(false);
+  const [mergeTarget, setMergeTarget] = useState<number | null>(null);
+  const [mergeSources, setMergeSources] = useState<Set<number>>(new Set());
+  const [mergeError, setMergeError] = useState("");
+  const [merging, setMerging] = useState(false);
 
   const activeCase = caseQ.data?.activeCase ?? null;
   const caseFiles = caseQ.data?.caseFiles ?? [];
@@ -73,6 +80,40 @@ export default function AppHeader() {
     setForm({caseId: "", caseName: ""});
     setFormError("");
     setShowForm(true);
+  }
+
+  function openMerge() {
+    setMergeTarget(activeCase?.id ?? caseFiles[0]?.id ?? null);
+    setMergeSources(new Set());
+    setMergeError("");
+    setShowMerge(true);
+  }
+
+  function toggleMergeSource(id: number) {
+    setMergeSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function submitMerge() {
+    if (mergeTarget == null || mergeSources.size === 0) return;
+    setMerging(true);
+    setMergeError("");
+    try {
+      await mergeCases({variables: {
+        sourceCaseFileIds: [...mergeSources],
+        targetCaseFileId: mergeTarget,
+      }});
+      await caseQ.refetch();
+      setShowMerge(false);
+    } catch (err) {
+      setMergeError("Нэгтгэхэд алдаа гарлаа: " + String(err));
+    } finally {
+      setMerging(false);
+    }
   }
 
   async function submitCase() {
@@ -130,10 +171,90 @@ export default function AppHeader() {
         )}
       </div>
       <div className="app-header-group">
+        {caseFiles.length >= 2 && (
+          <button className="btn" onClick={openMerge}>КЕЙС НЭГТГЭХ</button>
+        )}
         <button className="btn btn-accent" onClick={openForm}>
           + ШИНЭ КЕЙС
         </button>
       </div>
+
+      {showMerge && (
+        <div className="modal-overlay" onClick={() => setShowMerge(false)}>
+          <div
+            className="card"
+            onClick={(e) => e.stopPropagation()}
+            style={{width: 480, maxWidth: "90vw", marginBottom: 0}}
+          >
+            <div className="card-header">
+              <span className="card-title" style={{color: "var(--accent-purple)"}}>
+                КЕЙС НЭГТГЭХ
+              </span>
+            </div>
+            <div className="card-body">
+              {mergeError && (
+                <div className="form-error-box">{mergeError}</div>
+              )}
+              <label className="form-label">Хүлээн авах кейс (үндсэн)</label>
+              <select
+                className="form-input"
+                value={mergeTarget ?? ""}
+                onChange={(e) => {
+                  const id = Number(e.target.value);
+                  setMergeTarget(id);
+                  setMergeSources((prev) => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                  });
+                }}
+                style={{marginBottom: 14}}
+              >
+                {caseFiles.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.caseId} · {c.caseName}
+                  </option>
+                ))}
+              </select>
+              <label className="form-label">Нэгтгэх кейсүүд</label>
+              <div style={{maxHeight: 240, overflowY: "auto",
+                border: "1px solid var(--border-primary)",
+                borderRadius: "var(--radius-sm)", marginBottom: 8}}>
+                {caseFiles.filter((c) => c.id !== mergeTarget).map((c) => (
+                  <label key={c.id} style={{display: "flex",
+                    alignItems: "center", gap: 10, padding: "8px 12px",
+                    fontSize: 12, cursor: "pointer",
+                    borderBottom: "1px solid var(--border-primary)"}}>
+                    <input
+                      type="checkbox"
+                      checked={mergeSources.has(c.id)}
+                      onChange={() => toggleMergeSource(c.id)}
+                    />
+                    <span style={{flex: 1}}>{c.caseId} · {c.caseName}</span>
+                    <span className={`badge ${STATUS_BADGE[c.status] ?? "unknown"}`}>
+                      {STATUS_LABELS[c.status] ?? c.status}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div style={{fontSize: 11, color: "var(--text-muted)",
+                marginBottom: 16}}>
+                Нотлох баримт, тэмдэглэл үндсэн кейс рүү шилжиж, нэгтгэсэн
+                кейсүүд архивлагдана.
+              </div>
+              <div style={{display: "flex", justifyContent: "flex-end", gap: 8}}>
+                <button className="btn btn-sm"
+                  onClick={() => setShowMerge(false)}>ЦУЦЛАХ</button>
+                <button className="btn btn-accent"
+                  disabled={merging || mergeSources.size === 0}
+                  onClick={submitMerge}>
+                  {merging ? "НЭГТГЭЖ БАЙНА..." : `НЭГТГЭХ (${mergeSources.size})`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
