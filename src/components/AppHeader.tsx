@@ -7,22 +7,15 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useState} from "react";
-import {Link, useLocation} from "react-router-dom";
-import {
-  useApolloClient,
-  useMutation,
-  useQuery,
-  useReactiveVar,
-} from "@apollo/client";
+import {Link} from "react-router-dom";
+import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {ACTIVE_CASE_QUERY, SET_ACTIVE_CASE} from "../graphql/queries";
-import {NAV_META, STATUS_BADGE, STATUS_LABELS} from "../nav";
-import {drilldownVar} from "../lib/drilldown";
+import {STATUS_LABELS} from "../nav";
 import {Select} from "./inputs";
 
 // Global case SCOPE bar shown on every page: the analyst picks the case once
 // here and every page (evidence tagging, exhibits, …) follows it via the
-// shared ACTIVE_CASE_QUERY Apollo cache entry. The breadcrumb makes the
-// hierarchy explicit: case › current page. Case management itself (create,
+// shared ACTIVE_CASE_QUERY Apollo cache entry. Case management itself (create,
 // merge, status changes) lives on the /cases page — never here.
 
 interface CaseRef {
@@ -33,7 +26,6 @@ interface CaseRef {
 }
 
 export default function AppHeader() {
-  const location = useLocation();
   const client = useApolloClient();
   const caseQ = useQuery<{activeCase: CaseRef | null; caseFiles: CaseRef[]}>(
     ACTIVE_CASE_QUERY
@@ -42,8 +34,6 @@ export default function AppHeader() {
 
   const activeCase = caseQ.data?.activeCase ?? null;
   const caseFiles = caseQ.data?.caseFiles ?? [];
-  const page = NAV_META.find((n) => location.pathname.startsWith(n.path));
-  const drill = useReactiveVar(drilldownVar);
 
   // Status filter for the case dropdown (user wish: e.g. only open cases).
   // Sticky across sessions.
@@ -70,8 +60,6 @@ export default function AppHeader() {
     // whatever page is open follows the new scope immediately.
     await client.resetStore();
   }
-
-  const status = activeCase?.status ?? "";
 
   return (
     <header className="app-header">
@@ -102,27 +90,6 @@ export default function AppHeader() {
               label: `${c.caseId} · ${c.caseName} (${
                 STATUS_LABELS[c.status] ?? c.status})`})),
           ]} />
-        {activeCase && (
-          <span className={`badge ${STATUS_BADGE[status] ?? "unknown"}`}
-            title="Төлөв солих бол Кейсүүд хуудсыг ашиглана">
-            {STATUS_LABELS[status] ?? status}
-          </span>
-        )}
-        {page && page.path !== "/cases" && (
-          <>
-            <span className="app-header-crumb">›</span>
-            <span className="app-header-page">{page.label}</span>
-            {drill && (
-              <>
-                <span className="app-header-crumb">›</span>
-                <span className="app-header-page app-header-drill"
-                  title={drill}>
-                  {drill}
-                </span>
-              </>
-            )}
-          </>
-        )}
       </div>
       <div className="app-header-group">
         <Link to="/cases" className="app-header-manage">

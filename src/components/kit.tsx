@@ -6,6 +6,7 @@
  * Purpose     :
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
+import {useState} from "react";
 import type {ReactNode} from "react";
 import Plot from "./Plot";
 
@@ -111,6 +112,10 @@ export interface Column<T> {
   header: string;
   render: (row: T) => ReactNode;
   align?: "left" | "right" | "center";
+  // Tooltip shown on the column header (e.g. to explain what the number means).
+  title?: string;
+  // Provide a comparable value to make this column sortable by clicking it.
+  sortValue?: (row: T) => number | string;
 }
 
 export function DataTable<T>(props: {
@@ -119,24 +124,73 @@ export function DataTable<T>(props: {
   empty?: string;
   rowKey: (row: T, i: number) => string | number;
   onRowClick?: (row: T) => void;
+  // Highlights the currently-selected row (e.g. the drilled transaction).
+  isRowActive?: (row: T) => boolean;
+  // Extra per-row class (e.g. to dim rows marked "not important").
+  rowClassName?: (row: T) => string | undefined;
+  // Column index sorted by default (its sortValue must be set).
+  defaultSort?: {col: number; dir: "asc" | "desc"};
 }) {
+  const [sort, setSort] = useState<{col: number; dir: "asc" | "desc"} | null>(
+    props.defaultSort ?? null);
+
   if (props.rows.length === 0) {
     return <Empty message={props.empty ?? "Мэдээлэл алга"} />;
   }
+
+  let rows = props.rows;
+  const sortCol = sort != null ? props.columns[sort.col] : undefined;
+  if (sort && sortCol?.sortValue) {
+    const val = sortCol.sortValue;
+    const mul = sort.dir === "asc" ? 1 : -1;
+    rows = [...props.rows].sort((a, b) => {
+      const va = val(a), vb = val(b);
+      if (va < vb) return -1 * mul;
+      if (va > vb) return 1 * mul;
+      return 0;
+    });
+  }
+
+  function onHeaderClick(i: number) {
+    if (!props.columns[i].sortValue) return;
+    setSort((s) => s && s.col === i
+      ? {col: i, dir: s.dir === "asc" ? "desc" : "asc"}
+      // numbers usually want biggest-first on first click
+      : {col: i, dir: "desc"});
+  }
+
   return (
     <table className="data-grid" style={{width: "100%"}}>
       <thead>
         <tr>
-          {props.columns.map((c, i) => (
-            <th key={i} style={{textAlign: c.align ?? "left"}}>
-              {c.header}
-            </th>
-          ))}
+          {props.columns.map((c, i) => {
+            const sortable = !!c.sortValue;
+            const active = sort?.col === i;
+            return (
+              <th key={i} style={{textAlign: c.align ?? "left",
+                cursor: sortable ? "pointer" : undefined,
+                userSelect: "none",
+                color: active ? "var(--accent-cyan)" : undefined}}
+                title={c.title ?? (sortable ? "Эрэмбэлэх" : undefined)}
+                onClick={sortable ? () => onHeaderClick(i) : undefined}>
+                {c.header}
+                {sortable && (
+                  <span style={{marginLeft: 4, opacity: active ? 1 : 0.35}}>
+                    {active ? (sort!.dir === "asc" ? "▲" : "▼") : "↕"}
+                  </span>
+                )}
+              </th>
+            );
+          })}
         </tr>
       </thead>
       <tbody>
-        {props.rows.map((row, i) => (
+        {rows.map((row, i) => (
           <tr key={props.rowKey(row, i)}
+            className={[
+              props.isRowActive?.(row) ? "case-row-active" : "",
+              props.rowClassName?.(row) ?? "",
+            ].filter(Boolean).join(" ") || undefined}
             onClick={props.onRowClick ? () => props.onRowClick!(row) : undefined}
             style={props.onRowClick ? {cursor: "pointer"} : undefined}>
             {props.columns.map((c, j) => (

@@ -26,19 +26,26 @@ export const DARK_LAYOUT = {
   legend: {orientation: "h", y: -0.2},
 };
 
+export interface PlotClickEvent {
+  points: Array<{curveNumber: number; pointNumber: number; pointIndex?: number}>;
+}
+
 export interface PlotProps {
   data: unknown[];
   layout?: Record<string, unknown>;
   height?: number;
+  // Fired when a data point is clicked (e.g. to drill into a transaction).
+  onClick?: (e: PlotClickEvent) => void;
 }
 
-export default function Plot({data, layout, height}: PlotProps) {
+export default function Plot({data, layout, height, onClick}: PlotProps) {
   return (
     <PlotlyComponent
       data={data}
       layout={{...DARK_LAYOUT, ...layout, autosize: true}}
       config={{displayModeBar: false, responsive: true}}
       style={{width: "100%", height: height ?? 240}}
+      onClick={onClick}
       useResizeHandler
     />
   );

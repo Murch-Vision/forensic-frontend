@@ -221,10 +221,11 @@ body {
     max-height: calc(100% - 100px);
     overflow-y: auto;
     z-index: 3;
-    background: rgba(10, 12, 24, 0.92);
-    border: 1px solid var(--border-primary);
+    /* Solid, not translucent — the graph behind it made the text unreadable. */
+    background: #0A0C18;
+    border: 1px solid var(--border-secondary);
     border-radius: var(--radius);
-    box-shadow: var(--shadow);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.75);
     padding: 14px;
 }
 .graph-detail-head {
@@ -557,7 +558,9 @@ body {
 }
 .data-grid thead th {
     padding: 10px 14px;
-    background: rgba(0,229,255,0.05);
+    /* Solid, not translucent — a sticky header inside a scroll box must hide
+       the rows passing under it. */
+    background: #0E1C30;
     border-bottom: 1px solid var(--border-secondary);
     color: var(--text-muted);
     font-size: 9px;
@@ -653,7 +656,9 @@ body {
     color: var(--bg-primary);
     border-color: var(--accent-cyan);
 }
-.btn-primary:hover { background: #33ECFF; }
+/* Keep the dark label — the generic .btn:hover turns text cyan, which on the
+   cyan primary background is unreadable. */
+.btn-primary:hover { background: #33ECFF; color: var(--bg-primary); }
 .btn-danger { border-color: var(--accent-red); color: var(--accent-red); }
 .btn-danger:hover { background: rgba(255,23,68,0.1); }
 .btn-sm { padding: 4px 10px; font-size: 10px; }
