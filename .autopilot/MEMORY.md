@@ -140,6 +140,15 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   "Бүх холбоос нуугдсан" Empty message. ToggleChip gained optional `color`
   prop (kit.tsx) → `.toggle-chip.tinted.on` tints via `--chip-accent` +
   color-mix (app.css) — reuse for any legend-colored filter chip.
+- 2026-07-03: Graph search-to-focus (GOAL core — 552 nodes unfindable by
+  eye) — `.graph-search` combobox right-aligned on the filter bar: matches
+  node label AND sub (= account/phone numbers), persons + prefix hits
+  first, 8 shown + total note, Enter = first hit, Esc/blur clears (items
+  use onMouseDown+preventDefault so blur can't eat the click). NetworkGraph
+  is now forwardRef exposing `NetworkGraphHandle.focusNode(id)`: centers
+  view (t = center − off − node·(fit·k), zooms to ≥1.8k) + cyan double
+  focus ring drawn on top; ring clears on any canvas pointerdown. CSS
+  `.graph-search-*` (menu/item/type/name/sub/more) in app.css.
 - 2026-07-03: Txns page URL state + dedicated restore view — filters ride
   the querystring (acct, cp, type, from, to, q) via useSearchParams
   patchParams; page tabs "Гүйлгээний шинжилгээ" | "↩ Хасагдсаныг сэргээх"

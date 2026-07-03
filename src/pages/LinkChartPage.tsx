@@ -6,7 +6,7 @@
  * Purpose     :
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
-import {useMemo, useState} from "react";
+import {useMemo, useRef, useState} from "react";
 import {Link} from "react-router-dom";
 import {useMutation, useQuery} from "@apollo/client";
 import {
@@ -26,6 +26,7 @@ import {
   ToggleChip,
 } from "../components/kit";
 import NetworkGraph, {LINK_STYLE} from "../components/NetworkGraph";
+import type {NetworkGraphHandle} from "../components/NetworkGraph";
 import CaseGate from "../components/CaseGate";
 import {useDrilldown} from "../lib/drilldown";
 import {
@@ -172,6 +173,16 @@ export default function LinkChartPage() {
       return new Set();
     }
   });
+  // Search-to-focus: find any node (name / account number / phone) in the
+  // dense graph, jump the view to it and open its detail panel.
+  const graphRef = useRef<NetworkGraphHandle>(null);
+  const [search, setSearch] = useState("");
+  function focusSearchResult(node: NetworkNode) {
+    setSelected(node);
+    setSelectedLink(null);
+    setSearch("");
+    graphRef.current?.focusNode(node.id);
+  }
   function toggleKind(kind: NetworkLinkKind) {
     const next = new Set(hiddenKinds);
     if (next.has(kind)) next.delete(kind);
@@ -341,6 +352,22 @@ export default function LinkChartPage() {
   // Raw per-kind totals (pre-toggle) — the chips double as the edge legend.
   const totalEvidence = EDGE_KINDS.reduce(
     (sum, k) => sum + (network.kindCounts[k] ?? 0), 0);
+  // Matches against label AND sub (sub carries account/phone numbers, so a
+  // number fragment finds its node too). Persons and prefix hits sort first.
+  const searchQ = search.trim().toLowerCase();
+  const searchHits = searchQ
+    ? network.nodes
+      .filter((n) => n.label.toLowerCase().includes(searchQ)
+        || (n.sub ?? "").toLowerCase().includes(searchQ))
+      .sort((a, b) => {
+        const pa = a.type === "PERSON" ? 0 : 1;
+        const pb = b.type === "PERSON" ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        const sa = a.label.toLowerCase().startsWith(searchQ) ? 0 : 1;
+        const sb = b.label.toLowerCase().startsWith(searchQ) ? 0 : 1;
+        return sa !== sb ? sa - sb : a.label.localeCompare(b.label);
+      })
+    : [];
   // Keep the links list consistent with the (filtered) graph: only links whose
   // BOTH suspects still appear as nodes. Otherwise the count contradicts what's
   // actually drawn after removing unimportant pairs.
@@ -413,11 +440,55 @@ export default function LinkChartPage() {
                 on={!hiddenKinds.has(kind)}
                 onToggle={() => toggleKind(kind)} />
             ))}
+            <div className="graph-search">
+              <input type="text" className="form-input"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && searchHits.length > 0) {
+                    focusSearchResult(searchHits[0]);
+                  } else if (e.key === "Escape") {
+                    setSearch("");
+                  }
+                }}
+                onBlur={() => setSearch("")}
+                placeholder="Хайх — нэр, данс, утас…"
+                aria-label="Зангилаа хайх" />
+              {searchQ && (
+                <div className="graph-search-menu">
+                  {searchHits.slice(0, 8).map((n) => (
+                    <button key={n.id} type="button"
+                      className="graph-search-item"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        focusSearchResult(n);
+                      }}>
+                      <span className={`graph-search-type ${n.type.toLowerCase()}`}>
+                        {NODE_TYPE_LABEL[n.type] ?? n.type}
+                      </span>
+                      <span className="graph-search-name">{n.label}</span>
+                      {n.sub && (
+                        <span className="graph-search-sub">{n.sub}</span>
+                      )}
+                    </button>
+                  ))}
+                  {searchHits.length > 8 && (
+                    <div className="graph-search-more">
+                      …нийт {searchHits.length} илэрц — хайлтаа нарийсгана уу
+                    </div>
+                  )}
+                  {searchHits.length === 0 && (
+                    <div className="graph-search-more">Илэрц алга</div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
         {network.nodes.length > 0 ? (
           <div style={{position: "relative"}}>
-            <NetworkGraph nodes={network.nodes} links={network.links}
+            <NetworkGraph ref={graphRef}
+              nodes={network.nodes} links={network.links}
               onNodeClick={setSelected} onLinkClick={setSelectedLink} />
             {selected && (
               <div className="graph-detail-panel">

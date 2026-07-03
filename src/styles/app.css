@@ -940,6 +940,78 @@ body {
     color: var(--text-muted);
     margin-right: 4px;
 }
+/* Search-to-focus combobox, right-aligned on the graph filter bar. */
+.graph-search {
+    position: relative;
+    margin-left: auto;
+}
+.graph-search .form-input {
+    width: 280px;
+    padding: 8px 12px;
+    font-size: 12px;
+}
+.graph-search-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    width: 340px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 4px;
+    z-index: 30;
+}
+.graph-search-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.graph-search-item:hover { background: rgba(0, 229, 255, 0.08); }
+.graph-search-type {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-secondary);
+    color: var(--text-secondary);
+}
+.graph-search-type.person { color: #00C853; border-color: rgba(0, 200, 83, 0.4); }
+.graph-search-type.account { color: #00B0FF; border-color: rgba(0, 176, 255, 0.4); }
+.graph-search-type.phone { color: #E040FB; border-color: rgba(224, 64, 251, 0.4); }
+.graph-search-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.graph-search-sub {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+}
+.graph-search-more {
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border-primary);
+    margin-top: 2px;
+}
 .id-chip {
     display: inline-block;
     padding: 3px 8px;

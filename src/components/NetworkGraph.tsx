@@ -6,7 +6,7 @@
  * Purpose     :
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
-import {useEffect, useRef} from "react";
+import {forwardRef, useEffect, useImperativeHandle, useRef} from "react";
 import type {
   NetworkLink,
   NetworkLinkKind,
@@ -165,14 +165,24 @@ function tick(nodes: SimNode[], links: SimLink[], alpha: number): number {
   return alpha * 0.99;
 }
 
-export default function NetworkGraph(props: {
+// Imperative surface for the hosting page — search-to-focus lives here.
+export interface NetworkGraphHandle {
+  // Center the view on a node and mark it with a focus ring. The ring clears
+  // as soon as the analyst pans/drags/clicks the canvas again.
+  focusNode : (id: string) => void;
+}
+
+interface NetworkGraphProps {
   nodes : NetworkNode[];
   links : NetworkLink[];
   // Fired with the clicked node, or null when clicking empty canvas.
   onNodeClick? : (node: NetworkNode | null) => void;
   // Fired when an edge (not a node) is clicked — noise removal lives on edges.
   onLinkClick? : (link: NetworkLink | null) => void;
-}) {
+}
+
+export default forwardRef<NetworkGraphHandle, NetworkGraphProps>(
+function NetworkGraph(props, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const nodesRef = useRef<SimNode[]>([]);
   const linksRef = useRef<SimLink[]>([]);
@@ -192,6 +202,29 @@ export default function NetworkGraph(props: {
   const viewRef = useRef<View>({k: 1, tx: 0, ty: 0});
   // Graph→screen mapping captured at draw time, reused for hit testing.
   const fitRef = useRef({fit: 1, offX: 0, offY: 0});
+  // Node currently ringed by search-to-focus (null = none).
+  const focusRef = useRef<string | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    focusNode(id: string) {
+      const node = nodesRef.current.find((n) => n.id === id);
+      const canvas = canvasRef.current;
+      if (!node || !canvas) return;
+      focusRef.current = id;
+      // Center the node: screen = graph·(fit·k) + t + off, solved for t with
+      // the node's graph position at the canvas center. Zoom in enough that
+      // the node is unmistakable, but never zoom OUT of a closer view.
+      const {fit, offX, offY} = fitRef.current;
+      const k = clamp(Math.max(viewRef.current.k, 1.8), 0.3, 5);
+      const scale = fit * k;
+      viewRef.current = {
+        k,
+        tx: canvas.clientWidth / 2 - offX - node.x * scale,
+        ty: canvas.clientHeight / 2 - offY - node.y * scale,
+      };
+      ensureRunning();
+    },
+  }));
 
   // Paint the whole scene to the canvas. Cheap enough to run every frame.
   function draw() {
@@ -310,6 +343,25 @@ export default function NetworkGraph(props: {
           ctx.fillStyle = "#7a7fa0";
           ctx.fillText(n.sub, n.x, n.y + r + 15);
         }
+      }
+    }
+    // Search-focus ring, drawn on top of everything so the found node is
+    // unmistakable in a dense graph.
+    if (focusRef.current) {
+      const n = nodes.find((x) => x.id === focusRef.current);
+      if (n) {
+        const r = radiusOf(n);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = "#00E5FF";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.35;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 12, 0, Math.PI * 2);
+        ctx.stroke();
       }
     }
     ctx.globalAlpha = 1;
@@ -512,6 +564,8 @@ export default function NetworkGraph(props: {
 
   function onPointerDown(e: React.PointerEvent) {
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    // Any manual interaction dismisses the search-focus ring.
+    focusRef.current = null;
     const node = nodeAt(e.clientX, e.clientY);
     const link = node ? null : linkAt(e.clientX, e.clientY);
     clickRef.current = {x: e.clientX, y: e.clientY, node, link};
@@ -706,4 +760,4 @@ export default function NetworkGraph(props: {
       />
     </div>
   );
-}
+});

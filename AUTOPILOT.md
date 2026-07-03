@@ -24,3 +24,4 @@
 - 2026-07-03: noise cleanup v2 (user wish) — per-txn ✕Хас, min-amount floor, who→whom columns, pair drilldown; filters in querystring; restore = dedicated ?view=removed tab (not modal); killed 'Хамгийн томыг үлдээх'.
 - 2026-07-03: on-graph noise removal — click an edge on the connections graph to inspect & remove it (shared with txns restore); money floor control on the graph card.
 - 2026-07-03: Link chart edge-kind visibility chips — toggle Гүйлгээ/Дуудлага/Хамаарал edges (counts + legend colors, persisted); intel-only view supported; filter-aware empty state.
+- 2026-07-03: Link chart search-to-focus — find any person/account/phone by name or number fragment; view jumps to the node with a focus ring and opens its details.
