@@ -22,3 +22,4 @@
 - 2026-07-03: scope bar removed, strict header filter, auto-preview import (no AUTO kind), settings emptied (nuke gone), apollo cache warnings silenced.
 - 2026-07-03: transactions show currency, noise columns dropped, archive unselects case in UI. (co-authored with owner)
 - 2026-07-03: noise cleanup v2 (user wish) — per-txn ✕Хас, min-amount floor, who→whom columns, pair drilldown; filters in querystring; restore = dedicated ?view=removed tab (not modal); killed 'Хамгийн томыг үлдээх'.
+- 2026-07-03: on-graph noise removal — click an edge on the connections graph to inspect & remove it (shared with txns restore); money floor control on the graph card.

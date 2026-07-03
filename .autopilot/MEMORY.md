@@ -122,6 +122,16 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   (sender/receiver derived from credit/debit + account owner). Pair-row
   click drills via cp filter (chip clears it). 🧹 Цэвэрлэх modal =
   removal tools ONLY (floor, pair threshold, desc rule).
+- 2026-07-03: On-graph noise removal (GOAL core) — NetworkGraph.tsx gained
+  edge interaction: SimLink keeps `orig`, `linkAt()` point-to-segment hit
+  test (~6px, skips "owns"), edge hover = highlight + label + pointer,
+  `onLinkClick` prop. LinkChartPage: edge click → graph-detail-panel
+  (kind, endpoints, totals) with "✕ Энэ холбоосыг хасах" on txn edges →
+  removeTxnEdge() marks ALL contributing pairKeys (both directions) via
+  ignorePairs — shared store, restorable at /transactions?view=removed.
+  Money-floor input lives on the graph card header (badge when active).
+  KNOWN: graph is dominated by purple intel-link hairball — edge-kind
+  visibility toggles are the obvious next lever.
 - 2026-07-03: Txns page URL state + dedicated restore view — filters ride
   the querystring (acct, cp, type, from, to, q) via useSearchParams
   patchParams; page tabs "Гүйлгээний шинжилгээ" | "↩ Хасагдсаныг сэргээх"

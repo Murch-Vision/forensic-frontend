@@ -7,6 +7,7 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useMemo, useState} from "react";
+import {Link} from "react-router-dom";
 import {useMutation, useQuery} from "@apollo/client";
 import {
   CALL_RECORDS_QUERY,
@@ -27,15 +28,19 @@ import NetworkGraph from "../components/NetworkGraph";
 import CaseGate from "../components/CaseGate";
 import {useDrilldown} from "../lib/drilldown";
 import {
+  ignorePairs,
   isBelowMin,
   matchesDescRules,
+  pairKey,
+  setMinAmount,
   useIgnoredDesc,
   useIgnoredPairs,
   useIgnoredTxns,
   useMinAmount,
 } from "../lib/ignoredPairs";
+import {formatMoney} from "../lib/format";
 import {buildEvidenceNetwork} from "../lib/networkGraph";
-import type {NetworkNode} from "../lib/networkGraph";
+import type {NetworkLink, NetworkNode} from "../lib/networkGraph";
 import type {SuspectLinkType} from "../types";
 
 // The case's connection map: suspects, accounts and phones from the ACTUAL
@@ -108,6 +113,10 @@ export default function LinkChartPage() {
   }}>(NETWORK_FLOW_QUERY);
   const [generate, {loading: generating}] = useMutation(GENERATE_LINKS);
   const [selected, setSelected] = useState<NetworkNode | null>(null);
+  // Clicked EDGE — the noise-removal target (a whole connection at once).
+  const [selectedLink, setSelectedLink] = useState<NetworkLink | null>(null);
+  // Money floor input (commits on button/Enter — nothing while typing).
+  const [floorText, setFloorText] = useState("");
   // Selected node = a drilldown; surface it in the header breadcrumb.
   useDrilldown(selected?.label ?? null);
   // Pairs the analyst marked "not important" on the Transactions page. Both
@@ -147,6 +156,38 @@ export default function LinkChartPage() {
   async function onGenerate() {
     await generate();
     await refetch();
+  }
+
+  // Commit the money floor typed on the graph card — every transaction below
+  // it drops from the graph (and the whole Transactions page) instantly.
+  function commitFloor() {
+    setMinAmount(Number(floorText.replace(/[^\d.]/g, "")) || 0);
+  }
+
+  // Remove a clicked transaction edge: mark EVERY account→counterparty pair
+  // that feeds this graph edge (both directions) unimportant. Shares the
+  // ignored-pairs store with the Transactions page, so it is restorable from
+  // /transactions?view=removed.
+  function removeTxnEdge(link: NetworkLink) {
+    if (!txQ.data) return;
+    const aId = Number(link.source.slice(2));  // "a:12" → 12
+    const bId = Number(link.target.slice(2));
+    const onlyDigits = (s: string | null) => (s ?? "").replace(/\D/g, "");
+    const idByNumber = new Map(txQ.data.bankAccounts
+      .map((a) => [onlyDigits(a.accountNumber), a.id]));
+    const keys = new Set<string>();
+    for (const t of txQ.data.transactions) {
+      const cp = t.counterpartyAccount?.trim();
+      if (!cp) continue;
+      const toId = idByNumber.get(onlyDigits(cp));
+      if (toId == null) continue;
+      if ((t.bankAccountId === aId && toId === bId)
+        || (t.bankAccountId === bId && toId === aId)) {
+        keys.add(pairKey(t.bankAccountId, cp));
+      }
+    }
+    if (keys.size) ignorePairs([...keys]);
+    setSelectedLink(null);
   }
 
   const network = useMemo(() => {
@@ -263,17 +304,53 @@ export default function LinkChartPage() {
       <Card
         title={`Нотлох баримтын сүлжээ — ${network.nodes.length} зангилаа, `
           + `${counts.txn} гүйлгээний + ${counts.call} дуудлагын холбоос`}
-        actions={hidden.size > 0 ? (
-          <button className="btn btn-sm" onClick={restoreNodes}
-            title="Хасагдсан зангилаануудыг буцааж харуулах">
-            ↩ Хасагдсаныг сэргээх ({hidden.size})
-          </button>
-        ) : undefined}
+        actions={
+          <div style={{display: "flex", gap: 8, alignItems: "center",
+            flexWrap: "wrap"}}>
+            {minAmount > 0 ? (
+              <span className="badge" style={{display: "inline-flex",
+                alignItems: "center", gap: 6}}>
+                💰 {formatMoney(minAmount)}-с доош нуугдсан
+                <button className="modal-close" style={{fontSize: 14}}
+                  title="Босго арилгах"
+                  onClick={() => {setMinAmount(0); setFloorText("");}}>
+                  ×
+                </button>
+              </span>
+            ) : (
+              <>
+                <input type="text" inputMode="numeric" className="form-input"
+                  value={floorText}
+                  onChange={(e) => setFloorText(e.target.value)}
+                  onKeyDown={(e) => {if (e.key === "Enter") commitFloor();}}
+                  placeholder="Хамгийн бага дүн ₮"
+                  title="Энэ дүнгээс доош гүйлгээг зураглалаас нуух"
+                  style={{width: 160}} />
+                <button className="btn btn-danger" onClick={commitFloor}
+                  disabled={!Number(floorText.replace(/[^\d.]/g, ""))}>
+                  Нуух
+                </button>
+              </>
+            )}
+            {(ignoredPairs.size > 0 || minAmount > 0) && (
+              <Link to="/transactions?view=removed" className="btn"
+                title="Хассан бүх зүйлийг харах, буцаах">
+                ↩ Хасагдсаныг сэргээх
+              </Link>
+            )}
+            {hidden.size > 0 && (
+              <button className="btn" onClick={restoreNodes}
+                title="Хасагдсан зангилаануудыг буцааж харуулах">
+                ↩ Зангилаа ({hidden.size})
+              </button>
+            )}
+          </div>
+        }
         style={{marginBottom: 16}}>
         {network.nodes.length > 0 ? (
           <div style={{position: "relative"}}>
             <NetworkGraph nodes={network.nodes} links={network.links}
-              onNodeClick={setSelected} />
+              onNodeClick={setSelected} onLinkClick={setSelectedLink} />
             {selected && (
               <div className="graph-detail-panel">
                 <div className="graph-detail-head">
@@ -312,6 +389,54 @@ export default function LinkChartPage() {
                 </button>
               </div>
             )}
+            {selectedLink && !selected && (() => {
+              const l = selectedLink;
+              const src = network.nodes.find((n) => n.id === l.source);
+              const tgt = network.nodes.find((n) => n.id === l.target);
+              const kindLabel = l.kind === "txn" ? "Гүйлгээний холбоос"
+                : l.kind === "call" ? "Дуудлагын холбоос" : "Хамаарал";
+              return (
+                <div className="graph-detail-panel">
+                  <div className="graph-detail-head">
+                    <div>
+                      <div className="graph-detail-type">{kindLabel}</div>
+                      <div className="graph-detail-title">
+                        {src?.label ?? l.source} ↔ {tgt?.label ?? l.target}
+                      </div>
+                      {(src?.sub || tgt?.sub) && (
+                        <div className="graph-detail-sub">
+                          {src?.sub ?? "—"} ↔ {tgt?.sub ?? "—"}
+                        </div>
+                      )}
+                    </div>
+                    <button className="graph-detail-close"
+                      onClick={() => setSelectedLink(null)}
+                      aria-label="Хаах">×</button>
+                  </div>
+                  {l.label && (
+                    <div className="graph-detail-stats">
+                      <div className="graph-detail-row">
+                        <span>Нийт</span>
+                        <span>{l.label}</span>
+                      </div>
+                    </div>
+                  )}
+                  {l.kind === "txn" ? (
+                    <button className="btn btn-danger btn-sm"
+                      style={{width: "100%", marginTop: 12}}
+                      onClick={() => removeTxnEdge(l)}
+                      title={"Энэ хоёр дансны хоорондох бүх гүйлгээг хэрэггүй "
+                        + "гэж хасах — Сэргээх хуудаснаас буцаана"}>
+                      ✕ Энэ холбоосыг хасах
+                    </button>
+                  ) : (
+                    <div className="graph-detail-sub" style={{marginTop: 10}}>
+                      Зөвхөн гүйлгээний холбоосыг хасах боломжтой.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <Empty message="Сүлжээ алга — сэжигтэн, гүйлгээ, дуудлага импортлогдоогүй байна" />

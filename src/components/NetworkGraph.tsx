@@ -67,6 +67,8 @@ interface SimLink {
   strength : number;
   kind     : NetworkLinkKind;
   label?   : string;
+  // The caller's link object, handed back on click.
+  orig     : NetworkLink;
 }
 
 interface View {
@@ -167,6 +169,8 @@ export default function NetworkGraph(props: {
   links : NetworkLink[];
   // Fired with the clicked node, or null when clicking empty canvas.
   onNodeClick? : (node: NetworkNode | null) => void;
+  // Fired when an edge (not a node) is clicked — noise removal lives on edges.
+  onLinkClick? : (link: NetworkLink | null) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const nodesRef = useRef<SimNode[]>([]);
@@ -180,8 +184,10 @@ export default function NetworkGraph(props: {
   const panRef = useRef<{x: number; y: number} | null>(null);
   // Pointer-down snapshot: a release within a few px is a click.
   const clickRef = useRef<
-    {x: number; y: number; node: SimNode | null} | null>(null);
+    {x: number; y: number; node: SimNode | null; link: SimLink | null}
+    | null>(null);
   const hoverRef = useRef<string | null>(null);
+  const hoverLinkRef = useRef<SimLink | null>(null);
   const viewRef = useRef<View>({k: 1, tx: 0, ty: 0});
   // Graph→screen mapping captured at draw time, reused for hit testing.
   const fitRef = useRef({fit: 1, offX: 0, offY: 0});
@@ -227,8 +233,10 @@ export default function NetworkGraph(props: {
     }
 
     // Links, colored by evidence kind.
+    const hoverLink = hoverLinkRef.current;
     for (const l of links) {
-      const active = hover && (l.s.id === hover || l.t.id === hover);
+      const active = (hover && (l.s.id === hover || l.t.id === hover))
+        || l === hoverLink;
       const st = LINK_STYLE[l.kind];
       ctx.beginPath();
       ctx.moveTo(l.s.x, l.s.y);
@@ -236,17 +244,20 @@ export default function NetworkGraph(props: {
       ctx.strokeStyle = st.color;
       ctx.globalAlpha = hover
         ? (active ? 0.95 : 0.05)
-        : (l.kind === "owns" ? 0.45 : 0.4);
+        : active ? 0.95 : (l.kind === "owns" ? 0.45 : 0.4);
       ctx.lineWidth = active ? l.strength * 0.8 + 1.2 : l.strength * 0.6;
       ctx.stroke();
     }
-    // Aggregate labels on the hovered node's edges.
-    if (hover) {
+    // Aggregate labels on the hovered node's edges / the hovered edge itself.
+    if (hover || hoverLink) {
       ctx.font = "600 10px 'Cascadia Mono', Consolas, monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       for (const l of links) {
-        if (!l.label || (l.s.id !== hover && l.t.id !== hover)) continue;
+        const on = hover
+          ? (l.s.id === hover || l.t.id === hover)
+          : l === hoverLink;
+        if (!l.label || !on) continue;
         const mx = (l.s.x + l.t.x) / 2;
         const my = (l.s.y + l.t.y) / 2;
         const w = ctx.measureText(l.label).width + 10;
@@ -380,11 +391,12 @@ export default function NetworkGraph(props: {
     });
     const lk: SimLink[] = props.links
       .map((l) => ({s: map.get(l.source)!, t: map.get(l.target)!,
-        strength: l.strength, kind: l.kind, label: l.label}))
+        strength: l.strength, kind: l.kind, label: l.label, orig: l}))
       .filter((l) => l.s && l.t);
 
     nodesRef.current = sim;
     linksRef.current = lk;
+    hoverLinkRef.current = null;
     alphaRef.current = 1;
     ensureRunning();
     return () => {
@@ -435,6 +447,31 @@ export default function NetworkGraph(props: {
     return found;
   }
 
+  // Nearest evidence edge within ~6 screen px of the pointer (point-to-segment
+  // distance). Ownership edges are structural, not evidence — never hit.
+  function linkAt(clientX: number, clientY: number): SimLink | null {
+    const p = toGraph(clientX, clientY);
+    const {fit} = fitRef.current;
+    const slop = 6 / (fit * viewRef.current.k);
+    let best: SimLink | null = null;
+    let bestD = slop;
+    for (const l of linksRef.current) {
+      if (l.kind === "owns") continue;
+      const dx = l.t.x - l.s.x;
+      const dy = l.t.y - l.s.y;
+      const len2 = dx * dx + dy * dy || 1;
+      const u = clamp(((p.x - l.s.x) * dx + (p.y - l.s.y) * dy) / len2, 0, 1);
+      const qx = l.s.x + u * dx;
+      const qy = l.s.y + u * dy;
+      const d = Math.hypot(p.x - qx, p.y - qy);
+      if (d < bestD) {
+        bestD = d;
+        best = l;
+      }
+    }
+    return best;
+  }
+
   // Zoom about a screen point (CSS px relative to the canvas). The full
   // screen mapping is screen = graph·(fit·k) + t + off — the fit factor
   // cancels between old and new zoom, but the letterbox offset does NOT:
@@ -475,7 +512,8 @@ export default function NetworkGraph(props: {
   function onPointerDown(e: React.PointerEvent) {
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     const node = nodeAt(e.clientX, e.clientY);
-    clickRef.current = {x: e.clientX, y: e.clientY, node};
+    const link = node ? null : linkAt(e.clientX, e.clientY);
+    clickRef.current = {x: e.clientX, y: e.clientY, node, link};
     if (node) {
       const p = toGraph(e.clientX, e.clientY);
       // Grabbing a person drags their whole constellation; grabbing an
@@ -540,10 +578,12 @@ export default function NetworkGraph(props: {
     }
     const node = nodeAt(e.clientX, e.clientY);
     const id = node ? node.id : null;
+    const link = node ? null : linkAt(e.clientX, e.clientY);
     const isHub = node && node.type === "PERSON";
-    setCursor(node ? (isHub ? "move" : "pointer") : "grab");
-    if (id !== hoverRef.current) {
+    setCursor(node ? (isHub ? "move" : "pointer") : link ? "pointer" : "grab");
+    if (id !== hoverRef.current || link !== hoverLinkRef.current) {
       hoverRef.current = id;
+      hoverLinkRef.current = link;
       ensureRunning();
     }
   }
@@ -552,7 +592,16 @@ export default function NetworkGraph(props: {
     const c = clickRef.current;
     clickRef.current = null;
     if (c && Math.abs(e.clientX - c.x) < 5 && Math.abs(e.clientY - c.y) < 5) {
-      props.onNodeClick?.(c.node);
+      if (c.node) {
+        props.onNodeClick?.(c.node);
+        props.onLinkClick?.(null);
+      } else if (c.link) {
+        props.onLinkClick?.(c.link.orig);
+        props.onNodeClick?.(null);
+      } else {
+        props.onNodeClick?.(null);
+        props.onLinkClick?.(null);
+      }
     }
     if (clusterDragRef.current) {
       for (const m of clusterDragRef.current.members) {
@@ -571,8 +620,9 @@ export default function NetworkGraph(props: {
   }
 
   function onPointerLeave() {
-    if (hoverRef.current) {
+    if (hoverRef.current || hoverLinkRef.current) {
       hoverRef.current = null;
+      hoverLinkRef.current = null;
       ensureRunning();
     }
   }
