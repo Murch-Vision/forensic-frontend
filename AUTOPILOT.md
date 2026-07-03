@@ -25,3 +25,4 @@
 - 2026-07-03: on-graph noise removal — click an edge on the connections graph to inspect & remove it (shared with txns restore); money floor control on the graph card.
 - 2026-07-03: Link chart edge-kind visibility chips — toggle Гүйлгээ/Дуудлага/Хамаарал edges (counts + legend colors, persisted); intel-only view supported; filter-aware empty state.
 - 2026-07-03: Link chart search-to-focus — find any person/account/phone by name or number fragment; view jumps to the node with a focus ring and opens its details.
+- 2026-07-03: Selected node keeps its direct connections highlighted (rest dimmed) + clickable connections list in the detail panel for hop-by-hop network walking.

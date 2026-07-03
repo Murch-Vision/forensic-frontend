@@ -489,6 +489,7 @@ export default function LinkChartPage() {
           <div style={{position: "relative"}}>
             <NetworkGraph ref={graphRef}
               nodes={network.nodes} links={network.links}
+              selectedId={selected?.id ?? null}
               onNodeClick={setSelected} onLinkClick={setSelectedLink} />
             {selected && (
               <div className="graph-detail-panel">
@@ -520,6 +521,50 @@ export default function LinkChartPage() {
                     Нэмэлт мэдээлэл алга.
                   </div>
                 )}
+                {(() => {
+                  // Direct connections, evidence first — click one to walk
+                  // the network hop by hop.
+                  const kindOrder = {txn: 0, call: 1, intel: 2, owns: 3};
+                  const rows = network.links
+                    .filter((l) =>
+                      l.source === selected.id || l.target === selected.id)
+                    .map((l) => {
+                      const otherId = l.source === selected.id
+                        ? l.target : l.source;
+                      const other = network.nodes.find(
+                        (n) => n.id === otherId);
+                      return other ? {link: l, other} : null;
+                    })
+                    .filter((r): r is {link: NetworkLink; other: NetworkNode} =>
+                      r != null)
+                    .sort((a, b) =>
+                      kindOrder[a.link.kind] - kindOrder[b.link.kind]);
+                  if (rows.length === 0) return null;
+                  return (
+                    <>
+                      <div className="graph-detail-links-title">
+                        Шууд холбоо · {rows.length}
+                      </div>
+                      <div className="graph-detail-links">
+                        {rows.map(({link, other}, i) => (
+                          <button key={`${other.id}|${link.kind}|${i}`}
+                            type="button" className="graph-detail-link-row"
+                            title="Энэ зангилаа руу очих"
+                            onClick={() => focusSearchResult(other)}>
+                            <span className="graph-detail-link-dot" style={{
+                              background: LINK_STYLE[link.kind].color}} />
+                            <span className="graph-detail-link-name">
+                              {other.label}
+                            </span>
+                            <span className="graph-detail-link-meta">
+                              {link.label ?? LINK_STYLE[link.kind].label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
                 <button className="btn btn-danger btn-sm"
                   style={{width: "100%", marginTop: 12}}
                   onClick={() => hideNode(selected.id)}

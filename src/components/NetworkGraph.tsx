@@ -175,6 +175,9 @@ export interface NetworkGraphHandle {
 interface NetworkGraphProps {
   nodes : NetworkNode[];
   links : NetworkLink[];
+  // Selected node — its direct connections stay highlighted (everything else
+  // dimmed) until deselection, independent of the transient hover.
+  selectedId? : string | null;
   // Fired with the clicked node, or null when clicking empty canvas.
   onNodeClick? : (node: NetworkNode | null) => void;
   // Fired when an edge (not a node) is clicked — noise removal lives on edges.
@@ -204,6 +207,14 @@ function NetworkGraph(props, ref) {
   const fitRef = useRef({fit: 1, offX: 0, offY: 0});
   // Node currently ringed by search-to-focus (null = none).
   const focusRef = useRef<string | null>(null);
+  // Mirror of props.selectedId — draw() runs inside a rAF closure that can
+  // outlive the render that started it, so it must read through a ref.
+  const selectedRef = useRef<string | null>(null);
+  selectedRef.current = props.selectedId ?? null;
+  useEffect(() => {
+    ensureRunning();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.selectedId]);
 
   useImperativeHandle(ref, () => ({
     focusNode(id: string) {
@@ -258,38 +269,41 @@ function NetworkGraph(props, ref) {
     const nodes = nodesRef.current;
     const links = linksRef.current;
     const hover = hoverRef.current;
+    // Highlight source: transient hover wins, else the selected node keeps
+    // its direct connections lit until deselection.
+    const hl = hover ?? selectedRef.current;
     const neighbors = new Set<string>();
-    if (hover) {
+    if (hl) {
       for (const l of links) {
-        if (l.s.id === hover) neighbors.add(l.t.id);
-        if (l.t.id === hover) neighbors.add(l.s.id);
+        if (l.s.id === hl) neighbors.add(l.t.id);
+        if (l.t.id === hl) neighbors.add(l.s.id);
       }
     }
 
     // Links, colored by evidence kind.
     const hoverLink = hoverLinkRef.current;
     for (const l of links) {
-      const active = (hover && (l.s.id === hover || l.t.id === hover))
+      const active = (hl && (l.s.id === hl || l.t.id === hl))
         || l === hoverLink;
       const st = LINK_STYLE[l.kind];
       ctx.beginPath();
       ctx.moveTo(l.s.x, l.s.y);
       ctx.lineTo(l.t.x, l.t.y);
       ctx.strokeStyle = st.color;
-      ctx.globalAlpha = hover
+      ctx.globalAlpha = hl
         ? (active ? 0.95 : 0.05)
         : active ? 0.95 : (l.kind === "owns" ? 0.45 : 0.4);
       ctx.lineWidth = active ? l.strength * 0.8 + 1.2 : l.strength * 0.6;
       ctx.stroke();
     }
-    // Aggregate labels on the hovered node's edges / the hovered edge itself.
-    if (hover || hoverLink) {
+    // Aggregate labels on the highlighted node's edges / the hovered edge.
+    if (hl || hoverLink) {
       ctx.font = "600 10px 'Cascadia Mono', Consolas, monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       for (const l of links) {
-        const on = hover
-          ? (l.s.id === hover || l.t.id === hover)
+        const on = hl
+          ? (l.s.id === hl || l.t.id === hl)
           : l === hoverLink;
         if (!l.label || !on) continue;
         const mx = (l.s.x + l.t.x) / 2;
@@ -310,7 +324,7 @@ function NetworkGraph(props, ref) {
     for (const n of nodes) {
       const st = TYPE_STYLE[n.type];
       const r = radiusOf(n);
-      const dim = hover && hover !== n.id && !neighbors.has(n.id);
+      const dim = hl && hl !== n.id && !neighbors.has(n.id);
       const baseAlpha = dim ? 0.2 : 1;
 
       ctx.beginPath();
@@ -333,13 +347,13 @@ function NetworkGraph(props, ref) {
       ctx.fillText(st.icon, n.x, n.y);
 
       const showLabel = n.weight >= 1 || showAll
-        || hover === n.id || neighbors.has(n.id);
+        || hl === n.id || neighbors.has(n.id);
       if (showLabel) {
         ctx.font = LABEL_FONT;
         ctx.textBaseline = "top";
         ctx.fillStyle = "#c8cce0";
         ctx.fillText(n.label, n.x, n.y + r + 3);
-        if (n.sub && (showAll || hover === n.id)) {
+        if (n.sub && (showAll || hl === n.id)) {
           ctx.fillStyle = "#7a7fa0";
           ctx.fillText(n.sub, n.x, n.y + r + 15);
         }

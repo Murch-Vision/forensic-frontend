@@ -149,6 +149,14 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   view (t = center − off − node·(fit·k), zooms to ≥1.8k) + cyan double
   focus ring drawn on top; ring clears on any canvas pointerdown. CSS
   `.graph-search-*` (menu/item/type/name/sub/more) in app.css.
+- 2026-07-03: Selected-node connection highlight + hop navigation (GOAL
+  core) — NetworkGraph prop `selectedId`: draw()'s highlight source is
+  `hover ?? selectedRef.current` (ref-mirrored — rAF closures outlive
+  renders), so a selected node PERSISTENTLY dims non-neighbors and lights
+  its edges/labels like hover does. Node detail panel gained "Шууд холбоо ·
+  N" list (evidence kinds first): dot = LINK_STYLE color, counterpart
+  label, edge aggregate; row click = focusSearchResult(other) → walk the
+  network hop by hop. CSS `.graph-detail-link*`.
 - 2026-07-03: Txns page URL state + dedicated restore view — filters ride
   the querystring (acct, cp, type, from, to, q) via useSearchParams
   patchParams; page tabs "Гүйлгээний шинжилгээ" | "↩ Хасагдсаныг сэргээх"
