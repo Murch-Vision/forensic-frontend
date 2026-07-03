@@ -7,6 +7,7 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useState} from "react";
+import {useSearchParams} from "react-router-dom";
 import {useMutation, useQuery} from "@apollo/client";
 import {
   ACTIVE_CASE_QUERY,
@@ -30,7 +31,6 @@ import {
   addDescRule,
   clearDescRules,
   ignorePairs,
-  ignoreTxns,
   isBelowMin,
   matchesDescRules,
   pairKey,
@@ -88,12 +88,36 @@ export default function TransactionsPage() {
     sourceId: number; exhibitNumber: number}[]}>(EVIDENCE_FOR_CASE, {
     variables: {caseFileId: activeCase?.id ?? 0}, skip: !activeCase});
   const [tagEvidence] = useMutation(TAG_EVIDENCE);
-  const [filterAccount, setFilterAccount] = useState("All");
-  const [filterCounterparty, setFilterCounterparty] = useState("");
-  const [filterType, setFilterType] = useState("");
-  const [filterFrom, setFilterFrom] = useState("");
-  const [filterTo, setFilterTo] = useState("");
-  const [filterDesc, setFilterDesc] = useState("");
+  // View filters + the page view live in the URL querystring, so a filtered
+  // view is deep-linkable, survives reload and can be shared/screenshotted
+  // (e.g. /transactions?acct=3&cp=1234&view=removed).
+  const [params, setParams] = useSearchParams();
+  function patchParams(patch: Record<string, string | null>) {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null || v === "") next.delete(k);
+        else next.set(k, v);
+      }
+      return next;
+    }, {replace: true});
+  }
+  const filterAccount = params.get("acct") ?? "All";
+  const filterCounterparty = params.get("cp") ?? "";
+  const filterType = params.get("type") ?? "";
+  const filterFrom = params.get("from") ?? "";
+  const filterTo = params.get("to") ?? "";
+  const filterDesc = params.get("q") ?? "";
+  // Page view: the analysis itself, or the dedicated restore ("removed") tab.
+  const view: "txns" | "removed" =
+    params.get("view") === "removed" ? "removed" : "txns";
+  const setFilterAccount = (v: string) =>
+    patchParams({acct: v === "All" ? null : v});
+  const setFilterCounterparty = (v: string) => patchParams({cp: v});
+  const setFilterType = (v: string) => patchParams({type: v});
+  const setFilterFrom = (v: string) => patchParams({from: v});
+  const setFilterTo = (v: string) => patchParams({to: v});
+  const setFilterDesc = (v: string) => patchParams({q: v});
   const [topN, setTopN] = useState(10);
   const [pairTopN, setPairTopN] = useState(20);
   const [corrMin, setCorrMin] = useState(30);
@@ -104,7 +128,6 @@ export default function TransactionsPage() {
   const minAmount = useMinAmount();
   // Cleanup modal + its inputs (nothing applies while typing — a button commits).
   const [cleanupOpen, setCleanupOpen] = useState(false);
-  const [cleanupTab, setCleanupTab] = useState<"remove" | "restore">("remove");
   const [minAmountText, setMinAmountText] = useState("");
   const [thresholdText, setThresholdText] = useState("");
   const [thresholdMode, setThresholdMode] = useState<"total" | "single">(
@@ -180,15 +203,6 @@ export default function TransactionsPage() {
   const tableRows = filtered.filter((t) =>
     (!filterType || t.type === filterType));
 
-  // One-shot: keep only the single biggest transaction currently shown and
-  // remove all the rest (the "leave the 80k, drop the other 4" workflow).
-  function keepOnlyLargestShown() {
-    if (tableRows.length <= 1) return;
-    const largest = tableRows.reduce(
-      (m, t) => (t.amount > m.amount ? t : m), tableRows[0]);
-    ignoreTxns(tableRows.filter((t) => t.id !== largest.id).map((t) => t.id));
-  }
-
   // One-shot: mark every active pair below the typed amount unimportant. No
   // per-keystroke filtering — the analyst types, then clicks the button once.
   function bulkRemoveBelow() {
@@ -217,10 +231,13 @@ export default function TransactionsPage() {
   function filterBy(patch: {
     account?: string; desc?: string; day?: string; counterparty?: string;
   }) {
-    if (patch.account !== undefined) setFilterAccount(patch.account);
-    if (patch.desc !== undefined) setFilterDesc(patch.desc);
-    setFilterCounterparty(patch.counterparty ?? "");
-    if (patch.day !== undefined) {setFilterFrom(patch.day); setFilterTo(patch.day);}
+    const p: Record<string, string | null> = {cp: patch.counterparty ?? null};
+    if (patch.account !== undefined) {
+      p.acct = patch.account === "All" ? null : patch.account;
+    }
+    if (patch.desc !== undefined) p.q = patch.desc;
+    if (patch.day !== undefined) {p.from = patch.day; p.to = patch.day;}
+    patchParams(p);
     setSelectedTxn(null);
   }
   const hasFilter = filterAccount !== "All" || filterCounterparty !== ""
@@ -228,12 +245,8 @@ export default function TransactionsPage() {
     || filterDesc !== "";
 
   function clearFilters() {
-    setFilterAccount("All");
-    setFilterCounterparty("");
-    setFilterType("");
-    setFilterFrom("");
-    setFilterTo("");
-    setFilterDesc("");
+    patchParams({acct: null, cp: null, type: null, from: null, to: null,
+      q: null});
   }
 
   // Duplicated гүйлгээний утга: identical descriptions used 2+ times.
@@ -468,6 +481,31 @@ export default function TransactionsPage() {
         subtitle="САНХҮҮГИЙН УРСГАЛЫН АНАЛИЗ" />
       <CaseGate>
 
+      {/* Page views: the analysis, and a DEDICATED full-width restore area
+          (user wish: restoring must never live in a cramped modal). The view
+          rides the querystring so it is linkable: ?view=removed */}
+      <div style={{display: "flex", gap: 2, marginBottom: 16,
+        borderBottom: "1px solid var(--border-primary)"}}>
+        {([
+          {key: "txns", label: "💳 Гүйлгээний шинжилгээ"},
+          {key: "removed", label: `↩ Хасагдсаныг сэргээх${
+            restoreCount > 0 ? ` (${restoreCount})` : ""}`},
+        ] as const).map((tab) => (
+          <button key={tab.key} className="btn"
+            onClick={() => patchParams(
+              {view: tab.key === "txns" ? null : tab.key})}
+            style={{borderRadius: 0, border: "none",
+              padding: "10px 18px", background: "transparent",
+              borderBottom: view === tab.key
+                ? "2px solid var(--accent-cyan)" : "2px solid transparent",
+              color: view === tab.key
+                ? "var(--text-primary)" : "var(--text-muted)"}}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {view === "txns" && <>
       <div className="metrics-grid">
         <StatCard label="Нийт гүйлгээ (харагдаж буй / бүгд)"
           value={<>{totalCount}<span style={{color: "var(--text-muted)",
@@ -483,17 +521,9 @@ export default function TransactionsPage() {
         style={{marginBottom: 16}}
         actions={
           <div style={{display: "flex", gap: 8, alignItems: "center"}}>
-            {tableRows.length > 1 && (
-              <button className="btn btn-danger" onClick={keepOnlyLargestShown}
-                title={"Одоо харагдаж буй гүйлгээнээс хамгийн томыг нь үлдээж, "
-                  + "бусдыг хэрэггүй гэж хасах"}>
-                Хамгийн томыг үлдээх
-              </button>
-            )}
             <button className="btn btn-danger"
               onClick={() => {
                 setMinAmountText(minAmount > 0 ? String(minAmount) : "");
-                setCleanupTab("remove");
                 setCleanupOpen(true);
               }}
               title="Жижиг дүн, босго, байгууллагын утгаар бөөнөөр цэвэрлэх">
@@ -509,7 +539,8 @@ export default function TransactionsPage() {
           <div>
             <label className="form-label">Данс</label>
             <Select value={filterAccount}
-              onChange={(v) => {setFilterAccount(v); setFilterCounterparty("");}}
+              onChange={(v) => patchParams(
+                {acct: v === "All" ? null : v, cp: null})}
               style={{minWidth: 220}}
               options={accountOptions} />
           </div>
@@ -628,8 +659,7 @@ export default function TransactionsPage() {
               <button className="btn btn-danger"
                 onClick={() => {
                   setMinAmountText(minAmount > 0 ? String(minAmount) : "");
-                  setCleanupTab("remove");
-                setCleanupOpen(true);
+                  setCleanupOpen(true);
                 }}
                 title="Жижиг дүн, босго, байгууллагын утга зэргээр цэвэрлэх">
                 🧹 Цэвэрлэх{totalRemoved > 0 ? ` (${totalRemoved})` : ""}
@@ -758,6 +788,130 @@ export default function TransactionsPage() {
           onRowClick={(r) => openDrill(r.txn)}
         />
       </Card>
+      </>}
+
+      {view === "removed" && <>
+      <div className="metrics-grid">
+        <StatCard label="Хасагдсан гүйлгээ" value={removedTxnList.length} />
+        <StatCard label="Хасагдсан хос" value={removedPairs.length} />
+        <StatCard label="Утгын дүрэм" value={descRules.length} />
+        <StatCard label="Жижиг дүнгийн босго"
+          value={minAmount > 0 ? formatMoney(minAmount) : "—"} />
+      </div>
+
+      <Card title="Юу нуугдсан бэ?" style={{marginBottom: 16}}
+        actions={restoreCount > 0 ? (
+          <button className="btn btn-danger"
+            onClick={() => {
+              if (!window.confirm("Бүх хасалтыг цуцалж, нуусан бүх гүйлгээг "
+                + "буцааж харуулах уу?")) return;
+              restorePairs(); clearDescRules(); restoreTxns();
+              setMinAmount(0); setMinAmountText("");
+            }}
+            title="Бүх нуусан өгөгдлийг буцаах (баталгаажуулна)">
+            ↩ Бүгдийг сэргээх ({restoreCount})
+          </button>
+        ) : undefined}>
+        <div style={{fontSize: 12, color: "var(--text-secondary)"}}>
+          Хассан бүх зүйл энд байна — юу ч бүрмөсөн устдаггүй. Мөр бүрийн
+          ↩ товчоор нэг нэгээр нь буцаана. Хасагдсан өгөгдөл тооцоо, график,
+          холбоосын зураглалд огт орохгүй.
+        </div>
+        {minAmount > 0 && (
+          <div style={{display: "flex", justifyContent: "space-between",
+            alignItems: "center", padding: "8px 12px", marginTop: 12,
+            border: "1px solid var(--border-primary)",
+            borderRadius: "var(--radius-sm)"}}>
+            <span>💰 {formatMoney(minAmount)}-с доош бүх гүйлгээ нуугдсан
+              (жижиг дүнгийн босго)</span>
+            <button className="btn btn-sm"
+              onClick={() => {setMinAmount(0); setMinAmountText("");}}
+              title="Босго арилгах">↩ Сэргээх</button>
+          </div>
+        )}
+      </Card>
+
+      <div style={ROW}>
+        <Card title={`Гүйлгээний утгаар хасагдсан (${descRules.length})`}
+          noPadding>
+          <div className="scroll-container" style={{maxHeight: 300}}>
+            <DataTable<DescRule & {i: number}>
+              columns={[
+                {header: "Нөхцөл", render: (r) => r.mode === "starts"
+                  ? "Эхэлсэн" : r.mode === "ends" ? "Төгссөн" : "Агуулсан"},
+                {header: "Утга", render: (r) => r.text},
+                {header: "", align: "right" as const,
+                  render: (r) => (
+                    <button className="btn btn-sm"
+                      onClick={() => removeDescRule(r.i)}
+                      title="Энэ дүрмийг буцаах">↩ Сэргээх</button>
+                  )},
+              ]}
+              rows={descRules.map((r, i) => ({...r, i}))}
+              rowKey={(r) => `${r.mode}-${r.text}`}
+              empty="Утгын дүрэм алга"
+            />
+          </div>
+        </Card>
+        <Card title={`Хасагдсан хосууд (${removedPairs.length})`} noPadding>
+          <div className="scroll-container" style={{maxHeight: 300}}>
+            <DataTable<(typeof removedPairs)[number]>
+              columns={[
+                {header: "Данс", render: (r) => r.account},
+                {header: "Харьцсан данс", render: (r) => r.counterparty},
+                {header: "Гүйлгээ", align: "right" as const,
+                  render: (r) => r.txns},
+                {header: "Нийт дүн", align: "right" as const,
+                  render: (r) => formatMoney(r.total)},
+                {header: "", align: "right" as const,
+                  render: (r) => (
+                    <button className="btn btn-sm"
+                      onClick={() => toggleIgnoredPair(r.key)}
+                      title="Энэ хосыг буцаах">↩ Сэргээх</button>
+                  )},
+              ]}
+              rows={removedPairs}
+              rowKey={(r) => r.key}
+              empty="Хасагдсан хос алга"
+            />
+          </div>
+        </Card>
+      </div>
+
+      <Card title={`Хасагдсан гүйлгээ (${removedTxnList.length})`}
+        style={{marginBottom: 16}} noPadding>
+        <div className="scroll-container" style={{maxHeight: 440}}>
+          <DataTable<BankTransaction>
+            columns={[
+              {header: "Огноо",
+                sortValue: (t) => t.timestamp,
+                render: (t) => formatDateTime(t.timestamp)},
+              {header: "Хэнээс (илгээгч)",
+                render: (t) => partyCell(senderOf(t))},
+              {header: "", align: "center" as const,
+                render: () => <span style={{color: "var(--text-muted)",
+                  fontSize: 16}}>→</span>},
+              {header: "Хэнд (хүлээн авагч)",
+                render: (t) => partyCell(receiverOf(t))},
+              {header: "Дүн", align: "right" as const,
+                sortValue: (t) => t.amount,
+                render: (t) => formatMoney(t.amount)},
+              {header: "Гүйлгээний утга",
+                render: (t) => t.description ?? "—"},
+              {header: "", align: "right" as const,
+                render: (t) => (
+                  <button className="btn btn-sm"
+                    onClick={() => toggleIgnoredTxn(t.id)}
+                    title="Энэ гүйлгээг буцаах">↩ Сэргээх</button>
+                )},
+            ]}
+            rows={removedTxnList}
+            rowKey={(t) => t.id}
+            empty="Хасагдсан гүйлгээ алга — бүх өгөгдөл харагдаж байна"
+          />
+        </div>
+      </Card>
+      </>}
 
       {selectedTxn && (() => {
         const t = selectedTxn;
@@ -887,30 +1041,6 @@ export default function TransactionsPage() {
               <button className="modal-close" title="Хаах"
                 onClick={() => setCleanupOpen(false)}>×</button>
             </div>
-            {/* Two clearly separated jobs: ADD removals (destructive, red) vs
-                RESTORE what was removed (a safe, dedicated undo area). They must
-                never sit next to each other as look-alike buttons. */}
-            <div style={{display: "flex", gap: 4, padding: "0 18px",
-              borderBottom: "1px solid var(--border-primary)"}}>
-              <button className="btn" onClick={() => setCleanupTab("remove")}
-                style={{borderRadius: 0, border: "none", borderBottom:
-                  cleanupTab === "remove" ? "2px solid var(--accent-red)"
-                    : "2px solid transparent", background: "transparent",
-                  color: cleanupTab === "remove" ? "var(--text-primary)"
-                    : "var(--text-muted)"}}>
-                ✕ Хасах
-              </button>
-              <button className="btn" onClick={() => setCleanupTab("restore")}
-                style={{borderRadius: 0, border: "none", borderBottom:
-                  cleanupTab === "restore" ? "2px solid var(--accent-cyan)"
-                    : "2px solid transparent", background: "transparent",
-                  color: cleanupTab === "restore" ? "var(--text-primary)"
-                    : "var(--text-muted)"}}>
-                ↩ Сэргээх{restoreCount > 0 ? ` (${restoreCount})` : ""}
-              </button>
-            </div>
-
-            {cleanupTab === "remove" ? (
             <div className="modal-body">
               {/* Amount floor — the headline noise filter. Drops every small
                   transaction everywhere + on the connection graph. */}
@@ -994,145 +1124,19 @@ export default function TransactionsPage() {
                   disabled={!descText.trim()}>Хасах</button>
               </div>
               <div style={{fontSize: 11, color: "var(--text-muted)"}}>
-                Энэ утгатай бүх гүйлгээ хасагдана. Хасагдсан дүрмүүдийг
-                “↩ Сэргээх” табаас буцаана.
+                Энэ утгатай бүх гүйлгээ хасагдана. Хассан бүхнээ
+                “↩ Хасагдсаныг сэргээх” хуудаснаас буцаана.
               </div>
             </div>
-            ) : (
-            <div className="modal-body">
-              <div style={{fontSize: 12, color: "var(--text-secondary)",
-                marginBottom: 16}}>
-                Доорх бүх зүйл нь одоо <b>нуугдсан</b>. Мөр бүрийн ↩ товчоор
-                нэг нэгээр нь, эсвэл доод талын товчоор бүгдийг сэргээнэ.
-              </div>
-
-              {/* Amount floor */}
-              <div className="form-label">Жижиг дүнгийн босго</div>
-              {minAmount > 0 ? (
-                <div style={{display: "flex", justifyContent: "space-between",
-                  alignItems: "center", padding: "8px 12px", marginBottom: 18,
-                  border: "1px solid var(--border-primary)",
-                  borderRadius: "var(--radius-sm)"}}>
-                  <span>{formatMoney(minAmount)}-с доош гүйлгээ нуугдсан</span>
-                  <button className="btn btn-sm"
-                    onClick={() => {setMinAmount(0); setMinAmountText("");}}
-                    title="Босго арилгах">↩ Сэргээх</button>
-                </div>
-              ) : (
-                <div style={{fontSize: 11, color: "var(--text-muted)",
-                  marginBottom: 18}}>Идэвхтэй босго алга.</div>
-              )}
-
-              {/* Description rules — a clear table, not a badge pile */}
-              <div className="form-label">
-                Гүйлгээний утгаар хасагдсан ({descRules.length})
-              </div>
-              {descRules.length > 0 ? (
-                <div className="scroll-container" style={{maxHeight: 160,
-                  marginBottom: 18, border: "1px solid var(--border-primary)",
-                  borderRadius: "var(--radius-sm)"}}>
-                  <DataTable<DescRule & {i: number}>
-                    columns={[
-                      {header: "Нөхцөл", render: (r) => r.mode === "starts"
-                        ? "Эхэлсэн" : r.mode === "ends" ? "Төгссөн" : "Агуулсан"},
-                      {header: "Утга", render: (r) => r.text},
-                      {header: "", align: "right" as const,
-                        render: (r) => (
-                          <button className="btn btn-sm"
-                            onClick={() => removeDescRule(r.i)}
-                            title="Буцаах">↩</button>
-                        )},
-                    ]}
-                    rows={descRules.map((r, i) => ({...r, i}))}
-                    rowKey={(r) => `${r.mode}-${r.text}`}
-                    empty="Алга"
-                  />
-                </div>
-              ) : (
-                <div style={{fontSize: 11, color: "var(--text-muted)",
-                  marginBottom: 18}}>Хасагдсан утга алга.</div>
-              )}
-
-              {/* Removed pairs */}
-              <div className="form-label">
-                Хасагдсан хосууд ({removedPairs.length})
-              </div>
-              {removedPairs.length > 0 ? (
-                <div className="scroll-container" style={{maxHeight: 160,
-                  marginBottom: 18, border: "1px solid var(--border-primary)",
-                  borderRadius: "var(--radius-sm)"}}>
-                  <DataTable<(typeof removedPairs)[number]>
-                    columns={[
-                      {header: "Данс", render: (r) => r.account},
-                      {header: "Харьцсан данс", render: (r) => r.counterparty},
-                      {header: "Нийт дүн", align: "right" as const,
-                        render: (r) => formatMoney(r.total)},
-                      {header: "", align: "right" as const,
-                        render: (r) => (
-                          <button className="btn btn-sm"
-                            onClick={() => toggleIgnoredPair(r.key)}
-                            title="Буцаах">↩</button>
-                        )},
-                    ]}
-                    rows={removedPairs}
-                    rowKey={(r) => r.key}
-                    empty="Алга"
-                  />
-                </div>
-              ) : (
-                <div style={{fontSize: 11, color: "var(--text-muted)",
-                  marginBottom: 18}}>Хасагдсан хос алга.</div>
-              )}
-
-              {/* Individually removed transactions */}
-              <div className="form-label">
-                Хасагдсан гүйлгээ ({removedTxnList.length})
-              </div>
-              {removedTxnList.length > 0 ? (
-                <div className="scroll-container" style={{maxHeight: 160,
-                  marginBottom: 18, border: "1px solid var(--border-primary)",
-                  borderRadius: "var(--radius-sm)"}}>
-                  <DataTable<BankTransaction>
-                    columns={[
-                      {header: "Огноо",
-                        render: (t) => formatDateTime(t.timestamp)},
-                      {header: "Дүн", align: "right" as const,
-                        render: (t) => formatMoney(t.amount)},
-                      {header: "Харьцагч",
-                        render: (t) => t.counterpartyName
-                          ?? t.counterpartyAccount ?? "—"},
-                      {header: "", align: "right" as const,
-                        render: (t) => (
-                          <button className="btn btn-sm"
-                            onClick={() => toggleIgnoredTxn(t.id)}
-                            title="Буцаах">↩</button>
-                        )},
-                    ]}
-                    rows={removedTxnList}
-                    rowKey={(t) => t.id}
-                    empty="Алга"
-                  />
-                </div>
-              ) : (
-                <div style={{fontSize: 11, color: "var(--text-muted)",
-                  marginBottom: 18}}>Хасагдсан гүйлгээ алга.</div>
-              )}
-
-              {restoreCount > 0 && (
-                <button className="btn btn-danger" style={{width: "100%"}}
-                  onClick={() => {
-                    if (!window.confirm("Бүх хасалтыг цуцалж, нуусан бүх "
-                      + "гүйлгээг буцааж харуулах уу?")) return;
-                    restorePairs(); clearDescRules(); restoreTxns();
-                    setMinAmount(0); setMinAmountText("");
-                  }}
-                  title="Бүх нуусан өгөгдлийг буцаах (баталгаажуулна)">
-                  ↩ Бүгдийг сэргээх ({restoreCount})
-                </button>
-              )}
-            </div>
-            )}
             <div className="modal-footer">
+              <button className="btn"
+                onClick={() => {
+                  setCleanupOpen(false);
+                  patchParams({view: "removed"});
+                }}
+                title="Хасагдсан бүх зүйлийг харах, буцаах">
+                ↩ Хасагдсаныг харах{restoreCount > 0 ? ` (${restoreCount})` : ""}
+              </button>
               <button className="btn btn-primary"
                 onClick={() => setCleanupOpen(false)}>ХААХ</button>
             </div>

@@ -112,6 +112,24 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   STATUS_BADGE). Addresses wishes "don't change case status in app header"
   + "hierarchy for all pages".
 
+- 2026-07-03: Noise-removal suite (GOAL core, user wish) —
+  lib/ignoredPairs.ts: FOUR persistent noise marks (localStorage + Apollo
+  reactive vars, shared Txns page ↔ Link chart): per-txn ids
+  (`forensic.ignoredTxns`), account→cp pairs, desc rules
+  (starts/ends/contains), global min-amount floor
+  (`forensic.minTxnAmount`). All drop from every count/chart/pair AND the
+  connection graph. Txns table = Огноо|Хэнээс|→|Хэнд|Дүн|Утга|Үлдэгдэл|✕Хас
+  (sender/receiver derived from credit/debit + account owner). Pair-row
+  click drills via cp filter (chip clears it). 🧹 Цэвэрлэх modal =
+  removal tools ONLY (floor, pair threshold, desc rule).
+- 2026-07-03: Txns page URL state + dedicated restore view — filters ride
+  the querystring (acct, cp, type, from, to, q) via useSearchParams
+  patchParams; page tabs "Гүйлгээний шинжилгээ" | "↩ Хасагдсаныг сэргээх"
+  = `?view=removed`: full-width restore area (stat cards, floor row, desc
+  rules / pairs / txns tables, per-row ↩, confirm-gated Бүгдийг сэргээх).
+  Restore lives ONLY here (user wish: never in a small modal). "Хамгийн
+  томыг үлдээх" button REMOVED (user lost work to it — do not re-add).
+  NOTE for screenshots: /transactions?view=removed deep-links the tab.
 - 2026-07-02: Link chart = evidence network (GOAL core) —
   lib/networkGraph.ts buildEvidenceNetwork(): suspects + owned accounts/
   phones + txns aggregated per account↔counterparty pair (counterparty
