@@ -7,7 +7,7 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useState} from "react";
-import type {ReactNode} from "react";
+import type {CSSProperties, ReactNode} from "react";
 import Plot from "./Plot";
 
 // Shared layout / table / chart primitives reused by every ported page.
@@ -93,14 +93,20 @@ export function Badge({text, kind}: {text: string; kind: string}) {
 }
 
 // On/off filter pill — use instead of native checkboxes in toolbars.
-export function ToggleChip({label, on, onToggle}: {
+// `color` tints the ON state (legend-style chips, e.g. edge kinds); without
+// it the chip stays accent-cyan.
+export function ToggleChip({label, on, onToggle, color}: {
   label: string;
   on: boolean;
   onToggle: () => void;
+  color?: string;
 }) {
   return (
     <button type="button" aria-pressed={on}
-      className={on ? "toggle-chip on" : "toggle-chip"}
+      className={`toggle-chip${color ? " tinted" : ""}${on ? " on" : ""}`}
+      style={color
+        ? {"--chip-accent": color} as CSSProperties
+        : undefined}
       onClick={onToggle}>
       <span className="toggle-chip-dot" />
       {label}

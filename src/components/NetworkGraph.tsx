@@ -41,7 +41,8 @@ const TYPE_LABEL: Record<NetworkNodeType, string> = {
 };
 
 // Edge palette: money green, calls cyan, intel purple, ownership neutral.
-const LINK_STYLE: Record<NetworkLinkKind, {color: string; label: string}> = {
+// Exported so the link-chart filter chips stay in sync with the drawn edges.
+export const LINK_STYLE: Record<NetworkLinkKind, {color: string; label: string}> = {
   txn   : {color: "#00E676", label: "Гүйлгээ"},
   call  : {color: "#00E5FF", label: "Дуудлага"},
   intel : {color: "#E040FB", label: "Хамаарал"},

@@ -130,8 +130,16 @@ deleted): map, analysis (Шинжилгээ), osint, audit, intelboard
   removeTxnEdge() marks ALL contributing pairKeys (both directions) via
   ignorePairs — shared store, restorable at /transactions?view=removed.
   Money-floor input lives on the graph card header (badge when active).
-  KNOWN: graph is dominated by purple intel-link hairball — edge-kind
-  visibility toggles are the obvious next lever.
+- 2026-07-03: Edge-kind visibility chips (GOAL core — kills the purple
+  hairball on demand) — LinkChartPage `.graph-filter-bar` above the canvas:
+  ToggleChip per evidence kind (txn/call/intel; "owns" structural, never
+  toggled) with per-kind edge counts, colors from NetworkGraph's exported
+  LINK_STYLE. Hidden kinds persist (`forensic.hiddenEdgeKinds`). Keep-logic:
+  flow = VISIBLE txn/call; intel carries its persons ONLY when both flow
+  kinds are off (intel-only view ≠ empty graph); all kinds off → dedicated
+  "Бүх холбоос нуугдсан" Empty message. ToggleChip gained optional `color`
+  prop (kit.tsx) → `.toggle-chip.tinted.on` tints via `--chip-accent` +
+  color-mix (app.css) — reuse for any legend-colored filter chip.
 - 2026-07-03: Txns page URL state + dedicated restore view — filters ride
   the querystring (acct, cp, type, from, to, q) via useSearchParams
   patchParams; page tabs "Гүйлгээний шинжилгээ" | "↩ Хасагдсаныг сэргээх"

@@ -912,6 +912,34 @@ body {
     background: var(--accent-cyan);
     box-shadow: 0 0 6px rgba(0, 229, 255, 0.8);
 }
+/* Tinted variant — the ON state takes the color passed by the chip (legend
+   chips whose color must match what they filter, e.g. graph edge kinds). */
+.toggle-chip.tinted.on {
+    border-color: color-mix(in srgb, var(--chip-accent) 50%, transparent);
+    color: var(--chip-accent);
+    background: color-mix(in srgb, var(--chip-accent) 7%, transparent);
+}
+.toggle-chip.tinted.on .toggle-chip-dot {
+    background: var(--chip-accent);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--chip-accent) 80%, transparent);
+}
+/* Edge-kind visibility bar above the link-chart canvas. */
+.graph-filter-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.graph-filter-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-right: 4px;
+}
 .id-chip {
     display: inline-block;
     padding: 3px 8px;

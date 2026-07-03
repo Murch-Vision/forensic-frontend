@@ -23,8 +23,9 @@ import {
   Loading,
   PageHeader,
   SankeyChart,
+  ToggleChip,
 } from "../components/kit";
-import NetworkGraph from "../components/NetworkGraph";
+import NetworkGraph, {LINK_STYLE} from "../components/NetworkGraph";
 import CaseGate from "../components/CaseGate";
 import {useDrilldown} from "../lib/drilldown";
 import {
@@ -40,7 +41,11 @@ import {
 } from "../lib/ignoredPairs";
 import {formatMoney} from "../lib/format";
 import {buildEvidenceNetwork} from "../lib/networkGraph";
-import type {NetworkLink, NetworkNode} from "../lib/networkGraph";
+import type {
+  NetworkLink,
+  NetworkLinkKind,
+  NetworkNode,
+} from "../lib/networkGraph";
 import type {SuspectLinkType} from "../types";
 
 // The case's connection map: suspects, accounts and phones from the ACTUAL
@@ -103,6 +108,10 @@ const NODE_TYPE_LABEL: Record<string, string> = {
   PHONE   : "Утас",
 };
 
+// Toggleable evidence-edge kinds, in legend order. "owns" is structural
+// (person → their account/phone) and always drawn.
+const EDGE_KINDS: NetworkLinkKind[] = ["txn", "call", "intel"];
+
 export default function LinkChartPage() {
   const {data, loading, refetch} = useQuery<LcData>(LINKCHART_QUERY);
   const txQ = useQuery<TxData>(TRANSACTIONS_QUERY);
@@ -151,6 +160,29 @@ export default function LinkChartPage() {
   }
   function restoreNodes() {
     saveHidden(new Set());
+  }
+  // Edge kinds the analyst switched off (legend chips above the graph).
+  // Persisted so "hide the intel hairball" survives reloads.
+  const [hiddenKinds, setHiddenKinds] = useState<Set<NetworkLinkKind>>(() => {
+    try {
+      return new Set(JSON.parse(
+        localStorage.getItem("forensic.hiddenEdgeKinds") || "[]"
+      ) as NetworkLinkKind[]);
+    } catch {
+      return new Set();
+    }
+  });
+  function toggleKind(kind: NetworkLinkKind) {
+    const next = new Set(hiddenKinds);
+    if (next.has(kind)) next.delete(kind);
+    else next.add(kind);
+    setHiddenKinds(next);
+    try {
+      localStorage.setItem(
+        "forensic.hiddenEdgeKinds", JSON.stringify([...next]));
+    } catch {
+      /* ignore */
+    }
   }
 
   async function onGenerate() {
@@ -233,17 +265,38 @@ export default function LinkChartPage() {
       phones
     );
 
+    // Per-kind edge totals BEFORE the visibility chips — each chip shows what
+    // its kind would add back even while switched off.
+    const kindCounts: Partial<Record<NetworkLinkKind, number>> = {};
+    for (const l of net.links) {
+      kindCounts[l.kind] = (kindCounts[l.kind] ?? 0) + 1;
+    }
+    // Drop the switched-off kinds ("owns" is structural — never toggled).
+    const visLinks = net.links.filter((l) =>
+      l.kind === "owns" || !hiddenKinds.has(l.kind));
+
     // Money/call flow only (the auto-generated "intel" links connect nearly
     // everyone — the purple hairball — so they don't keep a node alive).
     const flow = new Set<string>();
-    for (const l of net.links) {
+    for (const l of visLinks) {
       if (l.kind === "txn" || l.kind === "call") {
         flow.add(l.source);
         flow.add(l.target);
       }
     }
+    // ...unless BOTH flow kinds are switched off and intel is the view the
+    // analyst asked for — then intel edges carry their persons.
+    if (hiddenKinds.has("txn") && hiddenKinds.has("call")
+      && !hiddenKinds.has("intel")) {
+      for (const l of visLinks) {
+        if (l.kind === "intel") {
+          flow.add(l.source);
+          flow.add(l.target);
+        }
+      }
+    }
     const owner = new Map<string, string>();  // account/phone id → person id
-    for (const l of net.links) {
+    for (const l of visLinks) {
       if (l.kind === "owns") owner.set(l.target, l.source);
     }
     // Keep flow nodes + the owner person of any kept account. Accounts nobody
@@ -254,12 +307,12 @@ export default function LinkChartPage() {
       if (o) keep.add(o);
     }
     const nodes = net.nodes.filter((n) => keep.has(n.id) && !hidden.has(n.id));
-    const links = net.links.filter((l) =>
+    const links = visLinks.filter((l) =>
       keep.has(l.source) && keep.has(l.target)
       && !hidden.has(l.source) && !hidden.has(l.target));
-    return {nodes, links};
+    return {nodes, links, kindCounts};
   }, [data, txQ.data, callQ.data, ignoredPairs, ignoredTxns, descRules,
-    minAmount, hidden]);
+    minAmount, hidden, hiddenKinds]);
 
   const actions = (
     <button className="btn btn-primary" onClick={onGenerate} disabled={generating}>
@@ -285,6 +338,9 @@ export default function LinkChartPage() {
     txn  : network.links.filter((l) => l.kind === "txn").length,
     call : network.links.filter((l) => l.kind === "call").length,
   };
+  // Raw per-kind totals (pre-toggle) — the chips double as the edge legend.
+  const totalEvidence = EDGE_KINDS.reduce(
+    (sum, k) => sum + (network.kindCounts[k] ?? 0), 0);
   // Keep the links list consistent with the (filtered) graph: only links whose
   // BOTH suspects still appear as nodes. Otherwise the count contradicts what's
   // actually drawn after removing unimportant pairs.
@@ -347,6 +403,18 @@ export default function LinkChartPage() {
           </div>
         }
         style={{marginBottom: 16}}>
+        {totalEvidence > 0 && (
+          <div className="graph-filter-bar">
+            <span className="graph-filter-label">Холбоос харуулах:</span>
+            {EDGE_KINDS.map((kind) => (
+              <ToggleChip key={kind}
+                label={`${LINK_STYLE[kind].label} · ${network.kindCounts[kind] ?? 0}`}
+                color={LINK_STYLE[kind].color}
+                on={!hiddenKinds.has(kind)}
+                onToggle={() => toggleKind(kind)} />
+            ))}
+          </div>
+        )}
         {network.nodes.length > 0 ? (
           <div style={{position: "relative"}}>
             <NetworkGraph nodes={network.nodes} links={network.links}
@@ -439,7 +507,9 @@ export default function LinkChartPage() {
             })()}
           </div>
         ) : (
-          <Empty message="Сүлжээ алга — сэжигтэн, гүйлгээ, дуудлага импортлогдоогүй байна" />
+          <Empty message={totalEvidence > 0 && hiddenKinds.size > 0
+            ? "Бүх холбоос нуугдсан — дээрх шүүлтүүрээс төрөл асаана уу"
+            : "Сүлжээ алга — сэжигтэн, гүйлгээ, дуудлага импортлогдоогүй байна"} />
         )}
       </Card>
 
