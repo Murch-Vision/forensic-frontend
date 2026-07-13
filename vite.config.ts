@@ -14,8 +14,8 @@ import react from "@vitejs/plugin-react";
 // the platform-injected env var; fall back to the known public preview URL.
 const API_PUBLIC_URL = "https://f2121093.longbinarycity.com";
 const apiUrl =
-  process.env.RC_LINK_FORENSIC_API ||
-  process.env.RC_PREVIEW_FORENSIC_API ||
+  process.env.MAESTRO_LINK_FORENSIC_API ||
+  process.env.MAESTRO_PREVIEW_FORENSIC_API ||
   process.env.API_URL ||
   API_PUBLIC_URL;
 
@@ -26,8 +26,8 @@ export default defineConfig({
   // Expose the API URL to the browser bundle so the Apollo client can talk to
   // the API directly (the API serves GraphQL with permissive CORS).
   define: {
-    "import.meta.env.VITE_RC_PREVIEW_FORENSIC_API": JSON.stringify(
-      process.env.RC_PREVIEW_FORENSIC_API || API_PUBLIC_URL,
+    "import.meta.env.VITE_MAESTRO_PREVIEW_FORENSIC_API": JSON.stringify(
+      process.env.MAESTRO_PREVIEW_FORENSIC_API || API_PUBLIC_URL,
     ),
   },
   server: {

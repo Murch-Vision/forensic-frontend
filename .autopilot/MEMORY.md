@@ -4,7 +4,7 @@
 Mongolian-language forensic intelligence platform ("Forensic Analyst").
 React 18 + TS + Vite + Apollo (GraphQL) frontend; sibling repo
 `/mnt/forensic-api` (Apollo Server + Knex/SQLite, `tsx watch`, hot-reloads).
-Frontend dev server + API are ALREADY running (see RC_PREVIEW_* env vars).
+Frontend dev server + API are ALREADY running (see MAESTRO_PREVIEW_* env vars).
 Package manager: pnpm. Branch scheme: autopilot/<date>; never push.
 
 ## Baseline (recorded 2026-07-02)
