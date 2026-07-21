@@ -43,10 +43,12 @@ const TYPE_LABEL: Record<NetworkNodeType, string> = {
 // Edge palette: money green, calls cyan, intel purple, ownership neutral.
 // Exported so the link-chart filter chips stay in sync with the drawn edges.
 export const LINK_STYLE: Record<NetworkLinkKind, {color: string; label: string}> = {
-  txn   : {color: "#00E676", label: "Гүйлгээ"},
-  call  : {color: "#00E5FF", label: "Дуудлага"},
-  intel : {color: "#E040FB", label: "Хамаарал"},
-  owns  : {color: "#3a4a6a", label: "Эзэмшил"},
+  txn    : {color: "#00E676", label: "Гүйлгээ"},
+  call   : {color: "#00E5FF", label: "Дуудлага"},
+  intel  : {color: "#E040FB", label: "Хамаарал"},
+  owns   : {color: "#3a4a6a", label: "Эзэмшил"},
+  // Analyst-drawn relationship — amber, dashed, always prominent.
+  manual : {color: "#FFAB00", label: "Гар холбоос"},
 };
 
 interface SimNode extends NetworkNode {
@@ -60,6 +62,12 @@ interface SimNode extends NetworkNode {
   // Pinned position while dragging (null = free).
   fx : number | null;
   fy : number | null;
+  // Per-node size multiplier (1 = default) — the analyst can enlarge a single
+  // node (e.g. to read its portrait) without touching any other.
+  scale : number;
+  // Per-node body shape. "rect" shows a portrait as a full (rounded) rectangle
+  // instead of clipping it to a circle.
+  shape : "circle" | "rect";
 }
 
 interface SimLink {
@@ -84,8 +92,29 @@ const RENDER_HEIGHT = 640;
 const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", sans-serif';
 const LABEL_FONT = "bold 10px -apple-system, system-ui, sans-serif";
 
+// A node's drawn radius, including its own per-node size multiplier so an
+// enlarged node (e.g. to show a portrait) is bigger everywhere it matters
+// (drawing, hit-testing, collision).
 function radiusOf(n: SimNode): number {
-  return TYPE_STYLE[n.type].r * n.weight;
+  return TYPE_STYLE[n.type].r * n.weight * (n.scale ?? 1);
+}
+
+// Trace a node's body path (circle, or a rounded square of side 2r) so fill,
+// clip and stroke all share the same silhouette.
+function traceNodeBody(ctx: CanvasRenderingContext2D, n: SimNode, r: number) {
+  ctx.beginPath();
+  if (n.shape === "rect") {
+    const rad = r * 0.28;
+    const x = n.x - r, y = n.y - r, w = r * 2, h = r * 2;
+    ctx.moveTo(x + rad, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rad);
+    ctx.arcTo(x + w, y + h, x, y + h, rad);
+    ctx.arcTo(x, y + h, x, y, rad);
+    ctx.arcTo(x, y, x + w, y, rad);
+    ctx.closePath();
+  } else {
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+  }
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -170,6 +199,21 @@ export interface NetworkGraphHandle {
   // Center the view on a node and mark it with a focus ring. The ring clears
   // as soon as the analyst pans/drags/clicks the canvas again.
   focusNode : (id: string) => void;
+  // Current node layout — {nodeId: {x, y}} — captured when saving a board.
+  getPositions : () => Record<string, {x: number; y: number; s?: number; sh?: "rect"}>;
+  // Multiply ONE node's size (or reset with factor 0) and persist the layout.
+  setNodeScale : (id: string, factor: number) => void;
+  // Switch ONE node between a circle and a (rounded) rectangle body.
+  setNodeShape : (id: string, shape: "circle" | "rect") => void;
+  // Reset pan/zoom to the default fit (whole scene centered) without touching
+  // node pins — used when entering/leaving isolate mode so the radial cluster
+  // is framed in full.
+  resetView : () => void;
+  // Pull ONLY the target's direct neighbors into a pinned ring around it,
+  // leaving every other node exactly where it is. Unlike isolate mode this
+  // keeps the whole graph on screen — it just gathers the target's own
+  // connections into a tidy cluster in place.
+  clusterAround : (id: string) => void;
 }
 
 interface NetworkGraphProps {
@@ -182,6 +226,16 @@ interface NetworkGraphProps {
   onNodeClick? : (node: NetworkNode | null) => void;
   // Fired when an edge (not a node) is clicked — noise removal lives on edges.
   onLinkClick? : (link: NetworkLink | null) => void;
+  // Saved layout to restore (from a saved board). Nodes with a saved position
+  // spawn exactly there and the simulation starts settled, so the arrangement
+  // the detective saved comes back as-is. Bumping `layoutKey` re-applies it.
+  initialPositions? : Record<string, {x: number; y: number; s?: number; sh?: "rect"}> | null;
+  layoutKey? : string | number;
+  // Fired after a drag settles (or after a reset) with the current node
+  // layout, so the host can persist the arrangement. null = the layout was
+  // reset and any saved positions should be forgotten.
+  onLayoutChange? : (
+    positions: Record<string, {x: number; y: number; s?: number; sh?: "rect"}> | null) => void;
 }
 
 export default forwardRef<NetworkGraphHandle, NetworkGraphProps>(
@@ -193,6 +247,12 @@ function NetworkGraph(props, ref) {
   const rafRef = useRef(0);
   const runningRef = useRef(false);
   const dragRef = useRef<SimNode | null>(null);
+  // Grab offset (node center − pointer) for a single-node drag, so the node
+  // doesn't jump to the cursor when grabbed off-center.
+  const dragOffsetRef = useRef<{dx: number; dy: number}>({dx: 0, dy: 0});
+  // Decoded suspect photos, keyed by their data URI, so a portrait is drawn in
+  // place of the 👤 icon. Loaded lazily; a fresh load repaints once ready.
+  const imgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const clusterDragRef = useRef<
     {members: SimNode[]; lastX: number; lastY: number} | null>(null);
   const panRef = useRef<{x: number; y: number} | null>(null);
@@ -217,6 +277,89 @@ function NetworkGraph(props, ref) {
   }, [props.selectedId]);
 
   useImperativeHandle(ref, () => ({
+    getPositions() {
+      return currentPositions();
+    },
+    setNodeScale(id: string, factor: number) {
+      const node = nodesRef.current.find((n) => n.id === id);
+      if (!node) return;
+      // factor 0 → reset to default size; otherwise multiply. Default (1) is
+      // the floor — nodes can be enlarged but never shrunk below default.
+      node.scale = factor === 0
+        ? 1 : clamp((node.scale ?? 1) * factor, 1, 6);
+      ensureRunning();                    // repaint at the new size
+      emitLayout(currentPositions());     // persist it with the layout
+    },
+    setNodeShape(id: string, shape: "circle" | "rect") {
+      const node = nodesRef.current.find((n) => n.id === id);
+      if (!node) return;
+      node.shape = shape;
+      ensureRunning();
+      emitLayout(currentPositions());
+    },
+    resetView() {
+      viewRef.current = {k: 1, tx: 0, ty: 0};
+      focusRef.current = null;
+      ensureRunning();
+    },
+    clusterAround(id: string) {
+      const nodes = nodesRef.current;
+      const links = linksRef.current;
+      const center = nodes.find((n) => n.id === id);
+      if (!center) return;
+      // Gather ONLY the target's OWN satellites: nodes it owns, or leaves that
+      // connect to nothing but the target. A neighbor that ALSO links to other
+      // nodes is its own hub (a "center") — pulling it here would rip it from
+      // its constellation, so leave it exactly where it is. One pass classifies
+      // every node: `elsewhere` = has an edge that doesn't touch the target;
+      // `owned` = hangs off the target by an ownership edge.
+      const elsewhere = new Set<string>();
+      const owned = new Set<string>();
+      for (const l of links) {
+        if (l.s.id === id || l.t.id === id) {
+          const other = l.s.id === id ? l.t : l.s;
+          if (l.kind === "owns") owned.add(other.id);
+        } else {
+          elsewhere.add(l.s.id);
+          elsewhere.add(l.t.id);
+        }
+      }
+      const rank = (t: NetworkNodeType) =>
+        t === "PERSON" ? 0 : t === "ACCOUNT" ? 1 : 2;
+      const seen = new Set<string>();
+      const nbrs: SimNode[] = [];
+      for (const l of links) {
+        const other = l.s.id === id ? l.t : l.t.id === id ? l.s : null;
+        if (!other || seen.has(other.id)) continue;
+        // Skip real centers: connected elsewhere AND not owned by the target.
+        if (elsewhere.has(other.id) && !owned.has(other.id)) continue;
+        seen.add(other.id);
+        nbrs.push(other);
+      }
+      nbrs.sort((a, b) => rank(a.type) - rank(b.type)
+        || a.label.localeCompare(b.label));
+      // Pin the center where it already sits — the cluster forms around it.
+      center.fx = center.ax = center.x;
+      center.fy = center.ay = center.y;
+      const place = (arr: SimNode[], radius: number) => {
+        arr.forEach((n, i) => {
+          const a = -Math.PI / 2 + (i / Math.max(1, arr.length)) * Math.PI * 2;
+          const x = center.x + Math.cos(a) * radius;
+          const y = center.y + Math.sin(a) * radius;
+          n.x = n.fx = n.ax = x;
+          n.y = n.fy = n.ay = y;
+        });
+      };
+      // Many neighbors → two concentric rings so nodes don't collide.
+      if (nbrs.length > 18) {
+        place(nbrs.filter((_, i) => i % 2 === 0), 135);
+        place(nbrs.filter((_, i) => i % 2 === 1), 225);
+      } else {
+        place(nbrs, Math.min(210, 95 + nbrs.length * 6));
+      }
+      ensureRunning();
+      emitLayout(currentPositions());
+    },
     focusNode(id: string) {
       const node = nodesRef.current.find((n) => n.id === id);
       const canvas = canvasRef.current;
@@ -236,6 +379,20 @@ function NetworkGraph(props, ref) {
       ensureRunning();
     },
   }));
+
+  // Lazily decode a portrait data URI; repaint once it's ready so the photo
+  // pops in without a full re-layout.
+  function getImage(src: string): HTMLImageElement {
+    const cache = imgCacheRef.current;
+    let img = cache.get(src);
+    if (!img) {
+      img = new Image();
+      img.onload = () => draw();
+      img.src = src;
+      cache.set(src, img);
+    }
+    return img;
+  }
 
   // Paint the whole scene to the canvas. Cheap enough to run every frame.
   function draw() {
@@ -286,17 +443,88 @@ function NetworkGraph(props, ref) {
       const active = (hl && (l.s.id === hl || l.t.id === hl))
         || l === hoverLink;
       const st = LINK_STYLE[l.kind];
+      const manual = l.kind === "manual";
       ctx.beginPath();
       ctx.moveTo(l.s.x, l.s.y);
       ctx.lineTo(l.t.x, l.t.y);
       ctx.strokeStyle = st.color;
+      // Manual (analyst-drawn) edges are the ground truth — keep them readable
+      // even when another node is highlighted, and dash them so they stand out
+      // from the auto-derived evidence edges.
       ctx.globalAlpha = hl
-        ? (active ? 0.95 : 0.05)
-        : active ? 0.95 : (l.kind === "owns" ? 0.45 : 0.4);
+        ? (active ? 0.95 : (manual ? 0.5 : 0.05))
+        : active ? 0.95 : (manual ? 0.85 : l.kind === "owns" ? 0.45 : 0.4);
       ctx.lineWidth = active ? l.strength * 0.8 + 1.2 : l.strength * 0.6;
+      if (manual) ctx.setLineDash([7, 5]);
       ctx.stroke();
+      if (manual) ctx.setLineDash([]);
     }
-    // Aggregate labels on the highlighted node's edges / the hovered edge.
+    ctx.globalAlpha = 1;
+
+    // Nodes.
+    const showAll = v.k >= 1.3;
+    for (const n of nodes) {
+      const st = TYPE_STYLE[n.type];
+      const r = radiusOf(n);
+      const dim = hl && hl !== n.id && !neighbors.has(n.id);
+      const baseAlpha = dim ? 0.2 : 1;
+
+      // Body: circle (default) or rounded rectangle — a rect shows the full
+      // square portrait instead of clipping it to a disc.
+      traceNodeBody(ctx, n, r);
+      ctx.globalAlpha = baseAlpha;
+      ctx.fillStyle = "#0b0e1a";
+      ctx.fill();
+
+      // A person with a photo shows their portrait; otherwise the tinted 👤
+      // icon. The photo loads lazily — until it's ready the icon stands in and
+      // we repaint when it arrives.
+      const photo = n.type === "PERSON" && n.photoData
+        ? getImage(n.photoData) : null;
+      const photoReady = !!photo && photo.complete && photo.naturalWidth > 0;
+      if (photoReady) {
+        ctx.save();
+        traceNodeBody(ctx, n, r);
+        ctx.clip();
+        ctx.globalAlpha = baseAlpha;
+        ctx.drawImage(photo!, n.x - r, n.y - r, r * 2, r * 2);
+        ctx.restore();
+      } else {
+        traceNodeBody(ctx, n, r);
+        ctx.globalAlpha = baseAlpha * 0.12;
+        ctx.fillStyle = st.ring;
+        ctx.fill();
+        ctx.globalAlpha = baseAlpha;
+        ctx.font = `${r}px ${EMOJI_FONT}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(st.icon, n.x, n.y);
+      }
+      // Ring on top (re-trace — clip/fill consumed the previous path).
+      traceNodeBody(ctx, n, r);
+      ctx.globalAlpha = baseAlpha;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = st.ring;
+      ctx.stroke();
+
+      const showLabel = n.weight >= 1 || showAll
+        || hl === n.id || neighbors.has(n.id);
+      if (showLabel) {
+        ctx.font = LABEL_FONT;
+        ctx.textBaseline = "top";
+        ctx.fillStyle = "#c8cce0";
+        ctx.fillText(n.label, n.x, n.y + r + 3);
+        if (n.sub && (showAll || hl === n.id)) {
+          ctx.fillStyle = "#7a7fa0";
+          ctx.fillText(n.sub, n.x, n.y + r + 15);
+        }
+      }
+    }
+
+    // Edge labels on the highlighted node's edges / the hovered edge — drawn
+    // AFTER the nodes so the value tag always sits on top and is never buried
+    // behind a node the edge happens to pass under.
     if (hl || hoverLink) {
       ctx.font = "600 10px 'Cascadia Mono', Consolas, monospace";
       ctx.textAlign = "center";
@@ -316,49 +544,9 @@ function NetworkGraph(props, ref) {
         ctx.fillStyle = LINK_STYLE[l.kind].color;
         ctx.fillText(l.label, mx, my);
       }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
 
-    // Nodes.
-    const showAll = v.k >= 1.3;
-    for (const n of nodes) {
-      const st = TYPE_STYLE[n.type];
-      const r = radiusOf(n);
-      const dim = hl && hl !== n.id && !neighbors.has(n.id);
-      const baseAlpha = dim ? 0.2 : 1;
-
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-      ctx.globalAlpha = baseAlpha;
-      ctx.fillStyle = "#0b0e1a";
-      ctx.fill();
-      ctx.globalAlpha = baseAlpha * 0.12;
-      ctx.fillStyle = st.ring;
-      ctx.fill();
-      ctx.globalAlpha = baseAlpha;
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = st.ring;
-      ctx.stroke();
-
-      ctx.font = `${r}px ${EMOJI_FONT}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(st.icon, n.x, n.y);
-
-      const showLabel = n.weight >= 1 || showAll
-        || hl === n.id || neighbors.has(n.id);
-      if (showLabel) {
-        ctx.font = LABEL_FONT;
-        ctx.textBaseline = "top";
-        ctx.fillStyle = "#c8cce0";
-        ctx.fillText(n.label, n.x, n.y + r + 3);
-        if (n.sub && (showAll || hl === n.id)) {
-          ctx.fillStyle = "#7a7fa0";
-          ctx.fillText(n.sub, n.x, n.y + r + 15);
-        }
-      }
-    }
     // Search-focus ring, drawn on top of everything so the found node is
     // unmistakable in a dense graph.
     if (focusRef.current) {
@@ -411,6 +599,23 @@ function NetworkGraph(props, ref) {
     ensureRunning();
   }
 
+  // Current node layout as {id: {x, y}} — used for persisting the arrangement
+  // and by the imperative getPositions() below.
+  function currentPositions(): Record<string, {x: number; y: number; s?: number; sh?: "rect"}> {
+    const out: Record<string, {x: number; y: number; s?: number; sh?: "rect"}> = {};
+    for (const n of nodesRef.current) {
+      out[n.id] = {x: Math.round(n.x), y: Math.round(n.y),
+        // Only record scale/shape when non-default, keeping saved state lean.
+        ...(n.scale !== 1 ? {s: n.scale} : {}),
+        ...(n.shape === "rect" ? {sh: "rect" as const} : {})};
+    }
+    return out;
+  }
+
+  function emitLayout(positions: Record<string, {x: number; y: number; s?: number; sh?: "rect"}> | null) {
+    props.onLayoutChange?.(positions);
+  }
+
   // Build the simulation graph once per dataset.
   useEffect(() => {
     // Assign every cluster an anchor — the most populated cell sits in the
@@ -435,6 +640,8 @@ function NetworkGraph(props, ref) {
       });
     });
 
+    const saved = props.initialPositions ?? null;
+    let restoredAny = false;
     const map = new Map<string, SimNode>();
     const sim: SimNode[] = props.nodes.map((node, i) => {
       const anchor = anchors.get(node.cluster)!;
@@ -442,16 +649,25 @@ function NetworkGraph(props, ref) {
       // offset — coincident spawns would leave repulsion with no direction.
       const angle = i * 2.399963;
       const rad = 26 + (i % 9) * 7;
+      // A saved board restores each node to exactly where it was arranged.
+      const pos = saved?.[node.id];
+      if (pos) restoredAny = true;
       const s: SimNode = {
         ...node,
-        x  : anchor.x + Math.cos(angle) * rad,
-        y  : anchor.y + Math.sin(angle) * rad,
+        x  : pos ? pos.x : anchor.x + Math.cos(angle) * rad,
+        y  : pos ? pos.y : anchor.y + Math.sin(angle) * rad,
         vx : 0,
         vy : 0,
-        ax : anchor.x,
-        ay : anchor.y,
-        fx : null,
-        fy : null,
+        ax : pos ? pos.x : anchor.x,
+        ay : pos ? pos.y : anchor.y,
+        // A restored node is pinned exactly where it was saved, so a saved
+        // arrangement comes back rock-steady and never drifts. A fresh node
+        // stays free so the initial auto-layout can place it.
+        fx : pos ? pos.x : null,
+        fy : pos ? pos.y : null,
+        // Restore the node's saved size + shape (defaults: 1, circle).
+        scale : pos?.s ?? 1,
+        shape : pos?.sh === "rect" ? "rect" : "circle",
       };
       map.set(node.id, s);
       return s;
@@ -464,7 +680,10 @@ function NetworkGraph(props, ref) {
     nodesRef.current = sim;
     linksRef.current = lk;
     hoverLinkRef.current = null;
-    alphaRef.current = 1;
+    // Restoring a saved board: start almost settled so the arranged layout is
+    // preserved instead of being re-flung by a hot simulation. A fresh graph
+    // starts hot (alpha 1) to lay itself out.
+    alphaRef.current = restoredAny ? 0.02 : 1;
     ensureRunning();
     return () => {
       cancelAnimationFrame(rafRef.current);
@@ -473,7 +692,7 @@ function NetworkGraph(props, ref) {
       runningRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.nodes, props.links]);
+  }, [props.nodes, props.links, props.layoutKey]);
 
   // Repaint on container resize so the layout keeps filling the card.
   useEffect(() => {
@@ -508,8 +727,12 @@ function NetworkGraph(props, ref) {
       const dx = p.x - n.x;
       const dy = p.y - n.y;
       const r = radiusOf(n) + slop;
-      // Last match wins — it's the node drawn on top.
-      if (dx * dx + dy * dy <= r * r) found = n;
+      // Rect nodes hit as a square, circles as a disc. Last match wins — it's
+      // the node drawn on top.
+      const hit = n.shape === "rect"
+        ? Math.abs(dx) <= r && Math.abs(dy) <= r
+        : dx * dx + dy * dy <= r * r;
+      if (hit) found = n;
     }
     return found;
   }
@@ -586,24 +809,23 @@ function NetworkGraph(props, ref) {
     if (node) {
       const p = toGraph(e.clientX, e.clientY);
       // Grabbing a person drags their whole constellation; grabbing an
-      // account/phone drags just that node.
+      // account/phone drags just that node. Pinning happens on the first
+      // move (see onPointerMove) — NOT here — so a plain click never nudges
+      // or re-pins a node. We also no longer reheat the simulation: dragging
+      // one node now leaves every other node exactly where it is instead of
+      // springing the whole graph around.
       if (node.type === "PERSON") {
         const members = nodesRef.current.filter(
           (m) => m.cluster === node.cluster);
-        members.forEach((m) => {
-          m.fx = m.x;
-          m.fy = m.y;
-        });
         clusterDragRef.current = {members, lastX: p.x, lastY: p.y};
         setCursor("grabbing");
-        reheat();
+        ensureRunning();
         return;
       }
       dragRef.current = node;
-      node.fx = p.x;
-      node.fy = p.y;
+      dragOffsetRef.current = {dx: node.x - p.x, dy: node.y - p.y};
       setCursor("grabbing");
-      reheat();
+      ensureRunning();
       return;
     }
     panRef.current = {x: e.clientX, y: e.clientY};
@@ -633,8 +855,16 @@ function NetworkGraph(props, ref) {
     }
     if (dragRef.current) {
       const p = toGraph(e.clientX, e.clientY);
-      dragRef.current.fx = p.x;
-      dragRef.current.fy = p.y;
+      const off = dragOffsetRef.current;
+      // Move x/y DIRECTLY (not just fx/fy) — the physics tick that would copy
+      // fx→y only runs while the sim is hot, and we no longer reheat on drag,
+      // so a settled account/phone node would otherwise never move. fx/fy are
+      // set too, pinning it where it's dropped.
+      const n = dragRef.current;
+      n.x = p.x + off.dx;
+      n.y = p.y + off.dy;
+      n.fx = n.x;
+      n.fy = n.y;
       return;
     }
     if (panRef.current) {
@@ -660,32 +890,41 @@ function NetworkGraph(props, ref) {
   function onPointerUp(e: React.PointerEvent) {
     const c = clickRef.current;
     clickRef.current = null;
-    if (c && Math.abs(e.clientX - c.x) < 5 && Math.abs(e.clientY - c.y) < 5) {
-      if (c.node) {
-        props.onNodeClick?.(c.node);
+    const isClick = !!c && Math.abs(e.clientX - c.x) < 5
+      && Math.abs(e.clientY - c.y) < 5;
+    if (isClick) {
+      if (c!.node) {
+        props.onNodeClick?.(c!.node);
         props.onLinkClick?.(null);
-      } else if (c.link) {
-        props.onLinkClick?.(c.link.orig);
+      } else if (c!.link) {
+        props.onLinkClick?.(c!.link.orig);
         props.onNodeClick?.(null);
       } else {
         props.onNodeClick?.(null);
         props.onLinkClick?.(null);
       }
     }
+    // A real drag (moved > a few px) leaves the node(s) pinned where they were
+    // dropped, so the arrangement stays put for good. A plain click never
+    // touched the pins, so nothing shifts.
+    let dragged = false;
     if (clusterDragRef.current) {
-      for (const m of clusterDragRef.current.members) {
-        m.fx = null;
-        m.fy = null;
-      }
+      if (!isClick) dragged = true;
       clusterDragRef.current = null;
     }
     if (dragRef.current) {
-      dragRef.current.fx = null;
-      dragRef.current.fy = null;
+      if (!isClick) {
+        dragged = true;
+        // Move the node's gravity anchor with it too, so nothing tugs it back.
+        dragRef.current.ax = dragRef.current.x;
+        dragRef.current.ay = dragRef.current.y;
+      }
       dragRef.current = null;
     }
     panRef.current = null;
     setCursor("grab");
+    // Persist the arrangement the analyst just made.
+    if (dragged) emitLayout(currentPositions());
   }
 
   function onPointerLeave() {
@@ -704,6 +943,8 @@ function NetworkGraph(props, ref) {
     });
     alphaRef.current = 1;
     ensureRunning();
+    // Forget any saved arrangement — this is a clean, fresh re-layout.
+    emitLayout(null);
   }
 
   function zoomButton(factor: number) {
@@ -712,10 +953,25 @@ function NetworkGraph(props, ref) {
     zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, factor);
   }
 
+
+  // The controls float over the canvas, so .btn's transparent background lets
+  // the graph show through and hides them. Force an OPAQUE surface (+ a little
+  // shadow) so they read clearly against any node or edge behind them.
+  const overlayBtn: React.CSSProperties = {
+    background: "var(--bg-card)",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
+  };
   const btnStyle: React.CSSProperties = {
+    ...overlayBtn,
     width: 30, height: 30, fontSize: 16, lineHeight: "1",
     display: "flex", alignItems: "center", justifyContent: "center",
   };
+
+  // Legend lists ONLY the node types / edge kinds actually present, so a kind
+  // with no edges (e.g. no purple "Хамаарал" left after merging money) doesn't
+  // linger in the key and confuse the analyst.
+  const presentTypes = new Set(props.nodes.map((n) => n.type));
+  const presentKinds = new Set(props.links.map((l) => l.kind));
 
   return (
     <div style={{position: "relative"}}>
@@ -724,10 +980,11 @@ function NetworkGraph(props, ref) {
         display: "flex", gap: 6,
       }}>
         <button className="btn" style={btnStyle}
-          onClick={() => zoomButton(1.2)}>+</button>
+          title="Томруулах (zoom)" onClick={() => zoomButton(1.2)}>+</button>
         <button className="btn" style={btnStyle}
-          onClick={() => zoomButton(1 / 1.2)}>−</button>
-        <button className="btn" style={{height: 30}} onClick={onReset}>
+          title="Жижигрүүлэх (zoom)" onClick={() => zoomButton(1 / 1.2)}>−</button>
+        <button className="btn" style={{...overlayBtn, height: 30}}
+          onClick={onReset}>
           ↺ Дахин эхлүүлэх
         </button>
       </div>
@@ -737,7 +994,8 @@ function NetworkGraph(props, ref) {
         background: "rgba(10,12,24,0.65)", padding: "8px 10px",
         borderRadius: 8, fontSize: 11,
       }}>
-        {(Object.keys(TYPE_STYLE) as NetworkNodeType[]).map((t) => (
+        {(Object.keys(TYPE_STYLE) as NetworkNodeType[])
+          .filter((t) => presentTypes.has(t)).map((t) => (
           <div key={t} style={{display: "flex", alignItems: "center", gap: 6}}>
             <span style={{
               width: 12, height: 12, borderRadius: "50%",
@@ -748,7 +1006,8 @@ function NetworkGraph(props, ref) {
           </div>
         ))}
         <div style={{height: 1, background: "#252a45", margin: "3px 0"}} />
-        {(Object.keys(LINK_STYLE) as NetworkLinkKind[]).map((k) => (
+        {(Object.keys(LINK_STYLE) as NetworkLinkKind[])
+          .filter((k) => presentKinds.has(k)).map((k) => (
           <div key={k} style={{display: "flex", alignItems: "center", gap: 6}}>
             <span style={{
               width: 12, height: 3, borderRadius: 2,

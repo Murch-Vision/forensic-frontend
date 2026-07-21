@@ -11,19 +11,18 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useMemo, useState} from "react";
-import {useMutation, useQuery} from "@apollo/client";
+import {useLazyQuery, useMutation, useQuery} from "@apollo/client";
 import {
   ACTIVE_CASE_QUERY,
   CREATE_BANK_ACCOUNT,
   CREATE_PHONE_NUMBER,
   GLOBAL_PEOPLE_QUERY,
+  MARK_AS_SUSPECT,
+  REPORT_SUSPECT_PDF,
   TAG_EVIDENCE,
 } from "../graphql/queries";
-import {
-  CREATE_SUSPECT,
-  DELETE_SUSPECT,
-  UPDATE_SUSPECT,
-} from "../graphql/suspects";
+import {DELETE_SUSPECT} from "../graphql/suspects";
+import {downloadBase64, type ReportFile} from "../lib/download";
 import {
   Badge,
   Card,
@@ -32,9 +31,10 @@ import {
   Loading,
   PageHeader,
 } from "../components/kit";
+import PersonFormModal, {type PersonForm} from "../components/PersonFormModal";
 import {Select} from "../components/inputs";
 import {useDrilldown} from "../lib/drilldown";
-import type {RiskLevel, SuspectInput, SuspectStatus} from "../types";
+import type {RiskLevel, SuspectStatus} from "../types";
 
 interface PersonSuspect {
   id             : number;
@@ -91,10 +91,6 @@ interface GlobalPerson {
   callRecordCount  : number;
 }
 
-const RISK_LEVELS: RiskLevel[] = [
-  "UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL",
-];
-
 const RISK_BADGE: Record<string, string> = {
   LOW: "low",
   MEDIUM: "medium",
@@ -132,44 +128,6 @@ const RISK_LABELS: Record<RiskLevel, string> = {
   HIGH: "Өндөр",
   CRITICAL: "Маш өндөр",
 };
-
-const GENDER_OPTIONS = [
-  {value: "Male", label: "Эрэгтэй"},
-  {value: "Female", label: "Эмэгтэй"},
-];
-
-interface FormState extends SuspectInput {
-  id?: number;
-}
-
-const EMPTY_FORM: FormState = {
-  fullName: "",
-  gender: "Male",
-  riskLevel: "UNKNOWN",
-};
-
-// Downscale the chosen image to a 256x256 JPEG data-URI (keeps the DB small).
-function resizeToDataUri(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("read failed"));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error("decode failed"));
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 256;
-        canvas.height = 256;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return reject(new Error("no 2d context"));
-        ctx.drawImage(img, 0, 0, 256, 256);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-}
 
 function initials(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
@@ -211,24 +169,26 @@ export default function PeoplePage() {
   const {data, loading, error, refetch} =
     useQuery<{globalPeople: GlobalPerson[]}>(GLOBAL_PEOPLE_QUERY);
   const [search, setSearch] = useState("");
+  const [caseFilter, setCaseFilter] = useState(0);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [formError, setFormError] = useState("");
+  // Prefilled form when editing an existing record; null = adding a new person.
+  const [formInitial, setFormInitial] = useState<PersonForm | null>(null);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [showPhoneForm, setShowPhoneForm] = useState(false);
   const [acct, setAcct] = useState({accountNumber: "", bankName: "",
     currentBalance: ""});
   const [phone, setPhone] = useState({number: "", provider: ""});
 
-  const [createSuspect] = useMutation(CREATE_SUSPECT);
-  const [updateSuspect] = useMutation(UPDATE_SUSPECT);
   const [deleteSuspect] = useMutation(DELETE_SUSPECT);
   const [createBankAccount] = useMutation(CREATE_BANK_ACCOUNT);
   const [createPhoneNumber] = useMutation(CREATE_PHONE_NUMBER);
   const [tagEvidence] = useMutation(TAG_EVIDENCE);
+  const [markAsSuspect, markQ] = useMutation(MARK_AS_SUSPECT);
+  const [getSuspectPdf, suspectPdfQ] =
+    useLazyQuery<{reportSuspectPdf: ReportFile}>(REPORT_SUSPECT_PDF,
+      {fetchPolicy: "no-cache"});
 
   // Evidence tagging follows the case picked in the global AppHeader.
   interface CaseRef {id: number; caseId: string; caseName: string}
@@ -237,16 +197,39 @@ export default function PeoplePage() {
 
   const people = useMemo(() => data?.globalPeople ?? [], [data]);
 
+  // Distinct cases present across everyone, with a per-case headcount, for the
+  // case filter dropdown.
+  const caseOptions = useMemo(() => {
+    const m = new Map<number, {name: string; count: number}>();
+    for (const p of people) {
+      const seen = new Set<number>();
+      for (const c of p.cases) {
+        if (seen.has(c.caseFile.id)) continue;
+        seen.add(c.caseFile.id);
+        const e = m.get(c.caseFile.id);
+        if (e) e.count++;
+        else m.set(c.caseFile.id,
+          {name: c.caseFile.caseName || c.caseFile.caseId, count: 1});
+      }
+    }
+    return [...m.entries()].map(([id, v]) => ({id, ...v}))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [people]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return people;
-    return people.filter((p) =>
-      p.fullName.toLowerCase().includes(q) ||
-      p.aliases.some((a) => a.toLowerCase().includes(q)) ||
-      p.phoneNumbers.some((n) => n.toLowerCase().includes(q)) ||
-      p.accountNumbers.some((n) => n.toLowerCase().includes(q)) ||
-      (p.nationalId ?? "").toLowerCase().includes(q));
-  }, [people, search]);
+    return people.filter((p) => {
+      if (caseFilter
+        && !p.cases.some((c) => c.caseFile.id === caseFilter)) return false;
+      if (!q) return true;
+      return (
+        p.fullName.toLowerCase().includes(q) ||
+        p.aliases.some((a) => a.toLowerCase().includes(q)) ||
+        p.phoneNumbers.some((n) => n.toLowerCase().includes(q)) ||
+        p.accountNumbers.some((n) => n.toLowerCase().includes(q)) ||
+        (p.nationalId ?? "").toLowerCase().includes(q));
+    });
+  }, [people, search, caseFilter]);
 
   const selected =
     filtered.find((p) => p.key === selectedKey) ?? filtered[0] ?? null;
@@ -259,14 +242,12 @@ export default function PeoplePage() {
     : null;
 
   function startAdd() {
-    setForm({...EMPTY_FORM});
-    setFormError("");
-    setIsEditing(false);
+    setFormInitial(null);
     setShowForm(true);
   }
 
   function startEdit(s: PersonSuspect) {
-    setForm({
+    setFormInitial({
       id             : s.id,
       fullName       : s.fullName,
       aliases        : s.aliases,
@@ -286,45 +267,7 @@ export default function PeoplePage() {
       photoData      : s.photoData,
       status         : s.status,
     });
-    setFormError("");
-    setIsEditing(true);
     setShowForm(true);
-  }
-
-  function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((f) => ({...f, [key]: value}));
-  }
-
-  async function onPhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const uri = await resizeToDataUri(file);
-      setForm((f) => ({...f, photoData: uri}));
-      setFormError("");
-    } catch (err) {
-      setFormError("Зураг ачаалахад алдаа гарлаа: " + String(err));
-    }
-  }
-
-  async function savePerson() {
-    setFormError("");
-    if (!form.fullName.trim()) {
-      setFormError("Бүтэн нэр заавал бөглөх");
-      return;
-    }
-    const {id, ...input} = form;
-    try {
-      if (isEditing && id !== undefined) {
-        await updateSuspect({variables: {id, input}});
-      } else {
-        await createSuspect({variables: {input}});
-      }
-      await refetch();
-      setShowForm(false);
-    } catch (err) {
-      setFormError(String(err));
-    }
   }
 
   async function deleteRecord(s: PersonSuspect) {
@@ -349,6 +292,22 @@ export default function PeoplePage() {
       },
     });
     await refetch();
+  }
+
+  // Flag/unflag this person as a suspect under investigation.
+  async function toggleMark() {
+    if (!primary) return;
+    const marked = primary.status === "UNDER_INVESTIGATION";
+    await markAsSuspect({variables: {id: primary.id, marked: !marked}});
+    await refetch();
+  }
+
+  // Export a per-suspect financial PDF (profile, income/outgoing totals and the
+  // full transaction ledger) for the selected person.
+  async function exportSuspectPdf() {
+    if (!primary) return;
+    const r = await getSuspectPdf({variables: {suspectId: primary.id}});
+    if (r.data?.reportSuspectPdf) downloadBase64(r.data.reportSuspectPdf);
   }
 
   async function submitAccount() {
@@ -416,12 +375,20 @@ export default function PeoplePage() {
             <Card noPadding>
               <div style={{padding: 16,
                 borderBottom: "1px solid var(--border-primary)"}}>
+                <Select value={caseFilter} searchable
+                  onChange={(v) => setCaseFilter(Number(v))}
+                  style={{width: "100%", marginBottom: 8}}
+                  options={[
+                    {value: 0, label: `Бүх кейс (${people.length})`},
+                    ...caseOptions.map((c) => ({value: c.id,
+                      label: `${c.name} (${c.count})`})),
+                  ]} />
                 <input className="form-input" style={{width: "100%"}}
                   placeholder="Нэр, утас, данс, РД-гаар хайх..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)} />
                 <div className="people-panel-stats">
-                  <span><b>{people.length}</b> хүн</span>
+                  <span><b>{filtered.length}</b> хүн</span>
                   <span><b>{crossCase}</b> олон кейст</span>
                   <span><b>{grouped}</b> давхардсан</span>
                   <span className="risk"><b>{highRisk}</b> эрсдэлтэй</span>
@@ -502,6 +469,12 @@ export default function PeoplePage() {
                           {MATCH_LABEL[m] ?? m}
                         </span>
                       ))}
+                      {primary.status === "UNDER_INVESTIGATION" && (
+                        <span className="badge high"
+                          title="Сэжигтэн болгон тэмдэглэсэн">
+                          СЭЖИГТЭН
+                        </span>
+                      )}
                     </div>
                     {selected.aliases.length > 0 && (
                       <div style={{fontSize: 11,
@@ -550,6 +523,20 @@ export default function PeoplePage() {
                         </button>
                       )
                     )}
+                    <button
+                      className={primary.status === "UNDER_INVESTIGATION"
+                        ? "btn btn-accent" : "btn"}
+                      onClick={toggleMark} disabled={markQ.loading}
+                      title="Энэ хүнийг сэжигтэн болгон тэмдэглэх">
+                      {primary.status === "UNDER_INVESTIGATION"
+                        ? "✓ СЭЖИГТЭН" : "СЭЖИГТЭН БОЛГОХ"}
+                    </button>
+                    <button className="btn btn-primary"
+                      onClick={exportSuspectPdf}
+                      disabled={suspectPdfQ.loading}
+                      title="Сэжигтний гүйлгээний тайлан (орлого/зарлага) PDF">
+                      {suspectPdfQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "PDF ТАЙЛАН"}
+                    </button>
                     <button className="btn" onClick={() => startEdit(primary)}>
                       ЗАСАХ
                     </button>
@@ -750,155 +737,15 @@ export default function PeoplePage() {
         </div>
       )}
 
-      {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal-content" style={{width: "min(720px, 92vw)"}}
-            onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <span className="modal-title">
-                {isEditing ? "МЭДЭЭЛЭЛ ЗАСАХ" : "ШИНЭ ХҮН НЭМЭХ"}
-              </span>
-              <button className="modal-close" title="Хаах"
-                onClick={() => setShowForm(false)}>
-                ×
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{display: "flex", gap: 24, flexWrap: "wrap"}}>
-                <div style={{width: 96, flexShrink: 0}}>
-                  <label className={`avatar-upload${
-                    form.photoData ? " has-photo" : ""}`}
-                    title="Зураг сонгох — холбоосын зураглалд ашиглана">
-                    {form.photoData ? (
-                      <>
-                        <img src={form.photoData} alt="preview" />
-                        <span className="avatar-upload-overlay">СОЛИХ</span>
-                      </>
-                    ) : (
-                      <span className="avatar-upload-hint">
-                        Зураг<br />сонгох
-                      </span>
-                    )}
-                    <input type="file" accept="image/*"
-                      style={{display: "none"}} onChange={onPhotoSelected} />
-                  </label>
-                  {form.photoData && (
-                    <button type="button" className="avatar-remove"
-                      onClick={() => setField("photoData", null)}>
-                      Устгах
-                    </button>
-                  )}
-                </div>
-                <div className="form-grid-2"
-                  style={{flex: 1, minWidth: 260, alignContent: "start"}}>
-                  <div style={{gridColumn: "1 / -1"}}>
-                    <label className="form-label">Бүтэн нэр *</label>
-                    <input className="form-input" autoFocus
-                      value={form.fullName}
-                      onChange={(e) => setField("fullName", e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="form-label">Өөр нэр</label>
-                    <input className="form-input"
-                      value={form.aliases ?? ""}
-                      onChange={(e) => setField("aliases", e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="form-label">Регистрийн дугаар</label>
-                    <input className="form-input"
-                      value={form.nationalId ?? ""}
-                      onChange={(e) =>
-                        setField("nationalId", e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="form-label">Хүйс</label>
-                    <Select style={{width: "100%"}}
-                      value={form.gender ?? "Male"}
-                      onChange={(v) => setField("gender", String(v))}
-                      options={GENDER_OPTIONS} />
-                  </div>
-                  <div>
-                    <label className="form-label">Эрсдэлийн түвшин</label>
-                    <Select style={{width: "100%"}}
-                      value={form.riskLevel ?? "UNKNOWN"}
-                      onChange={(v) => setField("riskLevel", v as RiskLevel)}
-                      options={RISK_LEVELS.map((r) => ({
-                        value: r, label: RISK_LABELS[r]}))} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-section-label">Холбоо барих</div>
-              <div className="form-grid-2">
-                <div>
-                  <label className="form-label">Утас</label>
-                  <input className="form-input"
-                    value={form.primaryPhone ?? ""}
-                    onChange={(e) =>
-                      setField("primaryPhone", e.target.value)} />
-                </div>
-                <div>
-                  <label className="form-label">И-мэйл</label>
-                  <input className="form-input"
-                    value={form.email ?? ""}
-                    onChange={(e) => setField("email", e.target.value)} />
-                </div>
-                <div>
-                  <label className="form-label">Хаяг</label>
-                  <input className="form-input"
-                    value={form.address ?? ""}
-                    onChange={(e) => setField("address", e.target.value)} />
-                </div>
-                <div>
-                  <label className="form-label">Хот</label>
-                  <input className="form-input"
-                    value={form.city ?? ""}
-                    onChange={(e) => setField("city", e.target.value)} />
-                </div>
-              </div>
-
-              <div className="form-section-label">Ажил / тэмдэглэл</div>
-              <div className="form-grid-2">
-                <div>
-                  <label className="form-label">Ажил мэргэжил</label>
-                  <input className="form-input"
-                    value={form.occupation ?? ""}
-                    onChange={(e) => setField("occupation", e.target.value)} />
-                </div>
-                <div>
-                  <label className="form-label">Байгууллага</label>
-                  <input className="form-input"
-                    value={form.organization ?? ""}
-                    onChange={(e) =>
-                      setField("organization", e.target.value)} />
-                </div>
-                <div style={{gridColumn: "1 / -1"}}>
-                  <label className="form-label">Тэмдэглэл</label>
-                  <textarea className="form-input"
-                    style={{minHeight: 72, resize: "vertical"}}
-                    value={form.notes ?? ""}
-                    onChange={(e) => setField("notes", e.target.value)} />
-                </div>
-              </div>
-
-              {formError && (
-                <div className="form-error-box"
-                  style={{marginTop: 16, marginBottom: 0}}>
-                  {formError}
-                </div>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button className="btn" onClick={() => setShowForm(false)}>
-                ЦУЦЛАХ
-              </button>
-              <button className="btn btn-accent" onClick={savePerson}>
-                {isEditing ? "ХАДГАЛАХ" : "ҮҮСГЭХ"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PersonFormModal
+        open={showForm}
+        initial={formInitial}
+        onClose={() => setShowForm(false)}
+        onSaved={async () => {
+          await refetch();
+          setShowForm(false);
+        }}
+      />
     </div>
   );
 }

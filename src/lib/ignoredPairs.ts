@@ -1,32 +1,130 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : ignoredPairs.ts
  * Created at  : 2026-07-02
- * Updated at  : 2026-07-02
+ * Updated at  : 2026-07-03
  * Author      : jeefo
  * Purpose     :
- * Description : Analyst-curated set of account→counterparty pairs marked
- *               "not important". Their transactions are dropped from every
- *               calculation on the Transactions page AND from the connection
- *               map on the Link-chart page. The choice is shared through an
- *               Apollo reactive var (so both pages react instantly) and
- *               persisted to localStorage (so it survives reloads).
+ * Description : The analyst's "unimportant data" decisions — marked pairs,
+ *               individually-removed transactions, description-noise rules and
+ *               the minimum-amount noise floor. Their whole point is to strip
+ *               clutter out of every calculation AND out of the connection
+ *               graph. They are PERMANENT and stored in the DATABASE per case
+ *               (see NoiseFilter on the API), so a decision made once is never
+ *               lost on reload, on another machine, or across sessions. An
+ *               Apollo reactive var mirrors the DB copy so both the
+ *               Transactions and Link-chart pages react instantly, and every
+ *               change is written straight back to the server.
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
-import {makeVar, useReactiveVar} from "@apollo/client";
+import {gql, makeVar, useReactiveVar} from "@apollo/client";
+import type {ApolloClient} from "@apollo/client";
+import {useApolloClient} from "@apollo/client";
+import {useEffect} from "react";
 
-const STORAGE_KEY = "forensic.ignoredTxnPairs";
+// --- reactive vars (mirror the DB copy for the active case) ----------------
+export const ignoredPairsVar = makeVar<Set<string>>(new Set());
+export const ignoredTxnsVar = makeVar<Set<number>>(new Set());
+export const minAmountVar = makeVar<number>(0);
 
-function load(): Set<string> {
+export type DescMode = "starts" | "ends" | "contains";
+export interface DescRule {mode: DescMode; text: string}
+export const ignoredDescVar = makeVar<DescRule[]>([]);
+
+// --- server sync ------------------------------------------------------------
+const NOISE_FILTER_QUERY = gql`
+  query CaseNoiseFilter {
+    caseNoiseFilter {
+      minAmount ignoredPairs ignoredTxns descRules { mode text }
+    }
+  }
+`;
+
+const SAVE_NOISE_FILTER = gql`
+  mutation SaveCaseNoiseFilter($input: NoiseFilterInput!) {
+    saveCaseNoiseFilter(input: $input) {
+      minAmount ignoredPairs ignoredTxns descRules { mode text }
+    }
+  }
+`;
+
+let client: ApolloClient<object> | null = null;
+// True while hydrating from the server — suppresses the write-back so loading
+// the saved state does not immediately re-save it.
+let hydrating = false;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+interface NoiseFilterPayload {
+  minAmount    : number;
+  ignoredPairs : string[];
+  ignoredTxns  : number[];
+  descRules    : DescRule[];
+}
+
+function currentState(): NoiseFilterPayload {
+  return {
+    minAmount: minAmountVar(),
+    ignoredPairs: [...ignoredPairsVar()],
+    ignoredTxns: [...ignoredTxnsVar()],
+    descRules: ignoredDescVar().map((r) => ({mode: r.mode, text: r.text})),
+  };
+}
+
+// Persist the whole filter to the DB (debounced — batches rapid edits). Called
+// after every change to any of the four marks.
+function persist(): void {
+  if (hydrating || !client) return;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    client
+      ?.mutate({mutation: SAVE_NOISE_FILTER,
+        variables: {input: currentState()}})
+      .catch(() => {/* offline / no active case — retried on next edit */});
+  }, 350);
+}
+
+// Load the active case's saved filter into the vars. Runs on first mount and
+// whenever the active case changes, so each case shows exactly its own marks.
+export async function hydrateNoiseFilter(
+  c: ApolloClient<object>,
+): Promise<void> {
+  client = c;
+  hydrating = true;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return new Set();
-    return new Set(JSON.parse(raw) as string[]);
+    const {data} = await c.query<{caseNoiseFilter: NoiseFilterPayload}>({
+      query: NOISE_FILTER_QUERY, fetchPolicy: "network-only",
+    });
+    const f = data.caseNoiseFilter;
+    minAmountVar(Number(f.minAmount) > 0 ? Number(f.minAmount) : 0);
+    ignoredPairsVar(new Set(f.ignoredPairs));
+    ignoredTxnsVar(new Set(f.ignoredTxns));
+    ignoredDescVar(f.descRules.map((r) => ({mode: r.mode, text: r.text})));
   } catch {
-    return new Set();
+    /* leave the vars as-is — fail open (show everything) rather than crash */
+  } finally {
+    hydrating = false;
   }
 }
 
-export const ignoredPairsVar = makeVar<Set<string>>(load());
+// Mount once (e.g. in the app header): keeps the noise filter in sync with the
+// active case. Re-hydrates whenever the active case id changes.
+export function useNoiseFilterSync(activeCaseId: number | null): void {
+  const c = useApolloClient();
+  useEffect(() => {
+    client = c;
+    if (activeCaseId == null) {
+      // No case selected — clear the marks so nothing leaks across cases.
+      hydrating = true;
+      minAmountVar(0);
+      ignoredPairsVar(new Set());
+      ignoredTxnsVar(new Set());
+      ignoredDescVar([]);
+      hydrating = false;
+      return;
+    }
+    void hydrateNoiseFilter(c);
+  }, [c, activeCaseId]);
+}
 
+// --- marked-unimportant account pairs --------------------------------------
 // Directional key: money from `bankAccountId` to counterparty account number.
 export function pairKey(bankAccountId: number, counterparty: string): string {
   return `${bankAccountId}→${counterparty.trim()}`;
@@ -40,20 +138,12 @@ export function txnPairKey(
   return cp ? pairKey(t.bankAccountId, cp) : null;
 }
 
-function persist(set: Set<string>): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
-  } catch {
-    /* storage full / disabled — the in-memory var still works this session */
-  }
-}
-
 export function toggleIgnoredPair(key: string): void {
   const next = new Set(ignoredPairsVar());
   if (next.has(key)) next.delete(key);
   else next.add(key);
   ignoredPairsVar(next);
-  persist(next);
+  persist();
 }
 
 // Permanently mark a batch of pairs unimportant in one shot (the "remove all
@@ -62,20 +152,20 @@ export function ignorePairs(keys: string[]): void {
   const next = new Set(ignoredPairsVar());
   for (const k of keys) next.add(k);
   ignoredPairsVar(next);
-  persist(next);
+  persist();
 }
 
 // Bring a batch of pairs back (undo). Empty argument restores everything.
 export function restorePairs(keys?: string[]): void {
   if (!keys) {
     ignoredPairsVar(new Set());
-    persist(new Set());
+    persist();
     return;
   }
   const next = new Set(ignoredPairsVar());
   for (const k of keys) next.delete(k);
   ignoredPairsVar(next);
-  persist(next);
+  persist();
 }
 
 export function useIgnoredPairs(): Set<string> {
@@ -86,33 +176,12 @@ export function useIgnoredPairs(): Set<string> {
 // The analyst can drop a SINGLE transaction (by id) — e.g. keep the one big
 // transfer in a pair and remove the four small ones around it. Removed ids are
 // dropped from every count, chart, pair total AND from the connection graph.
-const TXN_KEY = "forensic.ignoredTxns";
-
-function loadTxns(): Set<number> {
-  try {
-    const raw = localStorage.getItem(TXN_KEY);
-    return raw ? new Set(JSON.parse(raw) as number[]) : new Set();
-  } catch {
-    return new Set();
-  }
-}
-
-export const ignoredTxnsVar = makeVar<Set<number>>(loadTxns());
-
-function persistTxns(set: Set<number>): void {
-  try {
-    localStorage.setItem(TXN_KEY, JSON.stringify([...set]));
-  } catch {
-    /* ignore */
-  }
-}
-
 export function toggleIgnoredTxn(id: number): void {
   const next = new Set(ignoredTxnsVar());
   if (next.has(id)) next.delete(id);
   else next.add(id);
   ignoredTxnsVar(next);
-  persistTxns(next);
+  persist();
 }
 
 // Remove a batch of transaction ids in one shot (e.g. "remove all but the
@@ -121,20 +190,20 @@ export function ignoreTxns(ids: number[]): void {
   const next = new Set(ignoredTxnsVar());
   for (const id of ids) next.add(id);
   ignoredTxnsVar(next);
-  persistTxns(next);
+  persist();
 }
 
 // Bring removed transactions back (undo). Empty argument restores everything.
 export function restoreTxns(ids?: number[]): void {
   if (!ids) {
     ignoredTxnsVar(new Set());
-    persistTxns(new Set());
+    persist();
     return;
   }
   const next = new Set(ignoredTxnsVar());
   for (const id of ids) next.delete(id);
   ignoredTxnsVar(next);
-  persistTxns(next);
+  persist();
 }
 
 export function useIgnoredTxns(): Set<number> {
@@ -145,28 +214,12 @@ export function useIgnoredTxns(): Set<number> {
 // The analyst only cares about big money. Every transaction whose amount is
 // below this floor is treated as unimportant noise — dropped from every count,
 // chart, pair total on the Transactions page AND from the connection graph.
-// 0 = disabled (show everything). Persisted + reactive so both pages agree.
-const MIN_AMOUNT_KEY = "forensic.minTxnAmount";
-
-function loadMinAmount(): number {
-  try {
-    const n = Number(localStorage.getItem(MIN_AMOUNT_KEY));
-    return Number.isFinite(n) && n > 0 ? n : 0;
-  } catch {
-    return 0;
-  }
-}
-
-export const minAmountVar = makeVar<number>(loadMinAmount());
-
+// This is the primary declutter tool: it strips the mass of tiny transactions
+// so the link chart shows only the significant suspect connections. 0 = off.
 export function setMinAmount(value: number): void {
   const n = Number.isFinite(value) && value > 0 ? value : 0;
   minAmountVar(n);
-  try {
-    localStorage.setItem(MIN_AMOUNT_KEY, String(n));
-  } catch {
-    /* ignore */
-  }
+  persist();
 }
 
 export function useMinAmount(): number {
@@ -181,51 +234,24 @@ export function isBelowMin(amount: number, min: number): boolean {
 // --- Description-pattern noise rules ---------------------------------------
 // Organisations use formatted гүйлгээний утга. A rule marks every transaction
 // whose description starts-with / ends-with / contains a text as unimportant —
-// removed from every calculation AND from the connection graph. Persisted +
-// reactive so both pages agree.
-export type DescMode = "starts" | "ends" | "contains";
-export interface DescRule {mode: DescMode; text: string}
-
-const DESC_KEY = "forensic.ignoredDescRules";
-
-function loadDescRules(): DescRule[] {
-  try {
-    const raw = localStorage.getItem(DESC_KEY);
-    return raw ? (JSON.parse(raw) as DescRule[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-export const ignoredDescVar = makeVar<DescRule[]>(loadDescRules());
-
-function persistDesc(rules: DescRule[]): void {
-  try {
-    localStorage.setItem(DESC_KEY, JSON.stringify(rules));
-  } catch {
-    /* ignore */
-  }
-}
-
+// removed from every calculation AND from the connection graph.
 export function addDescRule(mode: DescMode, text: string): void {
   const t = text.trim();
   if (!t) return;
   const cur = ignoredDescVar();
   if (cur.some((r) => r.mode === mode && r.text === t)) return;
-  const next = [...cur, {mode, text: t}];
-  ignoredDescVar(next);
-  persistDesc(next);
+  ignoredDescVar([...cur, {mode, text: t}]);
+  persist();
 }
 
 export function removeDescRule(index: number): void {
-  const next = ignoredDescVar().filter((_r, i) => i !== index);
-  ignoredDescVar(next);
-  persistDesc(next);
+  ignoredDescVar(ignoredDescVar().filter((_r, i) => i !== index));
+  persist();
 }
 
 export function clearDescRules(): void {
   ignoredDescVar([]);
-  persistDesc([]);
+  persist();
 }
 
 export function useIgnoredDesc(): DescRule[] {

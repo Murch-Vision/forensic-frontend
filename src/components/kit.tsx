@@ -57,10 +57,17 @@ export function Card(props: {
 
 // color is one of the accent modifiers in app.css: cyan green red amber
 // purple blue. Renders the same .metric-card markup the Blazor pages use.
-export function StatCard(props: {label: string; value: ReactNode; color?: string}) {
+// onClick turns the card into a shortcut (dashboard → data pages).
+export function StatCard(props: {
+  label: string;
+  value: ReactNode;
+  color?: string;
+  onClick?: () => void;
+}) {
   const c = props.color ?? "";
   return (
-    <div className={`metric-card ${c}`}>
+    <div className={`metric-card ${c}`} onClick={props.onClick}
+      style={props.onClick ? {cursor: "pointer"} : undefined}>
       <div className="metric-label">{props.label}</div>
       <div className={`metric-value ${c}`}>{props.value}</div>
     </div>
@@ -136,9 +143,12 @@ export function DataTable<T>(props: {
   rowClassName?: (row: T) => string | undefined;
   // Column index sorted by default (its sortValue must be set).
   defaultSort?: {col: number; dir: "asc" | "desc"};
+  // Paginate when set: only this many rows render at once, with page controls.
+  pageSize?: number;
 }) {
   const [sort, setSort] = useState<{col: number; dir: "asc" | "desc"} | null>(
     props.defaultSort ?? null);
+  const [page, setPage] = useState(0);
 
   if (props.rows.length === 0) {
     return <Empty message={props.empty ?? "Мэдээлэл алга"} />;
@@ -165,7 +175,16 @@ export function DataTable<T>(props: {
       : {col: i, dir: "desc"});
   }
 
+  // Pagination: slice to the current page (clamped so filtering never strands
+  // the view on an empty page).
+  const size = props.pageSize;
+  const pageCount = size ? Math.max(1, Math.ceil(rows.length / size)) : 1;
+  const curPage = Math.min(page, pageCount - 1);
+  const pageRows = size
+    ? rows.slice(curPage * size, curPage * size + size) : rows;
+
   return (
+    <>
     <table className="data-grid" style={{width: "100%"}}>
       <thead>
         <tr>
@@ -191,7 +210,7 @@ export function DataTable<T>(props: {
         </tr>
       </thead>
       <tbody>
-        {rows.map((row, i) => (
+        {pageRows.map((row, i) => (
           <tr key={props.rowKey(row, i)}
             className={[
               props.isRowActive?.(row) ? "case-row-active" : "",
@@ -208,6 +227,23 @@ export function DataTable<T>(props: {
         ))}
       </tbody>
     </table>
+    {size && pageCount > 1 && (
+      <div style={{display: "flex", alignItems: "center",
+        justifyContent: "flex-end", gap: 12, padding: "10px 16px",
+        fontSize: 12, color: "var(--text-muted)",
+        borderTop: "1px solid var(--border-primary)"}}>
+        <span>
+          {curPage * size + 1}–{Math.min((curPage + 1) * size, rows.length)}
+          {" / "}{rows.length}
+        </span>
+        <button className="btn btn-sm" disabled={curPage <= 0}
+          onClick={() => setPage(curPage - 1)}>← Өмнөх</button>
+        <span>{curPage + 1} / {pageCount}</span>
+        <button className="btn btn-sm" disabled={curPage >= pageCount - 1}
+          onClick={() => setPage(curPage + 1)}>Дараах →</button>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -240,6 +276,10 @@ export function LineChart(props: {
   return (
     <Plot
       height={props.height ?? 240}
+      // Force a date x-axis: the labels are ISO dates, and telling plotly the
+      // type up front avoids the first-mount category/date auto-detect race
+      // that left this chart blank.
+      layout={{xaxis: {type: "date", gridcolor: "#1A1A3E"}}}
       data={[{
         type: "scatter",
         mode: "lines",
@@ -307,6 +347,10 @@ export function SankeyChart(props: {
   linkColors?: string[];
   height?: number;
 }) {
+  // Plotly's sankey mutates its input arrays in place. Apollo freezes query
+  // results, so passing them straight through throws ("Cannot assign to read
+  // only property") and the chart silently renders blank. Hand Plotly its own
+  // mutable copies.
   return (
     <Plot
       height={props.height ?? 420}
@@ -314,13 +358,14 @@ export function SankeyChart(props: {
         type: "sankey",
         orientation: "h",
         node: {
-          label: props.labels, pad: 14, thickness: 16,
-          color: props.nodeColors ?? CYAN,
+          label: [...props.labels], pad: 14, thickness: 16,
+          color: props.nodeColors ? [...props.nodeColors] : CYAN,
           line: {color: "#252550", width: 0.5},
         },
         link: {
-          source: props.source, target: props.target, value: props.value,
-          color: props.linkColors,
+          source: [...props.source], target: [...props.target],
+          value: [...props.value],
+          color: props.linkColors ? [...props.linkColors] : undefined,
         },
       }]}
     />

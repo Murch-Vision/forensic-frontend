@@ -97,9 +97,12 @@ export function Select(props: {
   // Overrides the trigger text — lets the current value stay visible even
   // when it is not among the (e.g. filtered) options.
   triggerLabel?: string;
+  // Adds a type-to-filter box at the top of the menu — for long lists.
+  searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
+  const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   useOutsideClose(open, () => setOpen(false), [ref, menuRef]);
@@ -110,11 +113,20 @@ export function Select(props: {
     (o) => String(o.value) === String(props.value));
   const selected = props.options[selectedIdx];
 
+  // The visible option set — filtered by the search box when searchable.
+  const filtered = props.searchable && query.trim()
+    ? props.options.filter((o) =>
+      o.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : props.options;
+  const filteredSelectedIdx = filtered.findIndex(
+    (o) => String(o.value) === String(props.value));
+
   function choose(idx: number) {
-    const opt = props.options[idx];
+    const opt = filtered[idx];
     if (!opt) return;
     props.onChange(String(opt.value));
     setOpen(false);
+    setQuery("");
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -123,20 +135,21 @@ export function Select(props: {
       e.preventDefault();
       if (open && highlight >= 0) choose(highlight);
       else {
-        setHighlight(selectedIdx);
+        setHighlight(filteredSelectedIdx);
         setOpen((v) => !v);
       }
     } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (!open) {
-        setHighlight(selectedIdx);
+        setHighlight(filteredSelectedIdx);
         setOpen(true);
         return;
       }
       const dir = e.key === "ArrowDown" ? 1 : -1;
       setHighlight((h) => {
-        const n = props.options.length;
-        return ((h < 0 ? selectedIdx : h) + dir + n) % n;
+        const n = filtered.length;
+        if (n === 0) return -1;
+        return ((h < 0 ? filteredSelectedIdx : h) + dir + n) % n;
       });
     }
   }
@@ -151,7 +164,8 @@ export function Select(props: {
         aria-expanded={open}
         onKeyDown={onKeyDown}
         onClick={() => {
-          setHighlight(selectedIdx);
+          setHighlight(filteredSelectedIdx);
+          setQuery("");
           setOpen((v) => !v);
         }}>
         <span className={
@@ -163,19 +177,34 @@ export function Select(props: {
       {open && menuStyle && createPortal(
         <div className="select-menu" role="listbox" ref={menuRef}
           style={menuStyle}>
-          {props.options.map((o, i) => (
-            <div key={String(o.value)}
-              role="option"
-              aria-selected={i === selectedIdx}
-              className={`select-option${
-                i === selectedIdx ? " selected" : ""}${
-                i === highlight ? " highlight" : ""}`}
-              onMouseEnter={() => setHighlight(i)}
-              onClick={() => choose(i)}>
-              {o.label}
-              {i === selectedIdx && <span className="select-check">✓</span>}
+          {props.searchable && (
+            <input className="form-input" autoFocus
+              style={{width: "100%", marginBottom: 4}}
+              placeholder="Хайх…"
+              value={query}
+              onChange={(e) => { setQuery(e.target.value); setHighlight(0); }}
+              onClick={(e) => e.stopPropagation()} />
+          )}
+          {filtered.length === 0 && (
+            <div className="select-option" style={{opacity: 0.6}}>
+              Илэрц алга
             </div>
-          ))}
+          )}
+          {filtered.map((o, i) => {
+            const isSel = String(o.value) === String(props.value);
+            return (
+              <div key={String(o.value)}
+                role="option"
+                aria-selected={isSel}
+                className={`select-option${isSel ? " selected" : ""}${
+                  i === highlight ? " highlight" : ""}`}
+                onMouseEnter={() => setHighlight(i)}
+                onClick={() => choose(i)}>
+                {o.label}
+                {isSel && <span className="select-check">✓</span>}
+              </div>
+            );
+          })}
         </div>,
         document.body
       )}

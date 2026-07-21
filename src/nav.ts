@@ -25,7 +25,6 @@ export const NAV_META: NavMeta[] = [
   {path: "/calls", label: "Дуудлагын бүртгэл", icon: "\u{1F4DE}"},
   {path: "/timeline", label: "Он цагийн хэлхээ", icon: "\u{23F1}"},
   {path: "/linkchart", label: "Холбоосын зураглал", icon: "\u{1F578}"},
-  {path: "/fraud", label: "Залилангийн урсгал", icon: "\u{1F6E1}"},
   {path: "/reports", label: "Тайлан", icon: "\u{1F4C4}"},
   {path: "/settings", label: "Тохиргоо", icon: "\u{2699}"},
 ];
@@ -45,4 +44,18 @@ export const STATUS_BADGE: Record<string, string> = {
   CLOSED: "unknown",
   ARCHIVED: "warning",
   UNKNOWN: "unknown",
+};
+
+export const PRIORITY_LABELS: Record<string, string> = {
+  LOW: "Бага",
+  MEDIUM: "Дунд",
+  HIGH: "Өндөр",
+  CRITICAL: "Ноцтой",
+};
+
+export const PRIORITY_BADGE: Record<string, string> = {
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+  CRITICAL: "critical",
 };

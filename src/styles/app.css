@@ -582,6 +582,17 @@ body {
     color: var(--text-primary);
     white-space: nowrap;
 }
+/* Long free-text cells (e.g. transaction descriptions) truncate with an
+   ellipsis instead of stretching the table and forcing a horizontal scroll.
+   Full text stays available via the cell's title tooltip. */
+.cell-truncate {
+    display: inline-block;
+    max-width: 340px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
 
 /* Badges */
 .badge {
@@ -659,8 +670,15 @@ body {
 /* Keep the dark label — the generic .btn:hover turns text cyan, which on the
    cyan primary background is unreadable. */
 .btn-primary:hover { background: #33ECFF; color: var(--bg-primary); }
-.btn-danger { border-color: var(--accent-red); color: var(--accent-red); }
-.btn-danger:hover { background: rgba(255,23,68,0.1); }
+/* Destructive buttons stay quiet by default (neutral grey) and only reveal
+   their red intent on hover — a page full of "remove" controls shouldn't be a
+   sea of red. */
+.btn-danger { border-color: var(--border-secondary); color: var(--text-secondary); }
+.btn-danger:hover {
+    border-color: var(--accent-red);
+    color: var(--accent-red);
+    background: rgba(255,23,68,0.08);
+}
 .btn-sm { padding: 4px 10px; font-size: 10px; }
 /* Modal footer action row — full-size .btn only, primary variant last */
 .modal-actions {
@@ -1637,6 +1655,42 @@ body {
 }
 .form-input::placeholder { color: var(--text-muted); }
 .form-input[disabled] { opacity: 0.55; cursor: not-allowed; }
+
+/* Chrome/WebKit paints autofilled fields with an opaque near-white background
+   and dark text, which wrecks the dark theme (the "white inputs"). There is no
+   direct background override for the UA autofill layer, so we mask it with an
+   inset box-shadow the size of the field and force the text fill colour. The
+   9999s transition keeps the shadow from flashing white for a frame on fill. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-text-fill-color: var(--text-primary);
+    caret-color: var(--text-primary);
+    -webkit-box-shadow: 0 0 0 1000px var(--bg-input) inset;
+    box-shadow: 0 0 0 1000px var(--bg-input) inset;
+    transition: background-color 9999s ease-out 0s;
+}
+
+/* Search-to-add result row in the case-access picker — a whole clickable row
+   that lights up cyan on hover. */
+.access-add-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 13px;
+    font-family: var(--font-main);
+}
+.access-add-row:hover {
+    border-color: var(--accent-cyan);
+    background: rgba(0, 229, 255, 0.05);
+}
 
 /* ── Profile / detail grid ───────────────────────────────── */
 .profile-grid {

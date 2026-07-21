@@ -31,20 +31,18 @@ import {
   addDescRule,
   clearDescRules,
   ignorePairs,
-  isBelowMin,
+  ignoreTxns,
   matchesDescRules,
   pairKey,
   removeDescRule,
   restorePairs,
   restoreTxns,
-  setMinAmount,
   toggleIgnoredPair,
   toggleIgnoredTxn,
   txnPairKey,
   useIgnoredDesc,
   useIgnoredPairs,
   useIgnoredTxns,
-  useMinAmount,
 } from "../lib/ignoredPairs";
 import type {DescMode, DescRule} from "../lib/ignoredPairs";
 import type {BankTransaction} from "../types";
@@ -56,6 +54,13 @@ interface TxnAccount {
   maskedNumber  : string;
   suspectId     : number | null;
 }
+
+// A usable display name: non-empty and not a "-" placeholder. When false we
+// fall back to the account number.
+const realName = (s: string | null | undefined): boolean => {
+  const t = (s ?? "").trim();
+  return t !== "" && !/^-+$/.test(t);
+};
 
 interface CorrCall {
   id            : number;
@@ -78,6 +83,54 @@ interface TxnData {
 const ROW: React.CSSProperties = {
   display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16,
 };
+
+// Threshold input kept in its OWN component with local state, so each keystroke
+// re-renders only this tiny widget — not the whole Transactions page (which
+// would redraw the heavy Plotly charts and lag). It commits on button/Enter.
+function ThresholdCleanup({onRemove}: {onRemove: (amt: number) => void}) {
+  const [text, setText] = useState("");
+  const amt = Number(text.replace(/[^\d.]/g, "")) || 0;
+  const submit = () => { if (amt) { onRemove(amt); setText(""); } };
+  return (
+    <div style={{display: "flex", gap: 8, alignItems: "center",
+      marginBottom: 6}}>
+      <input type="text" inputMode="numeric" className="form-input"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+        placeholder="Босго дүн ₮" style={{width: 150}} />
+      <button className="btn btn-danger" onClick={submit} disabled={!amt}>
+        Хасах
+      </button>
+    </div>
+  );
+}
+
+// Description-rule input, isolated in its own component with LOCAL state so
+// typing never re-renders the (heavy) transactions page.
+function DescCleanup() {
+  const [mode, setMode] = useState<DescMode>("starts");
+  const [text, setText] = useState("");
+  const submit = () => { if (text.trim()) { addDescRule(mode, text); setText(""); } };
+  return (
+    <div style={{display: "flex", gap: 8, alignItems: "center",
+      marginBottom: 6}}>
+      <Select value={mode} onChange={(v) => setMode(v as DescMode)}
+        style={{width: 150}}
+        options={[
+          {value: "starts", label: "Эхэлсэн"},
+          {value: "ends", label: "Төгссөн"},
+          {value: "contains", label: "Агуулсан"},
+        ]} />
+      <input type="text" className="form-input" value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+        placeholder="ж: SMART BANK, SOCIALPAY..." style={{flex: 1}} />
+      <button className="btn btn-danger" onClick={submit}
+        disabled={!text.trim()}>Хасах</button>
+    </div>
+  );
+}
 
 export default function TransactionsPage() {
   const {data, loading} = useQuery<TxnData>(TRANSACTIONS_QUERY);
@@ -125,15 +178,9 @@ export default function TransactionsPage() {
   const ignoredPairs = useIgnoredPairs();
   const ignoredTxns = useIgnoredTxns();
   const descRules = useIgnoredDesc();
-  const minAmount = useMinAmount();
-  // Cleanup modal + its inputs (nothing applies while typing — a button commits).
+  // Cleanup modal (its inputs keep their own local state so typing never
+  // re-renders this heavy page).
   const [cleanupOpen, setCleanupOpen] = useState(false);
-  const [minAmountText, setMinAmountText] = useState("");
-  const [thresholdText, setThresholdText] = useState("");
-  const [thresholdMode, setThresholdMode] = useState<"total" | "single">(
-    "total");
-  const [descText, setDescText] = useState("");
-  const [descMode, setDescMode] = useState<DescMode>("starts");
 
   const exhibitByTxn = new Map<number, number>();
   for (const e of evidenceQ.data?.evidenceForCase ?? []) {
@@ -181,12 +228,11 @@ export default function TransactionsPage() {
     && (!descNeedle
       || (t.description ?? "").toLowerCase().includes(descNeedle)));
   // Noise MARKS (persistent): a transaction is unimportant if it was removed
-  // individually, OR falls below the amount floor (small money the analyst
-  // doesn't care about), OR its description matches a rule, OR its account-pair
+  // individually (including the bulk "remove below ₮X" action, which marks each
+  // small transaction), OR its description matches a rule, OR its account-pair
   // was removed. All of them drop it from every count here AND from the graph.
   const isNoise = (t: BankTransaction) =>
-    ignoredTxns.has(t.id) || isBelowMin(t.amount, minAmount)
-    || matchesDescRules(t.description, descRules);
+    ignoredTxns.has(t.id) || matchesDescRules(t.description, descRules);
   const isPairUnimportant = (key: string | null) =>
     key != null && ignoredPairs.has(key);
   // cleanTxns = view minus amount/description noise; feeds the pair table.
@@ -203,26 +249,20 @@ export default function TransactionsPage() {
   const tableRows = filtered.filter((t) =>
     (!filterType || t.type === filterType));
 
-  // One-shot: mark every active pair below the typed amount unimportant. No
-  // per-keystroke filtering — the analyst types, then clicks the button once.
-  function bulkRemoveBelow() {
-    const t = Number(thresholdText.replace(/[^\d.]/g, ""));
-    if (!t) return;
-    const keys = activePairs
-      .filter((p) => (thresholdMode === "single" ? p.maxSingle : p.total) < t)
-      .map((p) => p.key);
-    if (keys.length) ignorePairs(keys);
-    setThresholdText("");
-  }
-  // Commit the amount floor — every transaction below it becomes noise
-  // everywhere (empty / 0 clears it). One button press, no per-keystroke work.
-  function commitMinAmount() {
-    setMinAmount(Number(minAmountText.replace(/[^\d.]/g, "")) || 0);
-  }
-  // Commit a description rule — marks matching transactions unimportant.
-  function markDesc() {
-    addDescRule(descMode, descText);
-    setDescText("");
+  // Remove noise below a threshold — ONE action ("Хасах"), two ways. Both are
+  // a real one-shot removal: they MARK the matching data unimportant (it lands
+  // in the "Хасагдсаныг сэргээх" tab), NOT a lingering live filter.
+  //  • "single": mark every INDIVIDUAL transaction under the amount.
+  //  • "total" : mark every account↔account pair whose TOTAL money is under it.
+  // A button commits — nothing applies while typing.
+  function removeNoise(amt: number) {
+    if (!amt) return;
+    // Mark every transaction below the amount removed (amounts are stored as
+    // magnitude, so `< amt` is the small ones regardless of debit/credit).
+    const ids = allTxns
+      .filter((t) => t.amount < amt && !ignoredTxns.has(t.id))
+      .map((t) => t.id);
+    if (ids.length) ignoreTxns(ids);
   }
   // Apply a filter from the detail panel or a pair row, then close it — the list
   // sits right under the filter bar so the result is immediately visible.
@@ -270,7 +310,7 @@ export default function TransactionsPage() {
   const acctById = new Map(accounts.map((a) => [a.id, a.maskedNumber]));
   interface PairAgg {
     key: string; bankAccountId: number; cpAccount: string;
-    account: string; counterparty: string;
+    account: string; counterparty: string; cpName: string;
     txns: number; total: number; maxSingle: number;
   }
   // EVERY account↔counterparty pair (not just repeated-amount ones) so the
@@ -285,8 +325,12 @@ export default function TransactionsPage() {
     const a = pairAgg.get(key) ?? {
       key, bankAccountId: t.bankAccountId, cpAccount: cp,
       account: acctById.get(t.bankAccountId) ?? String(t.bankAccountId),
-      counterparty: cp, txns: 0, total: 0, maxSingle: 0,
+      counterparty: cp, cpName: "", txns: 0, total: 0, maxSingle: 0,
     };
+    // Remember who the counterparty is (first real name seen for this account).
+    if (!a.cpName && realName(t.counterpartyName)) {
+      a.cpName = t.counterpartyName!.trim();
+    }
     a.txns++;
     a.total += t.amount;
     a.maxSingle = Math.max(a.maxSingle, t.amount);
@@ -299,20 +343,24 @@ export default function TransactionsPage() {
   // Table is sortable; slice the biggest-total first as the sensible default.
   const pairRows = [...activePairs]
     .sort((a, b) => b.total - a.total).slice(0, pairTopN);
-  // How many items the analyst has removed (pairs + single transactions),
-  // shown on the cleanup button.
-  const totalRemoved = ignoredPairs.size + ignoredTxns.size;
   // Individually-removed transactions, resolved for the cleanup modal's undo.
   const removedTxnList = allTxns.filter((t) => ignoredTxns.has(t.id));
   // Everything the analyst can restore, for the "Сэргээх" tab's badge.
   const restoreCount = removedTxnList.length + removedPairs.length
-    + descRules.length + (minAmount > 0 ? 1 : 0);
+    + descRules.length;
 
   // Дуудлагын дараах гүйлгээ: for each filtered transaction, the same
   // suspect's nearest preceding call within the chosen window.
   const suspectByAcct = new Map(accounts.map((a) => [a.id, a.suspectId]));
   const nameBySuspect = new Map(
     (callsQ.data?.suspects ?? []).map((s) => [s.id, s.fullName]));
+  // The owning person's name for one of our case accounts, or null (fall back
+  // to the account number). Lets the pair table say WHO, not just a number.
+  const acctOwnerName = (bankAccountId: number): string | null => {
+    const sid = suspectByAcct.get(bankAccountId);
+    const nm = sid != null ? nameBySuspect.get(sid) : null;
+    return realName(nm) ? nm! : null;
+  };
   // Account dropdown options — masked number labelled with its owner so the
   // analyst can tell whose account it is (numbers alone are unreadable).
   const accountOptions = [
@@ -328,28 +376,43 @@ export default function TransactionsPage() {
     call: CorrCall; txn: BankTransaction;
     suspectName: string; deltaMin: number;
   }
-  const corrRows: CorrRow[] = [];
-  for (const t of filtered) {
-    const sid = suspectByAcct.get(t.bankAccountId);
-    if (sid == null) continue;
-    const tt = new Date(t.timestamp).getTime();
-    let best: CorrCall | null = null;
-    let bestDelta = Infinity;
+  // Post-call correlation, done cheaply: group each suspect's calls ONCE with
+  // pre-parsed timestamps, sorted, then for each transaction binary-search the
+  // nearest preceding call. Avoids the old txns×calls scan (millions of ops
+  // with per-iteration date parsing) that froze the page. Plain computation —
+  // NOT a hook — because this runs after the component's early returns.
+  const corrRows: CorrRow[] = (() => {
+    const bySid = new Map<number, {call: CorrCall; ms: number}[]>();
     for (const c of calls) {
-      if (c.suspectId !== sid) continue;
-      const delta = (tt - new Date(c.startTime).getTime()) / 60000;
-      if (delta >= 0 && delta <= corrMin && delta < bestDelta) {
-        best = c;
-        bestDelta = delta;
+      if (c.suspectId == null) continue;
+      const arr = bySid.get(c.suspectId);
+      const entry = {call: c, ms: Date.parse(c.startTime)};
+      if (arr) arr.push(entry); else bySid.set(c.suspectId, [entry]);
+    }
+    for (const arr of bySid.values()) arr.sort((a, b) => a.ms - b.ms);
+    const rows: CorrRow[] = [];
+    for (const t of filtered) {
+      const sid = suspectByAcct.get(t.bankAccountId);
+      if (sid == null) continue;
+      const arr = bySid.get(sid);
+      if (!arr) continue;
+      const tt = Date.parse(t.timestamp);
+      // largest call ms <= tt (the nearest preceding call)
+      let lo = 0, hi = arr.length - 1, idx = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (arr[mid].ms <= tt) { idx = mid; lo = mid + 1; } else hi = mid - 1;
+      }
+      if (idx < 0) continue;
+      const delta = (tt - arr[idx].ms) / 60000;
+      if (delta >= 0 && delta <= corrMin) {
+        rows.push({call: arr[idx].call, txn: t,
+          suspectName: nameBySuspect.get(sid) ?? `#${sid}`, deltaMin: delta});
       }
     }
-    if (best) {
-      corrRows.push({call: best, txn: t,
-        suspectName: nameBySuspect.get(sid) ?? `#${sid}`,
-        deltaMin: bestDelta});
-    }
-  }
-  corrRows.sort((a, b) => a.deltaMin - b.deltaMin);
+    rows.sort((a, b) => a.deltaMin - b.deltaMin);
+    return rows;
+  })();
   const corrClass = (m: number) =>
     m <= 5 ? "tight" : m <= 15 ? "close" : "near";
 
@@ -522,12 +585,9 @@ export default function TransactionsPage() {
         actions={
           <div style={{display: "flex", gap: 8, alignItems: "center"}}>
             <button className="btn btn-danger"
-              onClick={() => {
-                setMinAmountText(minAmount > 0 ? String(minAmount) : "");
-                setCleanupOpen(true);
-              }}
+              onClick={() => setCleanupOpen(true)}
               title="Жижиг дүн, босго, байгууллагын утгаар бөөнөөр цэвэрлэх">
-              🧹 Цэвэрлэх{totalRemoved > 0 ? ` (${totalRemoved})` : ""}
+              🧹 Цэвэрлэх
             </button>
             {hasFilter && (
               <button className="btn" onClick={clearFilters}>ШҮҮЛТ ЦЭВЭРЛЭХ</button>
@@ -575,34 +635,25 @@ export default function TransactionsPage() {
               style={{width: "100%"}} />
           </div>
         </div>
-        {(filterCounterparty || minAmount > 0) && (
+        {filterCounterparty && (
           <div style={{display: "flex", flexWrap: "wrap", gap: 8,
             marginBottom: 16}}>
-            {filterCounterparty && (
-              <span className="badge info" style={{display: "inline-flex",
-                alignItems: "center", gap: 6}}>
-                Харьцсан данс: {filterCounterparty}
-                <button className="modal-close" style={{fontSize: 14}}
-                  title="Хос шүүлтийг арилгах"
-                  onClick={() => setFilterCounterparty("")}>×</button>
-              </span>
-            )}
-            {minAmount > 0 && (
-              <span className="badge" style={{display: "inline-flex",
-                alignItems: "center", gap: 6}}>
-                Шумын босго: {formatMoney(minAmount)}-с доош нуугдсан
-                <button className="modal-close" style={{fontSize: 14}}
-                  title="Босго арилгах" onClick={() => setMinAmount(0)}>×</button>
-              </span>
-            )}
+            <span className="badge info" style={{display: "inline-flex",
+              alignItems: "center", gap: 6}}>
+              Харьцсан данс: {filterCounterparty}
+              <button className="modal-close" style={{fontSize: 14}}
+                title="Хос шүүлтийг арилгах"
+                onClick={() => setFilterCounterparty("")}>×</button>
+            </span>
           </div>
         )}
-        <div className="scroll-container" style={{maxHeight: 440,
-          margin: "0 -18px -18px", borderTop: "1px solid var(--border-primary)"}}>
+        <div style={{margin: "0 -18px -18px",
+          borderTop: "1px solid var(--border-primary)"}}>
           <DataTable<BankTransaction>
             columns={columns}
             rows={tableRows}
             rowKey={(t) => t.id}
+            pageSize={25}
             empty="Гүйлгээ алга"
             onRowClick={openDrill}
             isRowActive={(t) => t.id === selectedTxn?.id}
@@ -627,7 +678,9 @@ export default function TransactionsPage() {
               defaultSort={{col: 1, dir: "desc"}}
               columns={[
                 {header: "Гүйлгээний утга", sortValue: (r) => r.desc,
-                  render: (r) => r.desc},
+                  render: (r) => (
+                    <span className="cell-truncate" title={r.desc}>{r.desc}</span>
+                  )},
                 {header: "Давтамж", align: "right" as const,
                   title: "Энэ утгатай гүйлгээ хэдэн удаа давтагдсан",
                   sortValue: (r) => r.count,
@@ -655,31 +708,23 @@ export default function TransactionsPage() {
         <Card
           title={`Данс хоорондын гүйлгээ (${activePairs.length})`}
           actions={
-            <div style={{display: "flex", gap: 8, alignItems: "center"}}>
-              <button className="btn btn-danger"
-                onClick={() => {
-                  setMinAmountText(minAmount > 0 ? String(minAmount) : "");
-                  setCleanupOpen(true);
-                }}
-                title="Жижиг дүн, босго, байгууллагын утга зэргээр цэвэрлэх">
-                🧹 Цэвэрлэх{totalRemoved > 0 ? ` (${totalRemoved})` : ""}
-              </button>
-              <Select value={pairTopN}
-                onChange={(v) => setPairTopN(Number(v))}
-                title="Хэдэн мөр харуулах" style={{width: 100}}
-                options={[10, 20, 50, 100].map((n) =>
-                  ({value: n, label: `Топ ${n}`}))} />
-            </div>
+            <Select value={pairTopN}
+              onChange={(v) => setPairTopN(Number(v))}
+              title="Хэдэн мөр харуулах" style={{width: 100}}
+              options={[10, 20, 50, 100].map((n) =>
+                ({value: n, label: `Топ ${n}`}))} />
           }
           noPadding>
           <div className="scroll-container" style={{maxHeight: 420}}>
             <DataTable<(typeof pairRows)[number]>
               defaultSort={{col: 4, dir: "desc"}}
               columns={[
-                {header: "Данс", sortValue: (r) => r.account,
-                  render: (r) => r.account},
-                {header: "Харьцсан данс", sortValue: (r) => r.counterparty,
-                  render: (r) => r.counterparty},
+                {header: "Эзэмшигч",
+                  sortValue: (r) => acctOwnerName(r.bankAccountId) ?? r.account,
+                  render: (r) => acctOwnerName(r.bankAccountId) ?? r.account},
+                {header: "Харьцагч",
+                  sortValue: (r) => realName(r.cpName) ? r.cpName : r.counterparty,
+                  render: (r) => realName(r.cpName) ? r.cpName : r.counterparty},
                 {header: "Гүйлгээ", align: "right" as const,
                   title: "Энэ хос хооронд хийгдсэн гүйлгээний тоо",
                   sortValue: (r) => r.txns, render: (r) => r.txns},
@@ -699,6 +744,7 @@ export default function TransactionsPage() {
               ]}
               rows={pairRows}
               rowKey={(r) => r.key}
+              pageSize={25}
               onRowClick={(r) => filterBy({
                 account: String(r.bankAccountId), counterparty: r.cpAccount})}
               empty="Хос алга"
@@ -762,8 +808,8 @@ export default function TransactionsPage() {
         <DataTable<(typeof corrRows)[number]>
           columns={[
             {header: "Дуудлага", render: (r) => formatDateTime(r.call.startTime)},
-            {header: "Дугаар",
-              render: (r) => `${r.call.callerNumber} → ${r.call.calledNumber}`},
+            {header: "Каллер", render: (r) => r.call.callerNumber},
+            {header: "Каллед", render: (r) => r.call.calledNumber},
             {header: "Сэжигтэн", render: (r) => r.suspectName},
             {header: "Зөрүү", align: "center" as const,
               render: (r) => (
@@ -784,6 +830,7 @@ export default function TransactionsPage() {
           ]}
           rows={corrRows}
           rowKey={(r) => `${r.call.id}-${r.txn.id}`}
+          pageSize={25}
           empty={`${corrMin} минутын дотор дуудлагын дараах гүйлгээ алга`}
           onRowClick={(r) => openDrill(r.txn)}
         />
@@ -795,8 +842,6 @@ export default function TransactionsPage() {
         <StatCard label="Хасагдсан гүйлгээ" value={removedTxnList.length} />
         <StatCard label="Хасагдсан хос" value={removedPairs.length} />
         <StatCard label="Утгын дүрэм" value={descRules.length} />
-        <StatCard label="Жижиг дүнгийн босго"
-          value={minAmount > 0 ? formatMoney(minAmount) : "—"} />
       </div>
 
       <Card title="Юу нуугдсан бэ?" style={{marginBottom: 16}}
@@ -806,7 +851,6 @@ export default function TransactionsPage() {
               if (!window.confirm("Бүх хасалтыг цуцалж, нуусан бүх гүйлгээг "
                 + "буцааж харуулах уу?")) return;
               restorePairs(); clearDescRules(); restoreTxns();
-              setMinAmount(0); setMinAmountText("");
             }}
             title="Бүх нуусан өгөгдлийг буцаах (баталгаажуулна)">
             ↩ Бүгдийг сэргээх ({restoreCount})
@@ -817,18 +861,6 @@ export default function TransactionsPage() {
           ↩ товчоор нэг нэгээр нь буцаана. Хасагдсан өгөгдөл тооцоо, график,
           холбоосын зураглалд огт орохгүй.
         </div>
-        {minAmount > 0 && (
-          <div style={{display: "flex", justifyContent: "space-between",
-            alignItems: "center", padding: "8px 12px", marginTop: 12,
-            border: "1px solid var(--border-primary)",
-            borderRadius: "var(--radius-sm)"}}>
-            <span>💰 {formatMoney(minAmount)}-с доош бүх гүйлгээ нуугдсан
-              (жижиг дүнгийн босго)</span>
-            <button className="btn btn-sm"
-              onClick={() => {setMinAmount(0); setMinAmountText("");}}
-              title="Босго арилгах">↩ Сэргээх</button>
-          </div>
-        )}
       </Card>
 
       <div style={ROW}>
@@ -880,7 +912,7 @@ export default function TransactionsPage() {
 
       <Card title={`Хасагдсан гүйлгээ (${removedTxnList.length})`}
         style={{marginBottom: 16}} noPadding>
-        <div className="scroll-container" style={{maxHeight: 440}}>
+        <div>
           <DataTable<BankTransaction>
             columns={[
               {header: "Огноо",
@@ -907,6 +939,7 @@ export default function TransactionsPage() {
             ]}
             rows={removedTxnList}
             rowKey={(t) => t.id}
+            pageSize={25}
             empty="Хасагдсан гүйлгээ алга — бүх өгөгдөл харагдаж байна"
           />
         </div>
@@ -1042,101 +1075,30 @@ export default function TransactionsPage() {
                 onClick={() => setCleanupOpen(false)}>×</button>
             </div>
             <div className="modal-body">
-              {/* Amount floor — the headline noise filter. Drops every small
-                  transaction everywhere + on the connection graph. */}
+              {/* Noise removal below a threshold — ONE action ("Хасах"), two
+                  ways: by single transaction (the amount floor) or by pair
+                  total. Both strip noise from every count, chart AND the graph. */}
               <div className="form-label" style={{color: "var(--accent-cyan)"}}>
-                💰 Зөвхөн том мөнгө — жижиг гүйлгээг бүхэлд нь нуух
+                🧹 Босго дүнгээс доош шум хасах
               </div>
-              <div style={{display: "flex", gap: 8, alignItems: "center",
-                marginBottom: 6}}>
-                <input type="text" inputMode="numeric" className="form-input"
-                  value={minAmountText}
-                  onChange={(e) => setMinAmountText(e.target.value)}
-                  onKeyDown={(e) => {if (e.key === "Enter") commitMinAmount();}}
-                  placeholder="Хамгийн бага дүн ₮" style={{width: 170}} />
-                <button className="btn btn-danger" onClick={commitMinAmount}>
-                  Хэрэглэх
-                </button>
-                {minAmount > 0 && (
-                  <button className="btn"
-                    onClick={() => {setMinAmount(0); setMinAmountText("");}}>
-                    Болих
-                  </button>
-                )}
-              </div>
+              <ThresholdCleanup onRemove={removeNoise} />
               <div style={{fontSize: 11, color: "var(--text-muted)",
                 marginBottom: 18}}>
-                {minAmount > 0
-                  ? `Идэвхтэй: ${formatMoney(minAmount)}-с доош бүх гүйлгээг `
-                    + "тооцоо, график, зураглалаас нууж байна."
-                  : "Энэ дүнгээс доош бүх ганц гүйлгээ шум болж, тооцоо, "
-                    + "график, холбоосын зураглалаас бүрмөсөн хасагдана."}
-              </div>
-
-              {/* Threshold removal */}
-              <div className="form-label">Босго дүнгээс доош хосыг хасах</div>
-              <div style={{display: "flex", gap: 8, alignItems: "center",
-                marginBottom: 6}}>
-                <input type="text" inputMode="numeric" className="form-input"
-                  value={thresholdText}
-                  onChange={(e) => setThresholdText(e.target.value)}
-                  onKeyDown={(e) => {if (e.key === "Enter") bulkRemoveBelow();}}
-                  placeholder="Босго дүн ₮" style={{width: 130}} />
-                <Select value={thresholdMode}
-                  onChange={(v) => setThresholdMode(v as typeof thresholdMode)}
-                  style={{width: 170}}
-                  options={[
-                    {value: "total", label: "Нийт дүнгээр"},
-                    {value: "single", label: "Ганц гүйлгээгээр"},
-                  ]} />
-                <button className="btn btn-danger" onClick={bulkRemoveBelow}
-                  disabled={!Number(thresholdText.replace(/[^\d.]/g, ""))}>
-                  Хасах
-                </button>
-              </div>
-              <div style={{fontSize: 11, color: "var(--text-muted)",
-                marginBottom: 18}}>
-                {thresholdMode === "single"
-                  ? "Хамгийн том ганц гүйлгээ нь босгоос доош бүх хосыг хасна."
-                  : "Нийт дүн нь босгоос доош бүх хосыг хасна."}
+                Дүн нь энэ босгоос доош ГАНЦ гүйлгээ бүрийг хасаж,
+                &nbsp;&apos;Хасагдсаныг сэргээх&apos; хуудсанд тэмдэглэнэ.
               </div>
 
               {/* Description-pattern noise rules */}
               <div className="form-label">
                 Гүйлгээний утгаар хасах (байгууллага гэх мэт)
               </div>
-              <div style={{display: "flex", gap: 8, alignItems: "center",
-                marginBottom: 6}}>
-                <Select value={descMode}
-                  onChange={(v) => setDescMode(v as DescMode)}
-                  style={{width: 150}}
-                  options={[
-                    {value: "starts", label: "Эхэлсэн"},
-                    {value: "ends", label: "Төгссөн"},
-                    {value: "contains", label: "Агуулсан"},
-                  ]} />
-                <input type="text" className="form-input" value={descText}
-                  onChange={(e) => setDescText(e.target.value)}
-                  onKeyDown={(e) => {if (e.key === "Enter") markDesc();}}
-                  placeholder="ж: SMART BANK, SOCIALPAY..."
-                  style={{flex: 1}} />
-                <button className="btn btn-danger" onClick={markDesc}
-                  disabled={!descText.trim()}>Хасах</button>
-              </div>
+              <DescCleanup />
               <div style={{fontSize: 11, color: "var(--text-muted)"}}>
                 Энэ утгатай бүх гүйлгээ хасагдана. Хассан бүхнээ
                 “↩ Хасагдсаныг сэргээх” хуудаснаас буцаана.
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn"
-                onClick={() => {
-                  setCleanupOpen(false);
-                  patchParams({view: "removed"});
-                }}
-                title="Хасагдсан бүх зүйлийг харах, буцаах">
-                ↩ Хасагдсаныг харах{restoreCount > 0 ? ` (${restoreCount})` : ""}
-              </button>
               <button className="btn btn-primary"
                 onClick={() => setCleanupOpen(false)}>ХААХ</button>
             </div>

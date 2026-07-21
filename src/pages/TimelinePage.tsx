@@ -85,8 +85,6 @@ export default function TimelinePage() {
   const [selectedSuspectId, setSelectedSuspectId] = useState("");
   const [showTransactions, setShowTransactions] = useState(true);
   const [showCalls, setShowCalls] = useState(true);
-  const [showCorrelations, setShowCorrelations] = useState(true);
-  const [showTravel, setShowTravel] = useState(true);
 
   const suspectId = selectedSuspectId === ""
     ? null : parseInt(selectedSuspectId, 10);
@@ -143,7 +141,7 @@ export default function TimelinePage() {
   items.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
   const visible = items.slice(0, 500);
 
-  const correlations = showCorrelations ? data.correlations : [];
+  const correlations = data.correlations;
 
   const columns: Column<CorrelationHit>[] = [
     {
@@ -198,10 +196,6 @@ export default function TimelinePage() {
             onToggle={() => setShowTransactions((v) => !v)} />
           <ToggleChip label="Дуудлага" on={showCalls}
             onToggle={() => setShowCalls((v) => !v)} />
-          <ToggleChip label="Холбоо" on={showCorrelations}
-            onToggle={() => setShowCorrelations((v) => !v)} />
-          <ToggleChip label="Зорчилт" on={showTravel}
-            onToggle={() => setShowTravel((v) => !v)} />
         </div>
       </Card>
 
@@ -251,31 +245,13 @@ export default function TimelinePage() {
         </div>
       </Card>
 
-      <Card title="Хамаарал (дуудлага ↔ гүйлгээ)" noPadding
-        style={{marginBottom: 16}}>
+      <Card title="Хамаарал (дуудлага ↔ гүйлгээ)" noPadding>
         <DataTable
           columns={columns}
           rows={correlations}
           rowKey={(_h, i) => i}
+          pageSize={50}
           empty="Холбоо олдсонгүй"
-        />
-      </Card>
-
-      <Card title="Аяллын зөрчил (нэг хүн хоёр газар)" noPadding>
-        <DataTable
-          rows={showTravel ? (travelQ.data?.travelCorrelations ?? []) : []}
-          rowKey={(_h, i) => i}
-          empty="Аяллын зөрчил олдсонгүй"
-          columns={[
-            {header: "Сэжигтэн", render: (h) => h.suspectName},
-            {header: "Огноо", render: (h) => formatDateTime(h.eventTime)},
-            {header: "Гүйлгээ", align: "right",
-              render: (h) => formatMoney(h.transactionAmount)},
-            {header: "Гүйлгээний газар", render: (h) => h.transactionLocation},
-            {header: "Дуудлагын газар", render: (h) => h.callLocation},
-            {header: "Зөрүү (мин)", align: "right",
-              render: (h) => h.timeDifferenceMinutes.toFixed(0)},
-          ]}
         />
       </Card>
       </CaseGate>

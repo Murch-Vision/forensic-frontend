@@ -11,8 +11,8 @@ import {
   REPORTS_QUERY,
   REPORT_BUNDLE,
   REPORT_EXCEL,
+  REPORT_MARKED_PDF,
   REPORT_PDF,
-  REPORT_WORD,
 } from "../graphql/queries";
 import {
   Badge,
@@ -23,24 +23,8 @@ import {
   StatCard,
 } from "../components/kit";
 import {formatMoney, sevClass} from "../lib/format";
+import {downloadBase64, type ReportFile} from "../lib/download";
 import type {CaseFile, PatternAlert} from "../types";
-
-interface ReportFile {
-  filename: string;
-  mimeType: string;
-  base64: string;
-}
-
-// Decode a base64 payload into a Blob and trigger a browser download.
-function downloadBase64(file: ReportFile) {
-  const bytes = Uint8Array.from(atob(file.base64), (c) => c.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], {type: file.mimeType}));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = file.filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 interface RpData {
   dashboardStats: {
@@ -70,10 +54,22 @@ export default function ReportsPage() {
     REPORT_BUNDLE,
     {fetchPolicy: "no-cache"}
   );
-  const [getWord, wordQ] = useLazyQuery<{reportWord: ReportFile}>(
-    REPORT_WORD,
-    {fetchPolicy: "no-cache"}
-  );
+  const [getMarkedPdf, markedQ] =
+    useLazyQuery<{reportMarkedSuspectsPdf: ReportFile}>(REPORT_MARKED_PDF,
+      {fetchPolicy: "no-cache"});
+
+  async function onMarkedPdf() {
+    try {
+      const r = await getMarkedPdf();
+      if (r.data?.reportMarkedSuspectsPdf) {
+        downloadBase64(r.data.reportMarkedSuspectsPdf);
+      } else if (r.error) {
+        alert(r.error.message);
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function onPdf() {
     const r = await getPdf();
@@ -90,10 +86,6 @@ export default function ReportsPage() {
     if (r.data?.reportBundle) downloadBase64(r.data.reportBundle);
   }
 
-  async function onWord() {
-    const r = await getWord();
-    if (r.data?.reportWord) downloadBase64(r.data.reportWord);
-  }
 
   if (loading || !data) {
     return (
@@ -107,6 +99,11 @@ export default function ReportsPage() {
   const s = data.dashboardStats;
   const actions = (
     <>
+      <button className="btn btn-accent" onClick={onMarkedPdf}
+        disabled={markedQ.loading}
+        title="Зөвхөн сэжигтэн болгож тэмдэглэсэн хүмүүсийн гүйлгээг PDF-ээр татах">
+        {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "СЭЖИГТНҮҮДИЙН ГҮЙЛГЭЭ (PDF)"}
+      </button>
       <button className="btn btn-primary" onClick={onPdf}
         disabled={pdfQ.loading}>
         {pdfQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "PDF ЭКСПОРТ"}
@@ -118,10 +115,6 @@ export default function ReportsPage() {
       <button className="btn" onClick={onBundle}
         disabled={bundleQ.loading}>
         {bundleQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "БҮРДЭЛ (ZIP)"}
-      </button>
-      <button className="btn" onClick={onWord}
-        disabled={wordQ.loading}>
-        {wordQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "WORD БОЛОВСРУУЛАХ"}
       </button>
     </>
   );
