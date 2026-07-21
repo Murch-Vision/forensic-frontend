@@ -6,6 +6,7 @@
  * Purpose     :
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
+import {useState} from "react";
 import {useLazyQuery, useQuery} from "@apollo/client";
 import {
   REPORTS_QUERY,
@@ -58,9 +59,14 @@ export default function ReportsPage() {
     useLazyQuery<{reportMarkedSuspectsPdf: ReportFile}>(REPORT_MARKED_PDF,
       {fetchPolicy: "no-cache"});
 
-  async function onMarkedPdf() {
+  // Threshold modal: ask for a minimum single-transaction amount before export.
+  const [showThreshold, setShowThreshold] = useState(false);
+  const [threshold, setThreshold] = useState("");
+
+  async function onMarkedPdf(minAmount: number) {
+    setShowThreshold(false);
     try {
-      const r = await getMarkedPdf();
+      const r = await getMarkedPdf({variables: {minAmount}});
       if (r.data?.reportMarkedSuspectsPdf) {
         downloadBase64(r.data.reportMarkedSuspectsPdf);
       } else if (r.error) {
@@ -99,7 +105,8 @@ export default function ReportsPage() {
   const s = data.dashboardStats;
   const actions = (
     <>
-      <button className="btn btn-accent" onClick={onMarkedPdf}
+      <button className="btn btn-accent"
+        onClick={() => { setThreshold(""); setShowThreshold(true); }}
         disabled={markedQ.loading}
         title="Зөвхөн сэжигтэн болгож тэмдэглэсэн хүмүүсийн гүйлгээг PDF-ээр татах">
         {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "СЭЖИГТНҮҮДИЙН ГҮЙЛГЭЭ (PDF)"}
@@ -166,6 +173,49 @@ export default function ReportsPage() {
           ]}
         />
       </Card>
+
+      {showThreshold && (
+        <div className="modal-overlay" onClick={() => setShowThreshold(false)}>
+          <div className="modal-content" style={{width: "min(440px, 92vw)"}}
+            onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">Гүйлгээний доод босго</span>
+              <button className="modal-close" title="Хаах"
+                onClick={() => setShowThreshold(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <label className="form-label">
+                Нэг гүйлгээний доод дүн (₮)
+              </label>
+              <input className="form-input" type="number" min={0} autoFocus
+                placeholder="ж: 100000"
+                value={threshold}
+                onChange={(e) => setThreshold(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    onMarkedPdf(Math.max(0, Math.floor(Number(threshold) || 0)));
+                  }
+                }} />
+              <div style={{fontSize: 12, color: "var(--text-muted)",
+                marginTop: 8}}>
+                Зөвхөн энэ дүнгээс их (буюу тэнцүү) гүйлгээг тайланд оруулна.
+                Хоосон эсвэл 0 бол бүх гүйлгээ орно.
+              </div>
+              <div style={{display: "flex", gap: 8, justifyContent: "flex-end",
+                marginTop: 20}}>
+                <button className="btn" onClick={() => setShowThreshold(false)}>
+                  Болих
+                </button>
+                <button className="btn btn-accent"
+                  onClick={() =>
+                    onMarkedPdf(Math.max(0, Math.floor(Number(threshold) || 0)))}>
+                  PDF ТАТАХ
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

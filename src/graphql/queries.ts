@@ -630,8 +630,8 @@ export const REPORT_SUSPECT_PDF = gql`
 `;
 
 export const REPORT_MARKED_PDF = gql`
-  query ReportMarkedSuspectsPdf {
-    reportMarkedSuspectsPdf { filename mimeType base64 }
+  query ReportMarkedSuspectsPdf($minAmount: Int) {
+    reportMarkedSuspectsPdf(minAmount: $minAmount) { filename mimeType base64 }
   }
 `;
 

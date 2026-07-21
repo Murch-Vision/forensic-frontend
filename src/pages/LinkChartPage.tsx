@@ -18,7 +18,6 @@ import {
   DELETE_CASE_GRAPH,
   DELETE_MANUAL_LINK,
   GENERATE_LINKS,
-  GENERATE_SAMPLE_DATA,
   LINKCHART_QUERY,
   NETWORK_FLOW_QUERY,
   SET_ACTIVE_CASE,
@@ -165,8 +164,6 @@ export default function LinkChartPage() {
     targetIndices: number[]; values: number[]; linkColors: string[];
   }}>(NETWORK_FLOW_QUERY);
   const [generate, {loading: generating}] = useMutation(GENERATE_LINKS);
-  const [sampleData, {loading: sampling}] =
-    useMutation(GENERATE_SAMPLE_DATA);
   const [selected, setSelected] = useState<NetworkNode | null>(null);
   // Clicked EDGE — the noise-removal target (a whole connection at once).
   const [selectedLink, setSelectedLink] = useState<NetworkLink | null>(null);
@@ -655,21 +652,6 @@ export default function LinkChartPage() {
     await refetch();
   }
 
-  async function onSampleData() {
-    const ok = window.confirm(
-      "Энэ кейсийн график, холбоосыг харагдуулах зорилгоор дэмо өгөгдөл "
-      + "(дуудлагын цаг, үргэлжлэл, хүн хоорондын холбоо) үүсгэх үү?");
-    if (!ok) return;
-    const res = await sampleData();
-    await refetch();
-    const r = res.data?.generateSampleData;
-    if (r) {
-      window.alert(
-        `Бэлэн боллоо: ${r.enrichedCalls} дуудлага баяжуулж, `
-        + `${r.networkCalls} шинэ дуудлага, ${r.linksCreated} холбоос үүсгэв.`);
-    }
-  }
-
   // Remove a clicked transaction edge: mark EVERY account→counterparty pair
   // that feeds this graph edge (both directions) unimportant. Shares the
   // ignored-pairs store with the Transactions page, so it is restorable from
@@ -921,11 +903,6 @@ export default function LinkChartPage() {
 
   const actions = (
     <div style={{display: "flex", gap: 8}}>
-      <button className="btn" onClick={onSampleData}
-        disabled={sampling}
-        title="Графикууд болон холбоог харагдуулах дэмо өгөгдөл үүсгэх">
-        {sampling ? "ҮҮСГЭЖ БАЙНА..." : "ДЭМО ӨГӨГДӨЛ"}
-      </button>
       <button className="btn btn-primary" onClick={onGenerate}
         disabled={generating}>
         {generating ? "БОЛОВСРУУЛЖ БАЙНА..." : "ХОЛБООС ҮҮСГЭХ"}
