@@ -22,8 +22,8 @@ The dev server talks to the backend API — see
 
 ## Pointing at the API
 
-`API_URL` says where the backend is. Set it in the environment or in a `.env`
-file next to `package.json` (see [`.env.example`](.env.example)):
+`API_URL` says where the backend is. Set it in the environment (or a `.env`
+file next to `package.json`, if you prefer):
 
 ```bash
 API_URL=http://localhost:4000        # backend on this machine (the default)
