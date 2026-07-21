@@ -643,7 +643,10 @@ export const MARK_AS_SUSPECT = gql`
 
 export const APP_VERSION_QUERY = gql`
   query AppVersion {
-    appVersion { version commit branch }
+    appVersion {
+      version commit branch
+      repos { name path version commit branch dirty }
+    }
   }
 `;
 
@@ -652,6 +655,7 @@ export const SELF_UPDATE = gql`
     selfUpdate {
       updated previousVersion newVersion previousCommit newCommit
       message restarting
+      repos { name updated previousCommit newCommit message }
     }
   }
 `;

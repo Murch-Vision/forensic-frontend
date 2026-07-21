@@ -13,10 +13,28 @@ import {Card, PageHeader} from "../components/kit";
 import {APP_VERSION_QUERY, SELF_UPDATE} from "../graphql/queries";
 import {useAuth} from "../lib/auth";
 
+interface RepoVersion {
+  name: string;
+  path: string;
+  version: string;
+  commit: string;
+  branch: string;
+  dirty: boolean;
+}
+
 interface VersionInfo {
   version: string;
   commit: string;
   branch: string;
+  repos: RepoVersion[];
+}
+
+interface RepoUpdate {
+  name: string;
+  updated: boolean;
+  previousCommit: string;
+  newCommit: string;
+  message: string;
 }
 
 interface UpdateResult {
@@ -27,6 +45,7 @@ interface UpdateResult {
   newCommit: string;
   message: string;
   restarting: boolean;
+  repos: RepoUpdate[];
 }
 
 export default function SettingsPage() {
@@ -65,14 +84,37 @@ export default function SettingsPage() {
           {loading && (
             <div style={{color: "var(--text-muted)"}}>Ачааллаж байна…</div>
           )}
-          {v && (
+          {v && (v.repos?.length ? (
+            <table className="data-table" style={{width: "100%"}}>
+              <thead>
+                <tr>
+                  <th>Сан</th><th>Хувилбар</th><th>Commit</th>
+                  <th>Салбар</th><th>Төлөв</th>
+                </tr>
+              </thead>
+              <tbody>
+                {v.repos.map((r) => (
+                  <tr key={r.path}>
+                    <td title={r.path}>{r.name}</td>
+                    <td>{r.version}</td>
+                    <td style={{fontFamily: "var(--font-mono)"}}>{r.commit}</td>
+                    <td style={{fontFamily: "var(--font-mono)"}}>{r.branch}</td>
+                    <td style={{color: r.dirty
+                      ? "var(--accent-amber, #FFAB00)" : "var(--text-muted)"}}>
+                      {r.dirty ? "Хадгалаагүй өөрчлөлттэй" : "Цэвэр"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
             <div style={{display: "flex", flexWrap: "wrap", gap: 32,
               alignItems: "center"}}>
               <Field label="Хувилбар" value={v.version} />
               <Field label="Commit" value={v.commit} mono />
               <Field label="Салбар" value={v.branch} mono />
             </div>
-          )}
+          ))}
 
           <div style={{marginTop: 24, display: "flex", gap: 12,
             alignItems: "center"}}>
@@ -109,12 +151,18 @@ export default function SettingsPage() {
                 ? "var(--accent-green)" : "var(--text-secondary)",
               fontSize: 12.5}}>
               <div>{result.message}</div>
-              {result.updated && (
-                <div style={{marginTop: 4, color: "var(--text-muted)",
-                  fontFamily: "var(--font-mono)", fontSize: 11.5}}>
-                  {result.previousCommit} → {result.newCommit}
-                  {result.previousVersion !== result.newVersion &&
-                    ` (${result.previousVersion} → ${result.newVersion})`}
+              {result.repos?.length > 0 && (
+                <div style={{marginTop: 6}}>
+                  {result.repos.map((r) => (
+                    <div key={r.name} style={{
+                      color: r.updated
+                        ? "var(--accent-green)" : "var(--text-muted)",
+                      fontSize: 11.5, marginTop: 2}}>
+                      <b>{r.name}</b>
+                      <span style={{fontFamily: "var(--font-mono)",
+                        marginLeft: 8}}>{r.message}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

@@ -415,6 +415,24 @@ export default function LinkChartPage() {
       return new Set();
     }
   });
+  // Text visibility. On a dense hub the names and the per-edge value tags are
+  // what make the picture unreadable, so both are switchable and remembered.
+  const [showNames, setShowNames] = useState(
+    () => localStorage.getItem("forensic.graphNames") !== "0");
+  const [showEdgeLabels, setShowEdgeLabels] = useState(
+    () => localStorage.getItem("forensic.graphEdgeLabels") !== "0");
+  function toggleNames() {
+    setShowNames((v) => {
+      localStorage.setItem("forensic.graphNames", v ? "0" : "1");
+      return !v;
+    });
+  }
+  function toggleEdgeLabels() {
+    setShowEdgeLabels((v) => {
+      localStorage.setItem("forensic.graphEdgeLabels", v ? "0" : "1");
+      return !v;
+    });
+  }
   // Search-to-focus: find any node (name / account number / phone) in the
   // dense graph, jump the view to it and open its detail panel.
   const graphRef = useRef<NetworkGraphHandle>(null);
@@ -1152,6 +1170,13 @@ export default function LinkChartPage() {
                   on={!hiddenKinds.has(kind)}
                   onToggle={() => toggleKind(kind)} />
               ))}
+            <span className="graph-filter-label" style={{marginLeft: 8}}>
+              Бичвэр:
+            </span>
+            <ToggleChip label="Нэр" color="#c8cce0"
+              on={showNames} onToggle={toggleNames} />
+            <ToggleChip label="Дүн" color="#00E676"
+              on={showEdgeLabels} onToggle={toggleEdgeLabels} />
             <div className="graph-search">
               <input type="text" className="form-input"
                 value={search}
@@ -1209,6 +1234,7 @@ export default function LinkChartPage() {
               // must NOT overwrite the real saved layout — only persist in the
               // normal full view.
               onLayoutChange={focusView ? undefined : persistPositions}
+              showNames={showNames} showEdgeLabels={showEdgeLabels}
               onNodeClick={handleNodeClick} onLinkClick={setSelectedLink} />
             {focusView && (
               <div style={{

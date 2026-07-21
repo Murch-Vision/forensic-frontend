@@ -236,6 +236,10 @@ interface NetworkGraphProps {
   // reset and any saved positions should be forgotten.
   onLayoutChange? : (
     positions: Record<string, {x: number; y: number; s?: number; sh?: "rect"}> | null) => void;
+  // Text visibility, driven by the chips above the graph. Node names and edge
+  // value tags are the two things that turn a dense hub into a wall of text.
+  showNames? : boolean;
+  showEdgeLabels? : boolean;
 }
 
 export default forwardRef<NetworkGraphHandle, NetworkGraphProps>(
@@ -271,10 +275,15 @@ function NetworkGraph(props, ref) {
   // outlive the render that started it, so it must read through a ref.
   const selectedRef = useRef<string | null>(null);
   selectedRef.current = props.selectedId ?? null;
+  // Same reasoning as selectedRef — draw() reads these from inside a rAF.
+  const namesRef = useRef(true);
+  namesRef.current = props.showNames ?? true;
+  const edgeLabelsRef = useRef(true);
+  edgeLabelsRef.current = props.showEdgeLabels ?? true;
   useEffect(() => {
     ensureRunning();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.selectedId]);
+  }, [props.selectedId, props.showNames, props.showEdgeLabels]);
 
   useImperativeHandle(ref, () => ({
     getPositions() {
@@ -508,8 +517,8 @@ function NetworkGraph(props, ref) {
       ctx.strokeStyle = st.ring;
       ctx.stroke();
 
-      const showLabel = n.weight >= 1 || showAll
-        || hl === n.id || neighbors.has(n.id);
+      const showLabel = namesRef.current
+        && (n.weight >= 1 || showAll || hl === n.id || neighbors.has(n.id));
       if (showLabel) {
         ctx.font = LABEL_FONT;
         ctx.textBaseline = "top";
@@ -525,24 +534,47 @@ function NetworkGraph(props, ref) {
     // Edge labels on the highlighted node's edges / the hovered edge — drawn
     // AFTER the nodes so the value tag always sits on top and is never buried
     // behind a node the edge happens to pass under.
-    if (hl || hoverLink) {
+    if ((hl || hoverLink) && edgeLabelsRef.current) {
       ctx.font = "600 10px 'Cascadia Mono', Consolas, monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      for (const l of links) {
-        const on = hl
-          ? (l.s.id === hl || l.t.id === hl)
-          : l === hoverLink;
-        if (!l.label || !on) continue;
-        const mx = (l.s.x + l.t.x) / 2;
-        const my = (l.s.y + l.t.y) / 2;
-        const w = ctx.measureText(l.label).width + 10;
+
+      // A hub can carry a hundred edges whose midpoints all land in the same
+      // few pixels, which used to render as an unreadable stack of tags. Place
+      // the strongest first and drop any that would collide with one already
+      // down, after trying a couple of slots further along the edge.
+      const tagged = links.filter((l) => l.label && (hl
+        ? (l.s.id === hl || l.t.id === hl)
+        : l === hoverLink));
+      tagged.sort((a, b) => (b.strength ?? 0) - (a.strength ?? 0));
+
+      const placed: {x: number; y: number; w: number; h: number}[] = [];
+      const hits = (a: {x: number; y: number; w: number; h: number}) =>
+        placed.some((p) => Math.abs(a.x - p.x) * 2 < a.w + p.w
+          && Math.abs(a.y - p.y) * 2 < a.h + p.h);
+
+      for (const l of tagged) {
+        const w = ctx.measureText(l.label!).width + 10;
+        let spot: {x: number; y: number; w: number; h: number} | null = null;
+        // Midpoint first, then off-centre slots, so a busy hub still shows as
+        // many tags as physically fit instead of one illegible pile.
+        for (const t of [0.5, 0.36, 0.64, 0.24, 0.76]) {
+          const cand = {
+            x: l.s.x + (l.t.x - l.s.x) * t,
+            y: l.s.y + (l.t.y - l.s.y) * t,
+            w, h: 16,
+          };
+          if (!hits(cand)) { spot = cand; break; }
+        }
+        if (!spot) continue;
+        placed.push(spot);
+
         ctx.globalAlpha = 0.88;
         ctx.fillStyle = "#0b0e1a";
-        ctx.fillRect(mx - w / 2, my - 8, w, 16);
+        ctx.fillRect(spot.x - w / 2, spot.y - 8, w, 16);
         ctx.globalAlpha = 1;
         ctx.fillStyle = LINK_STYLE[l.kind].color;
-        ctx.fillText(l.label, mx, my);
+        ctx.fillText(l.label!, spot.x, spot.y);
       }
       ctx.globalAlpha = 1;
     }
