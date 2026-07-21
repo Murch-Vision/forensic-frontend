@@ -44,4 +44,18 @@ export default defineConfig({
       },
     },
   },
+  // `npm run start` serves the built app from here. Same port and the same
+  // /graphql proxy as the dev server, so nothing downstream has to change.
+  preview: {
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      "/graphql": {
+        target: apiUrl,
+        changeOrigin: true,
+        secure: false,
+        rewrite: () => "/",
+      },
+    },
+  },
 });

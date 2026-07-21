@@ -32,6 +32,11 @@ echo [self-update] New version pulled (!BEFORE:~0,7! -^> !AFTER:~0,7!).
 echo [self-update] Reinstalling dependencies...
 call npm install
 
+REM Rebuild here rather than at boot — the task only serves dist\.
+echo [self-update] Rebuilding...
+call npm run build
+if !errorlevel! neq 0 echo [self-update] WARNING: build failed, serving the OLD build.
+
 echo [self-update] Restarting scheduled task '%TASK%'...
 schtasks /End /TN "%TASK%" >nul 2>&1
 schtasks /Run /TN "%TASK%" >nul 2>&1

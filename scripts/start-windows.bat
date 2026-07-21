@@ -51,8 +51,16 @@ if not exist "node_modules" (
     if !errorlevel! neq 0 call :log "WARNING: npm install exited !errorlevel!"
 )
 
-call :log "starting frontend dev server..."
-call "!NPM!" run dev >> "%LOG%" 2>&1
+REM Serve the app built at install/update time. Building here would add half a
+REM minute to every boot; this only fires as a safety net if dist is missing.
+if not exist "dist\index.html" (
+    call :log "no build found — building once..."
+    call "!NPM!" run build >> "%LOG%" 2>&1
+    if !errorlevel! neq 0 call :log "WARNING: build exited !errorlevel!"
+)
+
+call :log "starting frontend..."
+call "!NPM!" run start >> "%LOG%" 2>&1
 set "CODE=!errorlevel!"
 call :log "frontend exited with code !CODE!"
 
