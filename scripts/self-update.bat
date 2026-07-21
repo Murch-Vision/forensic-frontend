@@ -3,19 +3,17 @@ REM ============================================================
 REM  Forensic Analyst — Frontend self-update (Windows)
 REM
 REM  Pulls the latest code from git; if new commits arrived it
-REM  reinstalls dependencies and restarts the boot Scheduled Task
-REM  so the new version runs. No-op when already up to date.
+REM  reinstalls dependencies, rebuilds and restarts the running
+REM  launcher. No-op when already up to date.
 REM
-REM  Run manually, or schedule it (e.g. hourly) with:
-REM    schtasks /Create /TN "ForensicAnalystFrontendUpdate" ^
-REM      /TR "\"%~f0\"" /SC HOURLY /RU SYSTEM /RL HIGHEST
+REM  Run manually (double-click) whenever you want the latest code.
 REM ============================================================
 
 setlocal enabledelayedexpansion
 
 cd /d "%~dp0.."
 
-set "TASK=ForensicAnalystFrontend"
+set "NAME=ForensicAnalystFrontend"
 
 REM Remember the current commit, pull, then compare.
 for /f %%i in ('git rev-parse HEAD') do set "BEFORE=%%i"
@@ -37,9 +35,11 @@ echo [self-update] Rebuilding...
 call npm run build
 if !errorlevel! neq 0 echo [self-update] WARNING: build failed, serving the OLD build.
 
-echo [self-update] Restarting scheduled task '%TASK%'...
-schtasks /End /TN "%TASK%" >nul 2>&1
-schtasks /Run /TN "%TASK%" >nul 2>&1
+REM Close the running launcher window (titled by the installer shim) and start
+REM it again on the new build.
+echo [self-update] Restarting '%NAME%'...
+taskkill /FI "WINDOWTITLE eq %NAME%*" /T /F >nul 2>&1
+start "%NAME%" /min cmd /c "%~dp0start-windows.bat"
 echo [self-update] Done.
 
 endlocal

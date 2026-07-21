@@ -20,47 +20,45 @@ pnpm build        # type-check + production build
 The dev server talks to the backend API — see
 [`forensic-api`](https://github.com/Murch-Vision/forensic-api).
 
-## Windows: start automatically at boot
+## Windows: start automatically
 
-The launcher uses **`npm`** (not pnpm) and runs from the **Command Prompt**, so
-it works reliably from the `SYSTEM` account at boot. Everything lives in
-[`scripts/`](scripts/):
+Autostart is a plain batch file in your **Startup folder**. No Task Scheduler,
+no service, no administrator. Everything lives in [`scripts/`](scripts/):
 
 | Script | Purpose |
 | --- | --- |
-| `start-windows.bat` | Launcher — `npm install` (first run) then `npm run dev`. |
-| `install-startup-windows.bat` | Registers the boot Scheduled Task (uses `schtasks`, no PowerShell). |
-| `uninstall-startup-windows.bat` | Removes that task. |
-| `self-update.bat` | `git pull` + `npm install` + restart the Scheduled Task. |
+| `start-windows.bat` | Launcher — `npm install` (first run) then `npm run start`, which serves the built app. |
+| `install-startup-windows.bat` | Builds the app, then adds the launcher to your Startup folder. |
+| `uninstall-startup-windows.bat` | Removes it. |
+| `self-update.bat` | `git pull` + `npm install` + rebuild + restart the launcher. |
 
-### Install (run once) — Command Prompt
+### Install (run once)
 
-Open **Command Prompt as Administrator** (right-click → *Run as administrator*),
-`cd` to the project root, and run:
+**Double-click** `scripts\install-startup-windows.bat`. That is the whole
+install. It builds the app (~30s), writes `ForensicAnalystFrontend.bat` into
 
-```bat
-scripts\install-startup-windows.bat
+```
+%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 ```
 
-This creates a Scheduled Task named **`ForensicAnalystFrontend`** that runs
-`start-windows.bat` on every system boot as `SYSTEM` (elevated).
+and starts it straight away so you can see it work.
 
-Handy commands:
+To remove it later, double-click `scripts\uninstall-startup-windows.bat`.
 
-```bat
-schtasks /Run    /TN "ForensicAnalystFrontend"   &  :: start it now, no reboot
-schtasks /End    /TN "ForensicAnalystFrontend"   &  :: stop it
-scripts\uninstall-startup-windows.bat            &  :: remove it
-```
-
-> Requires Node.js installed **for all users** — the boot task runs as `SYSTEM`,
-> which only sees the machine `PATH`, so a per-user Node install (nvm, fnm) makes
-> the task start and die silently.
+> **It starts when you log in, not at boot.** That is the deliberate trade-off:
+> it runs as *you*, with *your* `PATH`, in *your* session — the same environment
+> where starting it by hand already works. A boot-time Scheduled Task runs as
+> `SYSTEM`, which cannot see a per-user Node install, is blocked by the default
+> laptop battery policy, and is killed after 3 days. That is why the old task
+> reported success and then did nothing. If nobody logs in, nothing runs.
 >
-> If nothing comes up after a restart, read `logs\startup.log` — the launcher
-> records every step there, since there is no console at boot.
+> The build happens at install and on self-update, never at startup — `npm run
+> start` only serves `dist\`, so logging in is not delayed by a build.
+>
+> If the app does not come up, read `logs\startup.log` — the launcher records
+> every step there, including exactly where it failed.
 
 ## Self-update
 
 Run `scripts\self-update.bat` (manually or on a schedule) to pull the latest
-code and restart the Scheduled Task. Requires the `origin` remote above.
+code, rebuild, and restart the launcher. Requires the `origin` remote above.
