@@ -108,8 +108,8 @@ export default function ReportsPage() {
       <button className="btn btn-accent"
         onClick={() => { setThreshold(""); setShowThreshold(true); }}
         disabled={markedQ.loading}
-        title="Зөвхөн сэжигтэн болгож тэмдэглэсэн хүмүүсийн гүйлгээг PDF-ээр татах">
-        {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "СЭЖИГТНҮҮДИЙН ГҮЙЛГЭЭ (PDF)"}
+        title="Банкны гүйлгээний тайланг PDF-ээр татах — босго тавибал түүнээс дээш гүйлгээтэй бүх этгээд орно">
+        {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ГҮЙЛГЭЭНИЙ ТАЙЛАН (PDF)"}
       </button>
       <button className="btn btn-primary" onClick={onPdf}
         disabled={pdfQ.loading}>
@@ -198,8 +198,9 @@ export default function ReportsPage() {
                 }} />
               <div style={{fontSize: 12, color: "var(--text-muted)",
                 marginTop: 8}}>
-                Зөвхөн энэ дүнгээс их (буюу тэнцүү) гүйлгээг тайланд оруулна.
-                Хоосон эсвэл 0 бол бүх гүйлгээ орно.
+                Энэ дүнгээс их (буюу тэнцүү) гүйлгээ хийсэн БҮХ этгээд —
+                сэжигтэн эсэхээс үл хамааран — тайланд орно.
+                Хоосон эсвэл 0 бол зөвхөн тэмдэглэсэн сэжигтнүүд орно.
               </div>
               <div style={{display: "flex", gap: 8, justifyContent: "flex-end",
                 marginTop: 20}}>
