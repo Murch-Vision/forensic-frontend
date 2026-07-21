@@ -54,6 +54,7 @@ no service, no administrator. Everything lives in [`scripts/`](scripts/):
 | `install-startup-windows.bat` | Builds the app, then adds the launcher to your Startup folder. |
 | `uninstall-startup-windows.bat` | Removes it. |
 | `self-update.bat` | `git pull` + `npm install` + rebuild + restart the launcher. |
+| `update-all.bat` | Updates **both** repos — pull, install, build, restart whatever was running. |
 
 ### Install (run once)
 
