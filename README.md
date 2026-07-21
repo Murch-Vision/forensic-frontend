@@ -20,6 +20,29 @@ pnpm build        # type-check + production build
 The dev server talks to the backend API — see
 [`forensic-api`](https://github.com/Murch-Vision/forensic-api).
 
+## Pointing at the API
+
+`API_URL` says where the backend is. Set it in the environment or in a `.env`
+file next to `package.json` (see [`.env.example`](.env.example)):
+
+```bash
+API_URL=http://localhost:4000        # backend on this machine (the default)
+API_URL=http://192.168.1.50:4000     # backend on another machine
+```
+
+| Variable | Purpose |
+| --- | --- |
+| `API_URL` / `VITE_API_URL` | API host. Unset ⇒ `http://localhost:4000`. |
+| `VITE_GRAPHQL_URL` | Full endpoint override, if GraphQL is not at the host root. |
+
+> It is read at **build** time, so re-run `npm run build` (or `self-update.bat`,
+> which rebuilds) after changing it.
+>
+> When it is unset the app calls same-origin `/graphql` and the dev/preview
+> server proxies that to `API_URL`, so the built files stay portable. Nothing
+> falls back to a hardcoded remote host: an install with no configuration talks
+> to its own machine, never to someone else's server.
+
 ## Windows: start automatically
 
 Autostart is a plain batch file in your **Startup folder**. No Task Scheduler,
