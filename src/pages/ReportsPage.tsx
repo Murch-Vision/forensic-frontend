@@ -6,13 +6,14 @@
  * Purpose     :
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
+import {useState} from "react";
 import {useLazyQuery, useQuery} from "@apollo/client";
 import {
   REPORTS_QUERY,
   REPORT_BUNDLE,
   REPORT_EXCEL,
+  REPORT_MARKED_PDF,
   REPORT_PDF,
-  REPORT_WORD,
 } from "../graphql/queries";
 import {
   Badge,
@@ -23,24 +24,8 @@ import {
   StatCard,
 } from "../components/kit";
 import {formatMoney, sevClass} from "../lib/format";
+import {downloadBase64, type ReportFile} from "../lib/download";
 import type {CaseFile, PatternAlert} from "../types";
-
-interface ReportFile {
-  filename: string;
-  mimeType: string;
-  base64: string;
-}
-
-// Decode a base64 payload into a Blob and trigger a browser download.
-function downloadBase64(file: ReportFile) {
-  const bytes = Uint8Array.from(atob(file.base64), (c) => c.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], {type: file.mimeType}));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = file.filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 interface RpData {
   dashboardStats: {
@@ -70,10 +55,27 @@ export default function ReportsPage() {
     REPORT_BUNDLE,
     {fetchPolicy: "no-cache"}
   );
-  const [getWord, wordQ] = useLazyQuery<{reportWord: ReportFile}>(
-    REPORT_WORD,
-    {fetchPolicy: "no-cache"}
-  );
+  const [getMarkedPdf, markedQ] =
+    useLazyQuery<{reportMarkedSuspectsPdf: ReportFile}>(REPORT_MARKED_PDF,
+      {fetchPolicy: "no-cache"});
+
+  // Threshold modal: ask for a minimum single-transaction amount before export.
+  const [showThreshold, setShowThreshold] = useState(false);
+  const [threshold, setThreshold] = useState("");
+
+  async function onMarkedPdf(minAmount: number) {
+    setShowThreshold(false);
+    try {
+      const r = await getMarkedPdf({variables: {minAmount}});
+      if (r.data?.reportMarkedSuspectsPdf) {
+        downloadBase64(r.data.reportMarkedSuspectsPdf);
+      } else if (r.error) {
+        alert(r.error.message);
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function onPdf() {
     const r = await getPdf();
@@ -90,10 +92,6 @@ export default function ReportsPage() {
     if (r.data?.reportBundle) downloadBase64(r.data.reportBundle);
   }
 
-  async function onWord() {
-    const r = await getWord();
-    if (r.data?.reportWord) downloadBase64(r.data.reportWord);
-  }
 
   if (loading || !data) {
     return (
@@ -107,6 +105,12 @@ export default function ReportsPage() {
   const s = data.dashboardStats;
   const actions = (
     <>
+      <button className="btn btn-accent"
+        onClick={() => { setThreshold(""); setShowThreshold(true); }}
+        disabled={markedQ.loading}
+        title="Зөвхөн сэжигтэн болгож тэмдэглэсэн хүмүүсийн гүйлгээг PDF-ээр татах">
+        {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "СЭЖИГТНҮҮДИЙН ГҮЙЛГЭЭ (PDF)"}
+      </button>
       <button className="btn btn-primary" onClick={onPdf}
         disabled={pdfQ.loading}>
         {pdfQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "PDF ЭКСПОРТ"}
@@ -118,10 +122,6 @@ export default function ReportsPage() {
       <button className="btn" onClick={onBundle}
         disabled={bundleQ.loading}>
         {bundleQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "БҮРДЭЛ (ZIP)"}
-      </button>
-      <button className="btn" onClick={onWord}
-        disabled={wordQ.loading}>
-        {wordQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "WORD БОЛОВСРУУЛАХ"}
       </button>
     </>
   );
@@ -173,6 +173,49 @@ export default function ReportsPage() {
           ]}
         />
       </Card>
+
+      {showThreshold && (
+        <div className="modal-overlay" onClick={() => setShowThreshold(false)}>
+          <div className="modal-content" style={{width: "min(440px, 92vw)"}}
+            onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">Гүйлгээний доод босго</span>
+              <button className="modal-close" title="Хаах"
+                onClick={() => setShowThreshold(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <label className="form-label">
+                Нэг гүйлгээний доод дүн (₮)
+              </label>
+              <input className="form-input" type="number" min={0} autoFocus
+                placeholder="ж: 100000"
+                value={threshold}
+                onChange={(e) => setThreshold(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    onMarkedPdf(Math.max(0, Math.floor(Number(threshold) || 0)));
+                  }
+                }} />
+              <div style={{fontSize: 12, color: "var(--text-muted)",
+                marginTop: 8}}>
+                Зөвхөн энэ дүнгээс их (буюу тэнцүү) гүйлгээг тайланд оруулна.
+                Хоосон эсвэл 0 бол бүх гүйлгээ орно.
+              </div>
+              <div style={{display: "flex", gap: 8, justifyContent: "flex-end",
+                marginTop: 20}}>
+                <button className="btn" onClick={() => setShowThreshold(false)}>
+                  Болих
+                </button>
+                <button className="btn btn-accent"
+                  onClick={() =>
+                    onMarkedPdf(Math.max(0, Math.floor(Number(threshold) || 0)))}>
+                  PDF ТАТАХ
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

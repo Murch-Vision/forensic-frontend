@@ -8,31 +8,43 @@
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {gql} from "@apollo/client";
 
-export const DASHBOARD_QUERY = gql`
-  query Dashboard {
+// Dashboard, no active case: light launchpad data — global tallies + the
+// case list (row click activates a case).
+export const DASHBOARD_OVERVIEW_QUERY = gql`
+  query DashboardOverview {
     dashboardStats {
-      totalSuspects totalBankAccounts totalTransactions totalCallRecords
-      totalLinks highRiskSuspects flaggedTransactions openCases
-      totalTransactionVolume earliestTransaction latestTransaction
-      earliestCall latestCall
+      totalSuspects totalTransactions totalCallRecords openCases
+      highRiskSuspects totalTransactionVolume
     }
-    patterns { alertType severity description timestamp }
     caseFiles { id caseId caseName status priority leadInvestigator }
+  }
+`;
+
+// Dashboard, active case: the evidence queries are case-scoped server-side,
+// so these lists ARE the case; patterns stay global and are filtered against
+// the case's accounts/phones client-side.
+export const DASHBOARD_CASE_QUERY = gql`
+  query DashboardCase {
+    activeCase {
+      id caseId caseName description status priority leadInvestigator createdAt
+    }
     suspects {
-      id suspectId fullName riskLevel occupation city country initials
+      id suspectId fullName riskLevel occupation initials
       bankAccounts { id }
-      phoneNumbers { id }
+      phoneNumbers { id number }
     }
-    transactions {
-      id timestamp amount type category channel
-    }
+    bankAccounts { id bankName maskedNumber suspectId }
+    transactions { id bankAccountId timestamp amount type flagStatus }
+    callRecords { id startTime }
+    suspectLinks { id }
+    patterns { alertType severity description timestamp relatedAccountId }
   }
 `;
 
 export const TRANSACTIONS_QUERY = gql`
   query Transactions {
     bankAccounts { id accountNumber bankName maskedNumber suspectId }
-    transactions {
+    transactions(includeRemoved: true) {
       id bankAccountId timestamp amount type category description
       counterpartyAccount counterpartyName channel runningBalance flagStatus
       currency
@@ -78,7 +90,8 @@ export const LINKCHART_QUERY = gql`
     }
     suspectLinks {
       id sourceSuspectId targetSuspectId linkType description strength
-      totalFinancialValue totalCallCount confidenceLevel
+      totalFinancialValue totalCallCount confidenceLevel contributingTxnIds
+      caseGraphId
     }
   }
 `;
@@ -97,6 +110,76 @@ export const GENERATE_LINKS = gql`
       id sourceSuspectId targetSuspectId linkType description strength
       confidenceLevel
     }
+  }
+`;
+
+// --- Analyst-drawn manual connections (family / friends / etc.) -------------
+export const CREATE_MANUAL_LINK = gql`
+  mutation CreateManualLink($input: ManualLinkInput!) {
+    createManualLink(input: $input) {
+      id sourceSuspectId targetSuspectId linkType description strength
+      confidenceLevel
+    }
+  }
+`;
+
+export const UPDATE_MANUAL_LINK = gql`
+  mutation UpdateManualLink(
+    $id: Int!, $description: String!, $confidenceLevel: LinkConfidence
+  ) {
+    updateManualLink(
+      id: $id, description: $description, confidenceLevel: $confidenceLevel
+    ) {
+      id description confidenceLevel
+    }
+  }
+`;
+
+export const DELETE_MANUAL_LINK = gql`
+  mutation DeleteManualLink($id: Int!) {
+    deleteManualLink(id: $id)
+  }
+`;
+
+// Set/clear ONLY a suspect's photo (used from the link-chart node panel).
+export const SET_SUSPECT_PHOTO = gql`
+  mutation SetSuspectPhoto($id: Int!, $photoData: String) {
+    setSuspectPhoto(id: $id, photoData: $photoData) {
+      id photoData
+    }
+  }
+`;
+
+// --- Saved connection-graph boards -----------------------------------------
+export const CASE_GRAPHS_QUERY = gql`
+  query CaseGraphs {
+    caseGraphs { id name state createdAt updatedAt }
+  }
+`;
+
+export const CREATE_CASE_GRAPH = gql`
+  mutation CreateCaseGraph(
+    $name: String!, $state: String!, $claimUnassignedLinks: Boolean
+  ) {
+    createCaseGraph(
+      name: $name, state: $state, claimUnassignedLinks: $claimUnassignedLinks
+    ) {
+      id name state createdAt updatedAt
+    }
+  }
+`;
+
+export const UPDATE_CASE_GRAPH = gql`
+  mutation UpdateCaseGraph($id: Int!, $name: String, $state: String) {
+    updateCaseGraph(id: $id, name: $name, state: $state) {
+      id name state updatedAt
+    }
+  }
+`;
+
+export const DELETE_CASE_GRAPH = gql`
+  mutation DeleteCaseGraph($id: Int!) {
+    deleteCaseGraph(id: $id)
   }
 `;
 
@@ -163,26 +246,6 @@ export const SUSPECT_ACCESS_LOGS = gql`
   }
 `;
 
-export const FRAUD_WORKFLOW = gql`
-  query FraudWorkflow {
-    fraudWorkflow {
-      bankAccountId accountName benfordObserved
-      analysis {
-        riskLevel overallRisk verdict benfordPasses benfordChiSquared
-        avgTransactionsPerDay maxTransactionsPerDay nearThresholdPercentage
-        roundNumberPercentage offHoursPercentage weekendPercentage
-        velocityScore amountVarianceScore roundNumberScore offHoursScore
-        nearThresholdScore categoryDiversityScore
-      }
-      ruleResult {
-        finalScore finalAction finalRisk criticalFlags highFlags
-        baseScore ruleBoost modelScore modelAction
-        violations { ruleId ruleName severity description score }
-      }
-    }
-  }
-`;
-
 export const LOCATION_DENSITY = gql`
   query LocationDensity($windowDays: Int) {
     locationDensity(windowDays: $windowDays) {
@@ -219,14 +282,6 @@ export const RUN_ANALYSIS = gql`
     runAccountAnalysis(bankAccountId: $bankAccountId) {
       id bankAccountId overallRisk riskLevel verdict benfordPasses
       nearThresholdPercentage roundNumberPercentage offHoursPercentage
-    }
-  }
-`;
-
-export const FRAUD_QUERY = gql`
-  query Fraud {
-    bankAccounts {
-      id accountNumber bankName accountHolderName maskedNumber
     }
   }
 `;
@@ -328,15 +383,57 @@ export const SETTINGS_QUERY = gql`
   }
 `;
 
+// Chunked upload for large import files — the preview proxy caps a single
+// request body at ~1 MB, so big workbooks travel as sub-MB chunks and are
+// referenced afterwards by uploadId.
+export const UPLOAD_START = gql`
+  mutation UploadStart {
+    uploadStart
+  }
+`;
+
+export const UPLOAD_APPEND = gql`
+  mutation UploadAppend($uploadId: String!, $chunk: String!) {
+    uploadAppend(uploadId: $uploadId, chunk: $chunk)
+  }
+`;
+
+// Populate the active case with a lifelike demo call/device network so the
+// analytics charts and connection graph are meaningful.
+export const GENERATE_SAMPLE_DATA = gql`
+  mutation GenerateSampleData {
+    generateSampleData {
+      enrichedCalls networkCalls phonesEnsured linksCreated
+    }
+  }
+`;
+
+// Case-scoped suspects, for the CDR "subject" picker on the Import page.
+export const IMPORT_SUSPECTS = gql`
+  query ImportSuspects {
+    suspects { id fullName phoneNumbers { number } }
+  }
+`;
+
 export const EXCEL_SHEETS = gql`
-  query ExcelSheets($content: String!, $filename: String!) {
-    excelSheets(content: $content, filename: $filename)
+  query ExcelSheets($content: String!, $filename: String!, $uploadId: String) {
+    excelSheets(content: $content, filename: $filename, uploadId: $uploadId)
   }
 `;
 
 export const PREVIEW_IMPORT = gql`
-  query PreviewImport($content: String!, $filename: String, $sheetName: String) {
-    previewImport(content: $content, filename: $filename, sheetName: $sheetName) {
+  query PreviewImport(
+    $content: String!
+    $filename: String
+    $sheetName: String
+    $uploadId: String
+  ) {
+    previewImport(
+      content: $content
+      filename: $filename
+      sheetName: $sheetName
+      uploadId: $uploadId
+    ) {
       headers sampleRows totalRows detectedProfile domain confidence
       mapping { field column }
     }
@@ -351,7 +448,9 @@ export const IMPORT_DATA = gql`
     $filename: String
     $sheetName: String
     $subjectSuspectId: Int
+    $subjectNumber: String
     $mapping: [ColumnMapInput!]
+    $uploadId: String
   ) {
     importData(
       content: $content
@@ -360,7 +459,9 @@ export const IMPORT_DATA = gql`
       filename: $filename
       sheetName: $sheetName
       subjectSuspectId: $subjectSuspectId
+      subjectNumber: $subjectNumber
       mapping: $mapping
+      uploadId: $uploadId
     ) {
       totalRows importedRows skippedRows errors messages detectedProfile domain
     }
@@ -518,6 +619,39 @@ export const SET_AML = gql`
       nearThresholdRangeHigh roundNumberMinAmount roundNumberModulus
       nightHoursStart nightHoursEnd highValueTxnFloor muleDailyInflowMin
       muleOutflowRatio smurfingUnitMax smurfingDailyTotalMin currencyFormat
+    }
+  }
+`;
+
+export const REPORT_SUSPECT_PDF = gql`
+  query ReportSuspectPdf($suspectId: Int!) {
+    reportSuspectPdf(suspectId: $suspectId) { filename mimeType base64 }
+  }
+`;
+
+export const REPORT_MARKED_PDF = gql`
+  query ReportMarkedSuspectsPdf($minAmount: Int) {
+    reportMarkedSuspectsPdf(minAmount: $minAmount) { filename mimeType base64 }
+  }
+`;
+
+export const MARK_AS_SUSPECT = gql`
+  mutation MarkAsSuspect($id: Int!, $marked: Boolean!) {
+    markAsSuspect(id: $id, marked: $marked) { id suspectId status }
+  }
+`;
+
+export const APP_VERSION_QUERY = gql`
+  query AppVersion {
+    appVersion { version commit branch }
+  }
+`;
+
+export const SELF_UPDATE = gql`
+  mutation SelfUpdate {
+    selfUpdate {
+      updated previousVersion newVersion previousCommit newCommit
+      message restarting
     }
   }
 `;

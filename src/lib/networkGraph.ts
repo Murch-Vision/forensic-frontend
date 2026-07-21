@@ -19,7 +19,7 @@ import {formatMoney, formatNum} from "./format";
 
 export type NetworkNodeType = "PERSON" | "ACCOUNT" | "PHONE";
 
-export type NetworkLinkKind = "owns" | "txn" | "call" | "intel";
+export type NetworkLinkKind = "owns" | "txn" | "call" | "intel" | "manual";
 
 export interface NetworkNode {
   id    : string;
@@ -33,6 +33,9 @@ export interface NetworkNode {
   sub? : string;
   // [label, value] rows for the detail panel.
   stats : Array<[string, string]>;
+  // For PERSON nodes: the suspect's photo (data URI), drawn in place of the
+  // generic 👤 icon when present.
+  photoData? : string | null;
 }
 
 export interface NetworkLink {
@@ -43,6 +46,14 @@ export interface NetworkLink {
   kind : NetworkLinkKind;
   // Shown at the edge midpoint while hovered.
   label? : string;
+  // For analyst-drawn "manual" links: the suspect_links row id, so the edge
+  // can be edited / deleted straight from the graph.
+  linkId? : number;
+  // A "soft" edge draws only between nodes that are ALREADY visible — it never
+  // pulls a new node onto the canvas. Used for name-matched FINANCIAL_TRANSFER
+  // links that are merged into the money view: they enrich the graph without
+  // re-bushing it with everyone the generator connected by name alone.
+  soft? : boolean;
 }
 
 interface GraphSuspect {
@@ -50,13 +61,17 @@ interface GraphSuspect {
   fullName     : string;
   riskLevel    : string;
   organization : string | null;
+  photoData?   : string | null;
 }
 
 interface GraphSuspectLink {
+  id              : number;
   sourceSuspectId : number;
   targetSuspectId : number;
   linkType        : string;
+  description     : string | null;
   strength        : number;
+  totalFinancialValue? : number | null;
 }
 
 interface GraphAccount {
@@ -123,7 +138,15 @@ export function buildEvidenceNetwork(
   const suspectNode = new Map<number, string>();
 
   // --- Suspects --------------------------------------------------------------
+  // A "real" suspect has an actual name. Imports create ONE placeholder record
+  // (name "-", UNKNOWN) and pile every account they couldn't attribute onto it,
+  // so folding those dozens of unrelated accounts into that single node would
+  // invent a giant false "unknown person" hub. Skip such placeholder people —
+  // their accounts fall back to standalone account nodes (holder unknown).
+  const hasRealName = (name: string | null | undefined) =>
+    /[\p{L}\p{N}]/u.test(name ?? "");
   for (const s of suspects) {
+    if (!hasRealName(s.fullName)) continue;
     const personId = `s:${s.id}`;
     suspectNode.set(s.id, personId);
     nodes.set(personId, {
@@ -134,30 +157,47 @@ export function buildEvidenceNetwork(
       cluster : personId,
       sub     : s.organization ?? undefined,
       stats   : [["Эрсдэл", RISK_LABEL[s.riskLevel] ?? s.riskLevel]],
+      photoData : s.photoData ?? null,
     });
   }
 
-  // --- Owned bank accounts --------------------------------------------------
-  // Known account numbers → node ids, so counterparty numbers can be matched
-  // back to accounts inside the case (suspect ↔ suspect money paths).
-  const accountByNumber = new Map<string, string>();
+  // --- Bank accounts --------------------------------------------------------
+  // An account OWNED by a known suspect is folded straight INTO that person —
+  // no separate account avatar — so the chart isn't a bush of one-account
+  // satellites; its money hangs directly off the owner. An account with NO
+  // known owner keeps its own node (fallback) so unattributed money still
+  // shows. `accountEndpoint` maps each account id to the node its transactions
+  // should attach to (the owner person, or the fallback account node), and
+  // `accountByNumber` resolves a counterparty number to that same endpoint.
+  const accountByNumber = new Map<string, string>();  // digits → endpoint id
+  const accountEndpoint = new Map<number, string>();  // account id → endpoint
   for (const a of accounts) {
-    const accId = `a:${a.id}`;
+    // Skip placeholder accounts (number blank or just "-") — junk from imports.
+    if (!hasRealName(a.accountNumber)) continue;
     const owner = a.suspectId != null ? suspectNode.get(a.suspectId) : null;
-    nodes.set(accId, {
-      id      : accId,
-      label   : a.bankName || "Данс",
-      type    : "ACCOUNT",
-      weight  : 0.9,
-      cluster : owner ?? accId,
-      sub     : a.maskedNumber || a.accountNumber,
-      stats   : [["Дансны дугаар", a.accountNumber]],
-    });
-    const num = digits(a.accountNumber);
-    if (num) accountByNumber.set(num, accId);
+    let endpoint: string;
     if (owner) {
-      links.push({source: owner, target: accId, strength: 2, kind: "owns"});
+      // Folded into the person — list the bank + masked number on the owner so
+      // the account stays identifiable (and searchable) in the detail panel.
+      endpoint = owner;
+      nodes.get(owner)?.stats.push(
+        [a.bankName || "Данс", a.maskedNumber || a.accountNumber]);
+    } else {
+      const accId = `a:${a.id}`;
+      endpoint = accId;
+      nodes.set(accId, {
+        id      : accId,
+        label   : a.bankName || "Данс",
+        type    : "ACCOUNT",
+        weight  : 0.9,
+        cluster : accId,
+        sub     : a.maskedNumber || a.accountNumber,
+        stats   : [["Дансны дугаар", a.accountNumber]],
+      });
     }
+    accountEndpoint.set(a.id, endpoint);
+    const num = digits(a.accountNumber);
+    if (num) accountByNumber.set(num, endpoint);
   }
 
   // --- Transactions aggregated per known account pair ------------------------
@@ -167,9 +207,11 @@ export function buildEvidenceNetwork(
   const accById = new Map(accounts.map((a) => [a.id, a]));
   for (const t of transactions) {
     if (!accById.has(t.bankAccountId)) continue;
-    const from = `a:${t.bankAccountId}`;
+    const from = accountEndpoint.get(t.bankAccountId);
+    if (!from) continue;
     const cpNum = digits(t.counterpartyAccount);
     const to = cpNum ? accountByNumber.get(cpNum) : undefined;
+    // `to === from` drops internal transfers between one owner's own accounts.
     if (!to || to === from) continue;
     const key = from < to ? `${from}|${to}` : `${to}|${from}`;
     let agg = txnAgg.get(key);
@@ -180,7 +222,12 @@ export function buildEvidenceNetwork(
     agg.count += 1;
     agg.total += Math.abs(t.amount);
   }
+  // Canonical key for an undirected node pair — used to dedupe the money edges
+  // that a FINANCIAL_TRANSFER suspect-link would otherwise draw on top of.
+  const pairKey = (a: string, b: string) => a < b ? `${a}|${b}` : `${b}|${a}`;
+  const moneyPairs = new Set<string>();
   for (const agg of txnAgg.values()) {
+    moneyPairs.add(pairKey(agg.from, agg.to));
     links.push({
       source   : agg.from,
       target   : agg.to,
@@ -190,19 +237,24 @@ export function buildEvidenceNetwork(
     });
   }
 
-  // Per-account transaction totals for the detail panel.
-  const accTotals = new Map<number, {n: number; inflow: number; outflow: number}>();
+  // Transaction totals for the detail panel, aggregated onto whichever node the
+  // account folded into (the owner person, or the fallback account node).
+  const endpointTotals =
+    new Map<string, {n: number; inflow: number; outflow: number}>();
   for (const t of transactions) {
-    const st = accTotals.get(t.bankAccountId) ?? {n: 0, inflow: 0, outflow: 0};
+    const ep = accById.has(t.bankAccountId)
+      ? accountEndpoint.get(t.bankAccountId) : undefined;
+    if (!ep) continue;
+    const st = endpointTotals.get(ep) ?? {n: 0, inflow: 0, outflow: 0};
     st.n += 1;
     if (t.amount >= 0) st.inflow += t.amount;
     else st.outflow += -t.amount;
-    accTotals.set(t.bankAccountId, st);
+    endpointTotals.set(ep, st);
   }
-  for (const a of accounts) {
-    const st = accTotals.get(a.id);
-    if (!st) continue;
-    nodes.get(`a:${a.id}`)!.stats.push(
+  for (const [ep, st] of endpointTotals) {
+    const node = nodes.get(ep);
+    if (!node) continue;
+    node.stats.push(
       ["Гүйлгээ", formatNum(st.n)],
       ["Орлого", formatMoney(st.inflow)],
       ["Зарлага", formatMoney(st.outflow)]);
@@ -277,22 +329,52 @@ export function buildEvidenceNetwork(
       ["Нийт хугацаа", `${Math.round(st.seconds / 60)} мин`]);
   }
 
-  // --- Intelligence links (suspect ↔ suspect) --------------------------------
+  // --- Suspect ↔ suspect links -----------------------------------------------
+  // Auto-generated intelligence links ("intel") share the rendering with the
+  // analyst's own hand-drawn relationships ("manual"), but manual ones are kept
+  // visible at all times and carry their row id so they can be edited/deleted.
   for (const l of suspectLinks) {
     const source = suspectNode.get(l.sourceSuspectId);
     const target = suspectNode.get(l.targetSuspectId);
     if (!source || !target || source === target) continue;
-    links.push({source, target, strength: Math.max(1, l.strength),
-      kind: "intel", label: l.linkType});
+    if (l.linkType === "MANUAL") {
+      links.push({source, target, strength: Math.max(2, l.strength),
+        kind: "manual", label: l.description ?? "Холбоос", linkId: l.id});
+    } else if (l.linkType === "FINANCIAL_TRANSFER") {
+      // A FINANCIAL_TRANSFER suspect-link and a raw-transaction "Гүйлгээ" edge
+      // are the SAME money between two people — one matched by account number,
+      // the other also by name / national-id. Merge them into ONE green money
+      // edge: if this pair already has a Гүйлгээ edge, drop the duplicate;
+      // otherwise draw this AS the money edge (it caught a link the raw
+      // account-number aggregation missed, e.g. we only hold one side's
+      // statement and it merely NAMES the counterparty).
+      const key = pairKey(source, target);
+      if (moneyPairs.has(key)) continue;
+      moneyPairs.add(key);
+      // Soft: shown only if BOTH people are already on the canvas (kept by
+      // verified money/calls). A name-only match to an otherwise-isolated
+      // person stays hidden, so the graph doesn't re-bush.
+      links.push({source, target, strength: Math.max(1, l.strength),
+        kind: "txn", soft: true,
+        label: l.totalFinancialValue != null
+          ? `Гүйлгээ · ${formatMoney(l.totalFinancialValue)}`
+          : l.description ?? "Гүйлгээ"});
+    }
+    // Non-financial auto links (PHONE_CONTACT, SHARED_DEVICE, ...) are NOT
+    // drawn as a separate purple "Хамаарал" edge: phone contact is already
+    // shown by the cyan call edges (person→phone→call→phone→person), so a
+    // parallel magenta line was just confusing duplication. Only money (green)
+    // and calls (cyan) — plus ownership and manual links — remain.
   }
 
-  // Person summary rows now that everything is counted.
+  // Person summary rows now that everything is counted (owned accounts are
+  // already listed individually above, so only the phone count is added here).
   for (const s of suspects) {
-    const personId = suspectNode.get(s.id)!;
-    const person = nodes.get(personId)!;
-    const nAcc = accounts.filter((a) => a.suspectId === s.id).length;
+    const personId = suspectNode.get(s.id);
+    if (!personId) continue;   // skipped placeholder suspect
+    const person = nodes.get(personId);
+    if (!person) continue;
     const nPhones = phones.filter((p) => p.suspectId === s.id).length;
-    if (nAcc) person.stats.push(["Данс", formatNum(nAcc)]);
     if (nPhones) person.stats.push(["Утас", formatNum(nPhones)]);
   }
 

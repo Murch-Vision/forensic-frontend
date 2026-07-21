@@ -161,9 +161,7 @@ export default function CallRecordsPage() {
     }
   }
   const topContacts = [...contactMap.values()]
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 15);
-  const topBar = topContacts.slice(0, 10);
+    .sort((a, b) => b.count - a.count);
 
   // Activity heatmap: number[7][24] from each call's startTime (local).
   const heatmap: number[][] = Array.from({length: 7}, () =>
@@ -215,13 +213,19 @@ export default function CallRecordsPage() {
       <Card title="Сэжигтнээр шүүх" style={{marginBottom: 16}}>
         <div style={{display: "flex", gap: 12, alignItems: "center",
           flexWrap: "wrap"}}>
-          <Select value={selectedSuspectId}
+          <Select value={selectedSuspectId} searchable
             onChange={(v) => setSelectedSuspectId(Number(v))}
             style={{minWidth: 240}}
             options={[
               {value: 0, label: `Бүх дуудлага (${allCalls.length} бичлэг)`},
-              ...suspects.map((s) => ({value: s.id,
-                label: `${s.fullName} (${callCount(s)} дуудлага)`})),
+              // Only people who actually appear in the call data — no point
+              // listing the whole roster with "(0 дуудлага)".
+              ...suspects
+                .map((s) => ({id: s.id, name: s.fullName, n: callCount(s)}))
+                .filter((x) => x.n > 0)
+                .sort((a, b) => b.n - a.n)
+                .map((x) => ({value: x.id,
+                  label: `${x.name} (${x.n} дуудлага)`})),
             ]} />
           {selected && (
             <>
@@ -255,7 +259,6 @@ export default function CallRecordsPage() {
       <div className="metrics-grid">
         <StatCard label="Дуудлагын дуудлага" value={totalVoice}
           color="purple" />
-        <StatCard label="SMS заагууд" value={totalSms} color="cyan" />
         <StatCard label="Нийт үргэлжлэл" value={formatDuration(totalDuration)}
           color="green" />
         <StatCard label="Ялгаатай дугаар" value={uniqueNumbers} color="amber" />
@@ -277,70 +280,11 @@ export default function CallRecordsPage() {
         </div>
       </div>
 
-      <div style={{display: "flex", gap: 16, alignItems: "flex-start",
-        marginBottom: 16}}>
-        <div style={{flex: 1}}>
-          <Card title="Дээд холбоо (давтамж)">
-            <Plot
-              height={300}
-              data={[{
-                type: "bar", orientation: "h",
-                y: topBar.map((c) => `${last4(c.caller)}→${last4(c.called)}`)
-                  .reverse(),
-                x: topBar.map((c) => c.count).reverse(),
-                marker: {color: "#B388FF"},
-              }]}
-              layout={{margin: {l: 120, r: 16, t: 16, b: 40}}}
-            />
-          </Card>
-        </div>
-        <div style={{flex: 1}}>
-          <Card title="Дуудлагын төрөл">
-            <DonutChart labels={typeLabels}
-              values={typeLabels.map((t) => typeMap.get(t) ?? 0)}
-              colors={typeColors} />
-          </Card>
-        </div>
-      </div>
-
-      <div style={{display: "flex", gap: 16, alignItems: "flex-start",
-        marginBottom: 16}}>
-        <div style={{flex: 1}}>
-          <Card title="Цаг тутмын давтамж">
-            <Plot
-              height={260}
-              data={[{
-                type: "bar", x: hourLabels, y: hourCounts,
-                marker: {color: hourColors},
-              }]}
-            />
-          </Card>
-        </div>
-        <div style={{flex: 1}}>
-          <Card title="Үргэлжлэлийн тархалт (Voice)">
-            {voiceDur.length > 0 ? (
-              <Plot
-                height={260}
-                data={[{
-                  type: "box", y: voiceDur, name: "Voice (сек)",
-                  marker: {color: "#B388FF"}, boxmean: true,
-                }]}
-              />
-            ) : (
-              <div style={{padding: 24, color: "var(--text-muted)",
-                fontSize: 12}}>Дуудлагын үргэлжлэл алга</div>
-            )}
-          </Card>
-        </div>
-      </div>
-
       <Card title="Дээд холбооны хосууд" style={{marginBottom: 16}} noPadding>
         <DataTable<ContactFrequency>
           columns={[
-            {
-              header: "Дуудлага (каллер→каллед)",
-              render: (r) => `${r.caller}→${r.called}`,
-            },
+            {header: "Каллер", render: (r) => r.caller},
+            {header: "Каллед", render: (r) => r.called},
             {header: "Тоо", align: "right", render: (r) => r.count},
             {
               header: "Үргэлжлэл",
@@ -350,6 +294,7 @@ export default function CallRecordsPage() {
           ]}
           rows={topContacts}
           rowKey={(r) => `${r.caller}→${r.called}`}
+          pageSize={25}
           empty="Холбоо алга"
         />
       </Card>
@@ -360,43 +305,16 @@ export default function CallRecordsPage() {
             {header: "Эхэлсэн", render: (r) => formatDateTime(r.startTime)},
             {header: "Каллер", render: (r) => r.callerNumber},
             {header: "Каллед", render: (r) => r.calledNumber},
-            {
-              header: "Төрөл",
-              render: (r) => (
-                <Badge text={r.callType}
-                  kind={r.callType === "Voice" ? "info" : "low"} />
-              ),
-            },
             {header: "Чиглэл", render: (r) => r.direction},
             {
               header: "Үргэлжлэл",
               align: "right",
               render: (r) => formatDuration(r.durationSeconds),
             },
-            {header: "Байршил", render: (r) => r.location ?? "—"},
-            {header: "Туг", render: (r) => (
-              <div style={{display: "flex", gap: 4, flexWrap: "wrap"}}>
-                {isNightCall(r) && <Badge text="ШӨНИЙН" kind="medium" />}
-                {isShortCall(r) && <Badge text="БОГИНО" kind="high" />}
-                {r.durationSeconds > 1800 && <Badge text="УРТ" kind="info" />}
-              </div>
-            )},
-            {header: "Нотлох", render: (r) =>
-              !activeCase ? <span style={{color: "var(--text-muted)"}}>—</span>
-                : exhibitByCall.has(r.id)
-                  ? (
-                    <span className="badge info">
-                      #{exhibitByCall.get(r.id)}
-                    </span>
-                  )
-                  : (
-                    <button className="btn btn-sm" onClick={() => onTag(r)}>
-                      +
-                    </button>
-                  )},
           ]}
           rows={calls}
           rowKey={(r) => r.id}
+          pageSize={50}
           empty="Дуудлага алга"
         />
       </Card>

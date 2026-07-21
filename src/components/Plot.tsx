@@ -6,6 +6,7 @@
  * Purpose     :
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
+import {useEffect} from "react";
 // @ts-ignore — factory subpath has no bundled types
 import createPlotlyComponent from "react-plotly.js/factory";
 // @ts-ignore — dist-min has no bundled types
@@ -39,6 +40,16 @@ export interface PlotProps {
 }
 
 export default function Plot({data, layout, height, onClick}: PlotProps) {
+  // react-plotly measures its container on mount; inside a flex/grid card the
+  // width often isn't settled yet, so the chart paints blank at width 0 and no
+  // window-resize ever fires to correct it. Nudge a resize on the next frames
+  // so every chart re-measures and draws reliably.
+  useEffect(() => {
+    const fire = () => window.dispatchEvent(new Event("resize"));
+    const a = requestAnimationFrame(fire);
+    const t = setTimeout(fire, 120);
+    return () => { cancelAnimationFrame(a); clearTimeout(t); };
+  }, []);
   return (
     <PlotlyComponent
       data={data}

@@ -7,11 +7,12 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useState} from "react";
-import {Link} from "react-router-dom";
 import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {ACTIVE_CASE_QUERY, SET_ACTIVE_CASE} from "../graphql/queries";
 import {STATUS_LABELS} from "../nav";
 import {Select} from "./inputs";
+import {useNoiseFilterSync} from "../lib/ignoredPairs";
+import {useAuth} from "../lib/auth";
 
 // Global case SCOPE bar shown on every page: the analyst picks the case once
 // here and every page (evidence tagging, exhibits, …) follows it via the
@@ -27,6 +28,7 @@ interface CaseRef {
 
 export default function AppHeader() {
   const client = useApolloClient();
+  const {user, isAdmin, logout} = useAuth();
   const caseQ = useQuery<{activeCase: CaseRef | null; caseFiles: CaseRef[]}>(
     ACTIVE_CASE_QUERY
   );
@@ -34,6 +36,11 @@ export default function AppHeader() {
 
   const activeCase = caseQ.data?.activeCase ?? null;
   const caseFiles = caseQ.data?.caseFiles ?? [];
+
+  // Load THIS case's permanent noise-filter (marked-unimportant data) from the
+  // DB and keep it in sync — so the connection graph always excludes exactly
+  // what the analyst removed, on any machine, across reloads.
+  useNoiseFilterSync(activeCase?.id ?? null);
 
   // Status filter for the case dropdown (user wish: e.g. only open cases).
   // Sticky across sessions.
@@ -91,10 +98,21 @@ export default function AppHeader() {
                 STATUS_LABELS[c.status] ?? c.status})`})),
           ]} />
       </div>
-      <div className="app-header-group">
-        <Link to="/cases" className="app-header-manage">
-          КЕЙС УДИРДАХ →
-        </Link>
+
+      {/* Current account + sign-out, pinned to the right. */}
+      <div style={{marginLeft: "auto", display: "flex", alignItems: "center",
+        gap: 12}}>
+        <div style={{textAlign: "right", lineHeight: 1.2}}>
+          <div style={{fontSize: 13, color: "var(--text-primary)"}}>
+            {user?.fullName || user?.username}
+          </div>
+          <div style={{fontSize: 11, color: isAdmin
+            ? "var(--accent-amber)" : "var(--text-secondary)"}}>
+            {isAdmin ? "Хэлтсийн дарга" : "Мөрдөгч"}
+          </div>
+        </div>
+        <button className="btn" onClick={() => logout()}
+          title="Гарах">⏻ Гарах</button>
       </div>
     </header>
   );

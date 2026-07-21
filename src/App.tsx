@@ -20,7 +20,9 @@ import TimelinePage from "./pages/TimelinePage";
 import LinkChartPage from "./pages/LinkChartPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
-import FraudWorkflowPage from "./pages/FraudWorkflowPage";
+import AdminPage from "./pages/AdminPage";
+import LoginPage from "./pages/LoginPage";
+import {useAuth} from "./lib/auth";
 
 // Case-centric page set: /cases is the hierarchy root (case management);
 // every other page works inside the case picked in the global AppHeader.
@@ -34,14 +36,34 @@ const PAGE_ELEMENTS: Record<string, ReactNode> = {
   "/calls": <CallRecordsPage />,
   "/timeline": <TimelinePage />,
   "/linkchart": <LinkChartPage />,
-  "/fraud": <FraudWorkflowPage />,
   "/reports": <ReportsPage />,
   "/settings": <SettingsPage />,
+  "/admin": <AdminPage />,
 };
 
-const NAV = NAV_META.map((n) => ({...n, el: PAGE_ELEMENTS[n.path]}));
+// The admin control room is only in the sidebar for the boss; the route itself
+// also self-guards (renders a "no access" notice for non-admins).
+const ADMIN_NAV = {path: "/admin", label: "Удирдлага", icon: "\u{1F6E1}"};
 
 export default function App() {
+  const {user, loading} = useAuth();
+
+  // Resolving the stored token — hold the layout so pages don't flash.
+  if (loading) {
+    return (
+      <div style={{height: "100vh", display: "flex", alignItems: "center",
+        justifyContent: "center", color: "var(--text-secondary)"}}>
+        Ачааллаж байна…
+      </div>
+    );
+  }
+  // No session → the whole app is the login screen.
+  if (!user) return <LoginPage />;
+
+  const nav = user.role === "ADMIN"
+    ? [...NAV_META, ADMIN_NAV] : NAV_META;
+  const NAV = nav.map((n) => ({...n, el: PAGE_ELEMENTS[n.path]}));
+
   return (
     <div style={{display: "flex", height: "100vh"}}>
       <nav

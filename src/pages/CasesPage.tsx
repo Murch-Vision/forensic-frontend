@@ -17,7 +17,9 @@ import {
   SET_CASE_STATUS,
   UPDATE_CASE_FILE,
 } from "../graphql/queries";
-import {STATUS_BADGE, STATUS_LABELS} from "../nav";
+import {
+  PRIORITY_BADGE, PRIORITY_LABELS, STATUS_BADGE, STATUS_LABELS,
+} from "../nav";
 import {Card, Loading, MetricsGrid, PageHeader, StatCard} from "../components/kit";
 import {Select} from "../components/inputs";
 import {formatDate} from "../lib/format";
@@ -37,20 +39,6 @@ interface CaseRow {
   createdAt: string;
   closedAt: string | null;
 }
-
-const PRIORITY_LABELS: Record<string, string> = {
-  LOW: "Бага",
-  MEDIUM: "Дунд",
-  HIGH: "Өндөр",
-  CRITICAL: "Ноцтой",
-};
-
-const PRIORITY_BADGE: Record<string, string> = {
-  LOW: "low",
-  MEDIUM: "medium",
-  HIGH: "high",
-  CRITICAL: "critical",
-};
 
 export default function CasesPage() {
   const client = useApolloClient();
