@@ -7,10 +7,12 @@
  *               an admin self-update (git pull + restart) from the UI.
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
-import {useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import {useMutation, useQuery} from "@apollo/client";
 import {Card, PageHeader} from "../components/kit";
-import {APP_VERSION_QUERY, SELF_UPDATE} from "../graphql/queries";
+import {
+  APP_VERSION_QUERY, SELF_UPDATE, UPDATE_LOG_QUERY,
+} from "../graphql/queries";
 import {useAuth} from "../lib/auth";
 
 interface RepoVersion {
@@ -51,6 +53,11 @@ interface UpdateResult {
   repos: RepoUpdate[];
 }
 
+interface UpdateLog {
+  running: boolean;
+  lines: string[];
+}
+
 export default function SettingsPage() {
   const {isAdmin} = useAuth();
   const {data, loading, refetch} =
@@ -61,11 +68,42 @@ export default function SettingsPage() {
   const [selfUpdate, {loading: updating}] =
     useMutation<{selfUpdate: UpdateResult}>(SELF_UPDATE);
 
+  // Live log: polled while the update runs, kept on screen afterwards. The
+  // lines live in local state so they survive the poll being switched off.
+  const [watching, setWatching] = useState(false);
+  const [logLines, setLogLines] = useState<string[]>([]);
+  const logBox = useRef<HTMLDivElement>(null);
+  const {data: logData} = useQuery<{updateLog: UpdateLog}>(UPDATE_LOG_QUERY, {
+    skip: !watching,
+    pollInterval: 1000,
+    fetchPolicy: "no-cache",
+    errorPolicy: "ignore",
+  });
+
+  useEffect(() => {
+    if (logData?.updateLog) setLogLines(logData.updateLog.lines);
+  }, [logData]);
+
+  // Stop polling once both the mutation and the server-side run are over.
+  useEffect(() => {
+    if (watching && !updating && logData && !logData.updateLog.running) {
+      setWatching(false);
+    }
+  }, [watching, updating, logData]);
+
+  // Follow the output like a terminal: keep the newest line in view.
+  useEffect(() => {
+    const el = logBox.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [logLines]);
+
   const v = data?.appVersion;
 
   async function onUpdate() {
     setError(null);
     setResult(null);
+    setLogLines([]);
+    setWatching(true);
     try {
       const res = await selfUpdate();
       const r = res.data?.selfUpdate ?? null;
@@ -143,17 +181,27 @@ export default function SettingsPage() {
             >
               {updating ? "ШИНЭЧИЛЖ БАЙНА…" : "ШИНЭЧЛЭЛ ШАЛГАХ БА ТАТАХ"}
             </button>
-            {updating && (
-              <span style={{color: "var(--text-muted)", fontSize: 12}}>
-                Татаж, build хийж байна — 1-2 минут…
-              </span>
-            )}
             {!isAdmin && (
               <span style={{color: "var(--text-muted)", fontSize: 12}}>
                 Зөвхөн хэлтсийн дарга системийг шинэчилнэ.
               </span>
             )}
           </div>
+
+          {(watching || logLines.length > 0) && (
+            <div ref={logBox} style={{marginTop: 16, padding: "10px 14px",
+              borderRadius: 6, background: "var(--bg-input, #0a0a0a)",
+              border: "1px solid var(--border-primary)",
+              fontFamily: "var(--font-mono)", fontSize: 11,
+              lineHeight: 1.6, maxHeight: 280, overflowY: "auto",
+              whiteSpace: "pre-wrap", wordBreak: "break-all",
+              color: "var(--text-secondary)"}}>
+              {logLines.length
+                ? logLines.map((l, i) => <div key={i}>{l}</div>)
+                : "Эхэлж байна…"}
+              {updating && <div>▌</div>}
+            </div>
+          )}
 
           {error && (
             <div style={{marginTop: 16, padding: "10px 14px", borderRadius: 6,

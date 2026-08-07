@@ -650,6 +650,13 @@ export const APP_VERSION_QUERY = gql`
   }
 `;
 
+// Polled every second while an update runs — the live terminal box.
+export const UPDATE_LOG_QUERY = gql`
+  query UpdateLog {
+    updateLog { running lines }
+  }
+`;
+
 export const SELF_UPDATE = gql`
   mutation SelfUpdate {
     selfUpdate {
