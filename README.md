@@ -86,3 +86,5 @@ To remove it later, double-click `scripts\uninstall-startup-windows.bat`.
 
 Run `scripts\self-update.bat` (manually or on a schedule) to pull the latest
 code, rebuild, and restart the launcher. Requires the `origin` remote above.
+
+<!-- update-test: 2026-08-07 — live log туршилтын хоосон commit -->
