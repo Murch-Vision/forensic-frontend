@@ -88,7 +88,7 @@ export default function SettingsPage() {
             <div style={{color: "var(--text-muted)"}}>Ачааллаж байна…</div>
           )}
           {v && (v.repos?.length ? (
-            <table className="data-table"
+            <table className="data-grid"
               style={{width: "100%", tableLayout: "fixed"}}>
               <colgroup>
                 <col style={{width: "26%"}} />
