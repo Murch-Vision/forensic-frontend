@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : queries.ts
  * Created at  : 2026-06-23
- * Updated at  : 2026-06-30
+ * Updated at  : 2026-08-07
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -645,7 +645,7 @@ export const APP_VERSION_QUERY = gql`
   query AppVersion {
     appVersion {
       version commit branch
-      repos { name path version commit branch dirty }
+      repos { name path version commit branch dirty builtCommit }
     }
   }
 `;

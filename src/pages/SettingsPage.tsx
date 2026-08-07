@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : SettingsPage.tsx
  * Created at  : 2026-06-23
- * Updated at  : 2026-07-21
+ * Updated at  : 2026-08-07
  * Author      : jeefo
  * Purpose     : System settings surface — shows the running version and lets
  *               an admin self-update (git pull + restart) from the UI.
@@ -20,6 +20,9 @@ interface RepoVersion {
   commit: string;
   branch: string;
   dirty: boolean;
+  // Commit the served build was made from — null for the backend (runs from
+  // source), "" when unknown. commit ≠ builtCommit means the screen is stale.
+  builtCommit: string | null;
 }
 
 interface VersionInfo {
@@ -85,24 +88,36 @@ export default function SettingsPage() {
             <div style={{color: "var(--text-muted)"}}>Ачааллаж байна…</div>
           )}
           {v && (v.repos?.length ? (
-            <table className="data-table" style={{width: "100%"}}>
+            <table className="data-table"
+              style={{width: "100%", tableLayout: "fixed"}}>
+              <colgroup>
+                <col style={{width: "26%"}} />
+                <col style={{width: "13%"}} />
+                <col style={{width: "12%"}} />
+                <col style={{width: "12%"}} />
+                <col style={{width: "12%"}} />
+                <col style={{width: "25%"}} />
+              </colgroup>
               <thead>
                 <tr>
-                  <th>Сан</th><th>Хувилбар</th><th>Commit</th>
-                  <th>Салбар</th><th>Төлөв</th>
+                  <th>Сан</th><th>Хувилбар</th><th>Код</th>
+                  <th>Build</th><th>Салбар</th><th>Төлөв</th>
                 </tr>
               </thead>
               <tbody>
                 {v.repos.map((r) => (
                   <tr key={r.path}>
-                    <td title={r.path}>{r.name}</td>
+                    <td title={r.path} style={{overflow: "hidden",
+                      textOverflow: "ellipsis", whiteSpace: "nowrap"}}>
+                      {r.name}
+                    </td>
                     <td>{r.version}</td>
                     <td style={{fontFamily: "var(--font-mono)"}}>{r.commit}</td>
-                    <td style={{fontFamily: "var(--font-mono)"}}>{r.branch}</td>
-                    <td style={{color: r.dirty
-                      ? "var(--accent-amber, #FFAB00)" : "var(--text-muted)"}}>
-                      {r.dirty ? "Хадгалаагүй өөрчлөлттэй" : "Цэвэр"}
+                    <td style={{fontFamily: "var(--font-mono)"}}>
+                      {r.builtCommit === null ? "—" : r.builtCommit || "?"}
                     </td>
+                    <td style={{fontFamily: "var(--font-mono)"}}>{r.branch}</td>
+                    <td><RepoState r={r} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -128,6 +143,11 @@ export default function SettingsPage() {
             >
               {updating ? "ШИНЭЧИЛЖ БАЙНА…" : "ШИНЭЧЛЭЛ ШАЛГАХ БА ТАТАХ"}
             </button>
+            {updating && (
+              <span style={{color: "var(--text-muted)", fontSize: 12}}>
+                Татаж, build хийж байна — 1-2 минут…
+              </span>
+            )}
             {!isAdmin && (
               <span style={{color: "var(--text-muted)", fontSize: 12}}>
                 Зөвхөн хэлтсийн дарга системийг шинэчилнэ.
@@ -171,6 +191,29 @@ export default function SettingsPage() {
       </Card>
     </div>
   );
+}
+
+// One glance answers "is the screen I'm looking at the latest code?":
+// the frontend row compares the served build's commit against the pulled one.
+function RepoState({r}: {r: RepoVersion}) {
+  if (r.dirty) {
+    return <span style={{color: "var(--accent-amber, #FFAB00)"}}>
+      Хадгалаагүй өөрчлөлттэй
+    </span>;
+  }
+  if (r.builtCommit === null) {
+    return <span style={{color: "var(--accent-green, #00C853)"}}>
+      Шинэчлэгдсэн
+    </span>;
+  }
+  if (r.builtCommit === r.commit) {
+    return <span style={{color: "var(--accent-green, #00C853)"}}>
+      Шинэчлэгдсэн
+    </span>;
+  }
+  return <span style={{color: "var(--accent-red, #FF5252)"}}>
+    Build хуучирсан — Шинэчлэх дар
+  </span>;
 }
 
 function Field({label, value, mono}:
