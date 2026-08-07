@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : NetworkGraph.tsx
  * Created at  : 2026-06-24
- * Updated at  : 2026-06-30
+ * Updated at  : 2026-08-08
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -985,6 +985,202 @@ function NetworkGraph(props, ref) {
     zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, factor);
   }
 
+  // One click untangles the hairball — what the analyst used to do by hand
+  // (drag the two hub people apart, right-click "бөөгнүүлэх" on each, and
+  // still be left with a mess in the middle):
+  //   1. find the hub nodes automatically (enough own satellites),
+  //   2. spread the hubs apart, ring each hub's own satellites around it,
+  //   3. lay the SHARED nodes — connected to several hubs — out as a tidy
+  //      column midway between exactly the hubs they bridge.
+  function autoCluster() {
+    const nodes = nodesRef.current;
+    const links = linksRef.current;
+    if (!nodes.length) return;
+
+    const adj = new Map<string, Set<string>>();
+    const touch = (a: string, b: string) => {
+      let s = adj.get(a);
+      if (!s) {
+        s = new Set();
+        adj.set(a, s);
+      }
+      s.add(b);
+    };
+    for (const l of links) {
+      touch(l.s.id, l.t.id);
+      touch(l.t.id, l.s.id);
+    }
+    const deg = (id: string) => adj.get(id)?.size ?? 0;
+
+    // A node OWNED by another (account/phone → person) belongs to its owner.
+    const ownerOf = new Map<string, string>();
+    for (const l of links) {
+      if (l.kind === "owns") ownerOf.set(l.t.id, l.s.id);
+    }
+
+    // Hubs: nodes with at least two OWN satellites (owned nodes or leaves).
+    const satCount = new Map<string, number>();
+    for (const n of nodes) {
+      let c = 0;
+      for (const nb of adj.get(n.id) ?? []) {
+        if (ownerOf.get(nb) === n.id || deg(nb) === 1) c++;
+      }
+      satCount.set(n.id, c);
+    }
+    const centers = nodes
+      .filter((n) => (satCount.get(n.id) ?? 0) >= 2)
+      .sort((a, b) => (satCount.get(b.id) ?? 0) - (satCount.get(a.id) ?? 0));
+    if (!centers.length) return;
+    const isCenter = new Set(centers.map((c) => c.id));
+
+    // Multi-source BFS: every node is claimed by the hub(s) that reach it
+    // first. Reached by 2+ hubs at the same distance → a shared/middle node.
+    const claim = new Map<string, {centers: Set<string>; dist: number}>();
+    let frontier: Array<{id: string; root: string}> = [];
+    for (const c of centers) {
+      claim.set(c.id, {centers: new Set([c.id]), dist: 0});
+      frontier.push({id: c.id, root: c.id});
+    }
+    let dist = 0;
+    while (frontier.length) {
+      dist++;
+      const next: Array<{id: string; root: string}> = [];
+      for (const f of frontier) {
+        for (const nb of adj.get(f.id) ?? []) {
+          const cl = claim.get(nb);
+          if (!cl) {
+            claim.set(nb, {centers: new Set([f.root]), dist});
+            next.push({id: nb, root: f.root});
+          } else if (cl.dist === dist && !isCenter.has(nb)) {
+            cl.centers.add(f.root);
+          }
+        }
+      }
+      frontier = next;
+    }
+
+    // Satellites per hub, grouped by BFS distance (ring index).
+    const sats = new Map<string, SimNode[][]>();
+    for (const n of nodes) {
+      if (isCenter.has(n.id)) continue;
+      const cl = claim.get(n.id);
+      if (!cl || cl.centers.size !== 1) continue;
+      const cid = [...cl.centers][0];
+      let arr = sats.get(cid);
+      if (!arr) {
+        arr = [];
+        sats.set(cid, arr);
+      }
+      (arr[cl.dist] ??= []).push(n);
+    }
+    const ringR = (count: number) => Math.min(230, 95 + count * 6);
+    const hubRadius = (cid: string) => {
+      const arr = sats.get(cid) ?? [];
+      let r = 70;
+      for (let d = 1; d < arr.length; d++) {
+        if (arr[d]?.length) r = ringR(arr[d].length) + (d - 1) * 85;
+      }
+      return r;
+    };
+
+    // Hubs on a circle sized so neighboring rings can't overlap; two hubs
+    // land left/right — the arrangement the analyst was building by hand.
+    const K = centers.length;
+    const maxR = Math.max(...centers.map((c) => hubRadius(c.id)));
+    const bigR = K === 1 ? 0
+      : Math.max(430 + maxR, (K * (2 * maxR + 170)) / (2 * Math.PI));
+    const pos = new Map<string, {x: number; y: number}>();
+    centers.forEach((c, i) => {
+      const a = Math.PI + (i / K) * Math.PI * 2;
+      const x = Math.cos(a) * bigR;
+      const y = Math.sin(a) * bigR;
+      pos.set(c.id, {x, y});
+      c.x = c.fx = c.ax = x;
+      c.y = c.fy = c.ay = y;
+    });
+
+    const rank = (t: SimNode["type"]) =>
+      t === "PERSON" ? 0 : t === "ACCOUNT" ? 1 : 2;
+    for (const c of centers) {
+      const base = pos.get(c.id)!;
+      const arr = sats.get(c.id) ?? [];
+      for (let d = 1; d < arr.length; d++) {
+        const ring = arr[d];
+        if (!ring?.length) continue;
+        ring.sort((a, b) => rank(a.type) - rank(b.type)
+          || a.label.localeCompare(b.label));
+        const place = (list: SimNode[], r: number) => {
+          list.forEach((n, i) => {
+            const a = -Math.PI / 2 + (i / Math.max(1, list.length))
+              * Math.PI * 2;
+            const x = base.x + Math.cos(a) * r;
+            const y = base.y + Math.sin(a) * r;
+            n.x = n.fx = n.ax = x;
+            n.y = n.fy = n.ay = y;
+            pos.set(n.id, {x, y});
+          });
+        };
+        const r = ringR(ring.length) + (d - 1) * 85;
+        if (ring.length > 18) {
+          place(ring.filter((_, i) => i % 2 === 0), r - 45);
+          place(ring.filter((_, i) => i % 2 === 1), r + 45);
+        } else {
+          place(ring, r);
+        }
+      }
+    }
+
+    // Shared nodes: one tidy column midway between exactly the hubs they
+    // bridge, spread perpendicular to the hub↔hub axis; wide groups fold
+    // into two columns so the band stays compact.
+    const groups = new Map<string, SimNode[]>();
+    for (const n of nodes) {
+      const cl = claim.get(n.id);
+      if (!cl || cl.centers.size < 2 || isCenter.has(n.id)) continue;
+      const key = [...cl.centers].sort().join("|");
+      let list = groups.get(key);
+      if (!list) {
+        list = [];
+        groups.set(key, list);
+      }
+      list.push(n);
+    }
+    for (const [key, list] of groups) {
+      const ids = key.split("|");
+      const cx = ids.reduce((s, id) => s + (pos.get(id)?.x ?? 0), 0)
+        / ids.length;
+      const cy = ids.reduce((s, id) => s + (pos.get(id)?.y ?? 0), 0)
+        / ids.length;
+      const p0 = pos.get(ids[0]) ?? {x: 0, y: 0};
+      const p1 = pos.get(ids[1]) ?? {x: 1, y: 0};
+      const len = Math.hypot(p1.x - p0.x, p1.y - p0.y) || 1;
+      const axisX = (p1.x - p0.x) / len;
+      const axisY = (p1.y - p0.y) / len;
+      const perpX = -axisY;
+      const perpY = axisX;
+      list.sort((a, b) => rank(a.type) - rank(b.type)
+        || a.label.localeCompare(b.label));
+      const gap = 66;
+      const twoCol = list.length > 14;
+      const rows = twoCol ? Math.ceil(list.length / 2) : list.length;
+      list.forEach((n, i) => {
+        const row = twoCol ? Math.floor(i / 2) : i;
+        const off = (row - (rows - 1) / 2) * gap;
+        const side = twoCol ? (i % 2 ? 55 : -55) : 0;
+        const x = cx + perpX * off + axisX * side;
+        const y = cy + perpY * off + axisY * side;
+        n.x = n.fx = n.ax = x;
+        n.y = n.fy = n.ay = y;
+        pos.set(n.id, {x, y});
+      });
+    }
+
+    // Frame the new arrangement and persist it like a manual drag would be.
+    viewRef.current = {k: 1, tx: 0, ty: 0};
+    focusRef.current = null;
+    ensureRunning();
+    emitLayout(currentPositions());
+  }
 
   // The controls float over the canvas, so .btn's transparent background lets
   // the graph show through and hides them. Force an OPAQUE surface (+ a little
@@ -1015,6 +1211,12 @@ function NetworkGraph(props, ref) {
           title="Томруулах (zoom)" onClick={() => zoomButton(1.2)}>+</button>
         <button className="btn" style={btnStyle}
           title="Жижигрүүлэх (zoom)" onClick={() => zoomButton(1 / 1.2)}>−</button>
+        <button className="btn" style={{...overlayBtn, height: 30}}
+          title={"Автоматаар цэгцлэх: төв хүмүүсийг салгаж, тус бүрийн "
+            + "холбоог эргэн тойронд нь, дундын хүмүүсийг голд нь эгнүүлнэ"}
+          onClick={autoCluster}>
+          ✥ Бөөгнүүлэх
+        </button>
         <button className="btn" style={{...overlayBtn, height: 30}}
           onClick={onReset}>
           ↺ Дахин эхлүүлэх
