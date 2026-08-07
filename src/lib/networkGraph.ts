@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : networkGraph.ts
  * Created at  : 2026-06-30
- * Updated at  : 2026-07-02
+ * Updated at  : 2026-08-07
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -38,6 +38,19 @@ export interface NetworkNode {
   photoData? : string | null;
 }
 
+// Raw numbers behind an evidence edge — what the Дүгнэлт sentences are
+// generated from. Only the fields the edge's kind produces are set.
+export interface LinkFacts {
+  txnCount? : number;
+  txnTotal? : number;
+  // Directed money: source→target and target→source. A row whose statement
+  // side is ambiguous still lands in txnTotal, so these may not sum to it.
+  moneyOut? : number;
+  moneyIn?  : number;
+  callCount?   : number;
+  callSeconds? : number;
+}
+
 export interface NetworkLink {
   source : string;
   target : string;
@@ -46,6 +59,8 @@ export interface NetworkLink {
   kind : NetworkLinkKind;
   // Shown at the edge midpoint while hovered.
   label? : string;
+  // Numbers for the plain-language Дүгнэлт (see lib/linkVerdict.ts).
+  facts? : LinkFacts;
   // For analyst-drawn "manual" links: the suspect_links row id, so the edge
   // can be edited / deleted straight from the graph.
   linkId? : number;
@@ -202,7 +217,12 @@ export function buildEvidenceNetwork(
 
   // --- Transactions aggregated per known account pair ------------------------
   // Only counterparties that resolve to an account in the case draw an edge.
-  interface TxnAgg {from: string; to: string; count: number; total: number}
+  // `fwd` / `rev` split the total by direction (from→to / to→from) so the
+  // Дүгнэлт can say WHOSE money moved to whom, not just how much.
+  interface TxnAgg {
+    from: string; to: string; count: number; total: number;
+    fwd: number; rev: number;
+  }
   const txnAgg = new Map<string, TxnAgg>();
   const accById = new Map(accounts.map((a) => [a.id, a]));
   for (const t of transactions) {
@@ -213,14 +233,21 @@ export function buildEvidenceNetwork(
     const to = cpNum ? accountByNumber.get(cpNum) : undefined;
     // `to === from` drops internal transfers between one owner's own accounts.
     if (!to || to === from) continue;
-    const key = from < to ? `${from}|${to}` : `${to}|${from}`;
+    const a = from < to ? from : to;
+    const b = from < to ? to : from;
+    const key = `${a}|${b}`;
     let agg = txnAgg.get(key);
     if (!agg) {
-      agg = {from, to, count: 0, total: 0};
+      agg = {from: a, to: b, count: 0, total: 0, fwd: 0, rev: 0};
       txnAgg.set(key, agg);
     }
     agg.count += 1;
     agg.total += Math.abs(t.amount);
+    // The row belongs to `from`'s statement: a negative amount is money
+    // LEAVING that account towards the counterparty, positive is arriving.
+    const moneyFrom = t.amount < 0 ? from : to;
+    if (moneyFrom === a) agg.fwd += Math.abs(t.amount);
+    else agg.rev += Math.abs(t.amount);
   }
   // Canonical key for an undirected node pair — used to dedupe the money edges
   // that a FINANCIAL_TRANSFER suspect-link would otherwise draw on top of.
@@ -234,6 +261,12 @@ export function buildEvidenceNetwork(
       strength : txnStrength(agg.count),
       kind     : "txn",
       label    : `${agg.count} гүйлгээ · ${formatMoney(agg.total)}`,
+      facts    : {
+        txnCount : agg.count,
+        txnTotal : agg.total,
+        moneyOut : agg.fwd,
+        moneyIn  : agg.rev,
+      },
     });
   }
 
@@ -319,6 +352,7 @@ export function buildEvidenceNetwork(
       strength : txnStrength(agg.count),
       kind     : "call",
       label    : `${agg.count} дуудлага · ${Math.round(agg.seconds / 60)} мин`,
+      facts    : {callCount: agg.count, callSeconds: agg.seconds},
     });
   }
   for (const [id, st] of phoneTotals) {
@@ -358,7 +392,9 @@ export function buildEvidenceNetwork(
         kind: "txn", soft: true,
         label: l.totalFinancialValue != null
           ? `Гүйлгээ · ${formatMoney(l.totalFinancialValue)}`
-          : l.description ?? "Гүйлгээ"});
+          : l.description ?? "Гүйлгээ",
+        facts: l.totalFinancialValue != null
+          ? {txnTotal: l.totalFinancialValue} : undefined});
     }
     // Non-financial auto links (PHONE_CONTACT, SHARED_DEVICE, ...) are NOT
     // drawn as a separate purple "Хамаарал" edge: phone contact is already

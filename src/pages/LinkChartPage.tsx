@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : LinkChartPage.tsx
  * Created at  : 2026-06-23
- * Updated at  : 2026-07-02
+ * Updated at  : 2026-08-07
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -54,6 +54,12 @@ import {
   useMinAmount,
 } from "../lib/ignoredPairs";
 import {formatMoney} from "../lib/format";
+import {
+  CONFIDENCE_LABEL,
+  LINK_TYPE_LABEL,
+  graphVerdict,
+  linkVerdict,
+} from "../lib/linkVerdict";
 import {buildEvidenceNetwork} from "../lib/networkGraph";
 import type {
   NetworkLink,
@@ -421,6 +427,8 @@ export default function LinkChartPage() {
     () => localStorage.getItem("forensic.graphNames") !== "0");
   const [showEdgeLabels, setShowEdgeLabels] = useState(
     () => localStorage.getItem("forensic.graphEdgeLabels") !== "0");
+  // "How to read this picture" box for first-time viewers.
+  const [showGuide, setShowGuide] = useState(false);
   function toggleNames() {
     setShowNames((v) => {
       localStorage.setItem("forensic.graphNames", v ? "0" : "1");
@@ -825,6 +833,14 @@ export default function LinkChartPage() {
   }, [data, txQ.data, callQ.data, ignoredPairs, ignoredTxns, descRules,
     minAmount, hidden, hiddenKinds, activeGraphId]);
 
+  // Plain-language conclusions about the picture currently on screen — the
+  // client's ask: a first-time viewer must understand the graph without
+  // knowing the tool. Recomputed with every filter change so the sentences
+  // always describe exactly what is drawn.
+  const verdict = useMemo(
+    () => network ? graphVerdict(network.nodes, network.links) : [],
+    [network]);
+
   // Isolate view: the focused node + its direct neighbors only, laid out as a
   // radial ring (the focused node dead-center, neighbors evenly around it — a
   // second, wider ring when there are many). This is the "pull only this node's
@@ -1028,7 +1044,7 @@ export default function LinkChartPage() {
         ...l,
         strength: Math.min(10, kept.length),
         totalFinancialValue: sum,
-        description: `${kept.length} transactions totaling ${formatMoney(sum)}`,
+        description: `${kept.length} гүйлгээ · нийт ${formatMoney(sum)}`,
       }];
     });
   return (
@@ -1177,6 +1193,11 @@ export default function LinkChartPage() {
               on={showNames} onToggle={toggleNames} />
             <ToggleChip label="Дүн" color="#00E676"
               on={showEdgeLabels} onToggle={toggleEdgeLabels} />
+            <button className="btn btn-sm"
+              onClick={() => setShowGuide((v) => !v)}
+              title="Зураглалыг хэрхэн унших тухай товч тайлбар">
+              {showGuide ? "Тайлбар хаах" : "Хэрхэн унших вэ?"}
+            </button>
             <div className="graph-search">
               <input type="text" className="form-input"
                 value={search}
@@ -1219,6 +1240,28 @@ export default function LinkChartPage() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+        {showGuide && (
+          <div style={{margin: "10px 0 4px", padding: "10px 14px",
+            borderRadius: 6, background: "var(--bg-input, #0a0a0a)",
+            border: "1px solid var(--border-primary)", fontSize: 12,
+            lineHeight: 1.8, color: "var(--text-secondary)"}}>
+            <div>
+              • Дугуй бүр нэг этгээд — том байх тусам эрсдэл өндөр. Данс,
+              утас тусдаа жижиг зангилаагаар харагдана.
+            </div>
+            <div>
+              • <span style={{color: "#00E676"}}>Ногоон шугам</span> = мөнгөн
+              гүйлгээ, <span style={{color: "#00E5FF"}}>цэнхэр</span> =
+              утасны дуудлага, <span style={{color: "#FFAB00"}}>шар
+              тасархай</span> = мөрдөгчийн гараар тэмдэглэсэн холбоос, бүдэг
+              саарал = эзэмшил.
+            </div>
+            <div>
+              • Шугам зузаан байх тусам харилцаа олон удаа давтагдсан.
+              Шугам дээр дарвал тухайн холбоосын дүгнэлт, дүн харагдана.
             </div>
           </div>
         )}
@@ -1504,6 +1547,8 @@ export default function LinkChartPage() {
               const kindLabel = l.kind === "txn" ? "Гүйлгээний холбоос"
                 : l.kind === "call" ? "Дуудлагын холбоос"
                 : l.kind === "manual" ? "Гар холбоос" : "Хамаарал";
+              const sentences = linkVerdict(
+                l, src?.label ?? l.source, tgt?.label ?? l.target);
               return (
                 <div className="graph-detail-panel">
                   <div className="graph-detail-head">
@@ -1522,6 +1567,17 @@ export default function LinkChartPage() {
                       onClick={() => setSelectedLink(null)}
                       aria-label="Хаах">×</button>
                   </div>
+                  {sentences.length > 0 && (
+                    <div style={{marginTop: 10}}>
+                      <div className="form-label">Дүгнэлт</div>
+                      <div style={{fontSize: 12.5, lineHeight: 1.65,
+                        color: "var(--text-primary)"}}>
+                        {sentences.map((s, i) => (
+                          <div key={i} style={{marginTop: i ? 4 : 0}}>{s}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {l.label && (
                     <div className="graph-detail-stats">
                       <div className="graph-detail-row">
@@ -1603,6 +1659,31 @@ export default function LinkChartPage() {
         )}
       </Card>
 
+      {/* The client's ask: conclusions in words, readable by someone seeing
+          the tool for the first time. Sentences describe the CURRENT picture
+          (all filters applied); clicking one jumps to the person it names. */}
+      <Card title="Дүгнэлт" style={{marginBottom: 16}}>
+        {verdict.length > 0 ? (
+          <div style={{fontSize: 13, lineHeight: 1.9,
+            color: "var(--text-primary)"}}>
+            {verdict.map((v, i) => {
+              const node = v.focusId
+                ? network.nodes.find((n) => n.id === v.focusId) : undefined;
+              return (
+                <div key={i}
+                  onClick={node ? () => focusSearchResult(node) : undefined}
+                  style={node ? {cursor: "pointer"} : undefined}
+                  title={node ? "Зураг дээр очиж харах" : undefined}>
+                  •&nbsp;{v.text}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <Empty message="Дүгнэлт гаргах нотлох баримт алга" />
+        )}
+      </Card>
+
       <Card title={`Холбоосын жагсаалт (${shownLinks.length})`}
         style={{marginBottom: 16}} noPadding>
         <div>
@@ -1615,11 +1696,14 @@ export default function LinkChartPage() {
               {header: "Эх сурвалж", render: (l) => nameById.get(l.sourceSuspectId) ?? l.sourceSuspectId},
               {header: "Зорилго", render: (l) => nameById.get(l.targetSuspectId) ?? l.targetSuspectId},
               {header: "Төрөл", render: (l) => (
-                <span className="badge info">{l.linkType}</span>
+                <span className="badge info">
+                  {LINK_TYPE_LABEL[l.linkType] ?? l.linkType}
+                </span>
               )},
               {header: "Хүч", align: "right", render: (l) => l.strength},
-              {header: "Итгэл", render: (l) => l.confidenceLevel},
-              {header: "Тайлбар", render: (l) => l.description ?? "—"},
+              {header: "Итгэл", render: (l) =>
+                CONFIDENCE_LABEL[l.confidenceLevel] ?? l.confidenceLevel},
+              {header: "Дүгнэлт", render: (l) => l.description ?? "—"},
             ]}
           />
         </div>
