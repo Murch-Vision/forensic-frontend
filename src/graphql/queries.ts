@@ -650,6 +650,14 @@ export const APP_VERSION_QUERY = gql`
   }
 `;
 
+// The server machine's LAN IPs — Settings shows them with the app's own
+// port so a client on another computer knows exactly what to type.
+export const LAN_ADDRESSES_QUERY = gql`
+  query LanAddresses {
+    lanAddresses
+  }
+`;
+
 // Polled every second while an update runs — the live terminal box.
 export const UPDATE_LOG_QUERY = gql`
   query UpdateLog {

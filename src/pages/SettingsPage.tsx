@@ -11,7 +11,7 @@ import {useEffect, useRef, useState} from "react";
 import {useMutation, useQuery} from "@apollo/client";
 import {Card, PageHeader} from "../components/kit";
 import {
-  APP_VERSION_QUERY, SELF_UPDATE, UPDATE_LOG_QUERY,
+  APP_VERSION_QUERY, LAN_ADDRESSES_QUERY, SELF_UPDATE, UPDATE_LOG_QUERY,
 } from "../graphql/queries";
 import {useAuth} from "../lib/auth";
 
@@ -97,6 +97,25 @@ export default function SettingsPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [logLines]);
 
+  // The addresses other computers open this app with: server LAN IPs + the
+  // port THIS page is being served on (so it is always the right one).
+  const lanQ = useQuery<{lanAddresses: string[]}>(LAN_ADDRESSES_QUERY);
+  const [copied, setCopied] = useState<string | null>(null);
+  const appPort = window.location.port
+    || (window.location.protocol === "https:" ? "443" : "80");
+  const accessUrls = (lanQ.data?.lanAddresses ?? [])
+    .map((ip) => `http://${ip}:${appPort}`);
+
+  async function copyUrl(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(url);
+      window.setTimeout(() => setCopied(null), 1500);
+    } catch {
+      /* clipboard unavailable — the address is still visible to type */
+    }
+  }
+
   const v = data?.appVersion;
 
   async function onUpdate() {
@@ -120,7 +139,37 @@ export default function SettingsPage() {
       <PageHeader icon={"⚙️"} title="Тохиргоо"
         subtitle="СИСТЕМИЙН ТОХИРГОО" />
 
-      <Card title="ХУВИЛБАР БА ШИНЭЧЛЭЛ">
+      <Card title="ХАНДАХ ХАЯГ">
+        <div style={{padding: "8px 4px 4px", fontSize: 13}}>
+          <div style={{color: "var(--text-secondary)", marginBottom: 10}}>
+            Өөр компьютерээс энэ программ руу доорх хаягаар нэвтэрнэ
+            (browser-ийн хаягийн мөрөнд бичнэ):
+          </div>
+          {lanQ.loading && (
+            <div style={{color: "var(--text-muted)"}}>Ачааллаж байна…</div>
+          )}
+          {!lanQ.loading && accessUrls.length === 0 && (
+            <div style={{color: "var(--text-muted)"}}>
+              Сүлжээний хаяг олдсонгүй — компьютер сүлжээнд холбогдоогүй
+              байж магадгүй.
+            </div>
+          )}
+          {accessUrls.map((url) => (
+            <div key={url} style={{display: "flex", alignItems: "center",
+              gap: 12, marginTop: 6}}>
+              <span style={{fontFamily: "var(--font-mono)", fontSize: 14,
+                color: "var(--accent-cyan)"}}>
+                {url}
+              </span>
+              <button className="btn btn-sm" onClick={() => copyUrl(url)}>
+                {copied === url ? "Хуулагдлаа" : "Хуулах"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card title="ХУВИЛБАР БА ШИНЭЧЛЭЛ" style={{marginTop: 16}}>
         <div style={{padding: "8px 4px 4px", fontSize: 13}}>
           {loading && (
             <div style={{color: "var(--text-muted)"}}>Ачааллаж байна…</div>
