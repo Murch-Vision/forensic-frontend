@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : vite.config.ts
  * Created at  : 2026-06-23
- * Updated at  : 2026-06-23
+ * Updated at  : 2026-08-07
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -49,14 +49,19 @@ export default defineConfig(({mode}) => {
       "import.meta.env.VITE_API_URL": JSON.stringify(explicit),
     },
     server: {
+      // 0.0.0.0 — the workstation serves the whole department over LAN, not
+      // just the machine it runs on.
+      host: true,
       port: 5173,
       // Tauri expects the dev server on a fixed port; fail rather than hop ports.
       strictPort: true,
       proxy,
     },
-    // `npm run start` serves the built app from here. Same port and the same
-    // /graphql proxy as the dev server, so nothing downstream has to change.
+    // `npm run start` serves the built app from here. Same host/port and the
+    // same /graphql proxy as the dev server, so nothing downstream has to
+    // change.
     preview: {
+      host: true,
       port: 5173,
       strictPort: true,
       proxy,
