@@ -13,7 +13,7 @@ import {useMutation} from "@apollo/client";
 import {PageHeader, Card} from "../components/kit";
 import {SEND_SUPPORT_REQUEST} from "../graphql/support";
 
-const TYPES = ["Алдаа", "Санал", "Асуулт"];
+const TYPES = ["Алдаа", "Санал"];
 
 const MAX_IMAGES = 3;
 const MAX_TEXT   = 3800;
