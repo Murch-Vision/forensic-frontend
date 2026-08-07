@@ -40,6 +40,7 @@ import {Select} from "../components/inputs";
 import NetworkGraph, {LINK_STYLE} from "../components/NetworkGraph";
 import type {NetworkGraphHandle} from "../components/NetworkGraph";
 import CaseGate from "../components/CaseGate";
+import LinkVerdictReport from "../components/LinkVerdictReport";
 import PersonFormModal, {type SavedPerson} from "../components/PersonFormModal";
 import {useDrilldown} from "../lib/drilldown";
 import {
@@ -248,7 +249,8 @@ export default function LinkChartPage() {
   // and draw the link. Holds the source person while the modal is open.
   const [addConnectFrom, setAddConnectFrom] = useState<NetworkNode | null>(null);
   const [tagEvidence] = useMutation(TAG_EVIDENCE);
-  const caseQ = useQuery<{activeCase: {id: number} | null}>(ACTIVE_CASE_QUERY);
+  const caseQ = useQuery<{activeCase:
+    {id: number; caseId: string; caseName: string} | null}>(ACTIVE_CASE_QUERY);
   const activeCaseId = caseQ.data?.activeCase?.id ?? null;
 
   // Open the "new person → connect" modal. Manual links live inside a saved
@@ -429,6 +431,8 @@ export default function LinkChartPage() {
     () => localStorage.getItem("forensic.graphEdgeLabels") !== "0");
   // "How to read this picture" box for first-time viewers.
   const [showGuide, setShowGuide] = useState(false);
+  // The boss-facing printable report (LinkVerdictReport).
+  const [reportOpen, setReportOpen] = useState(false);
   function toggleNames() {
     setShowNames((v) => {
       localStorage.setItem("forensic.graphNames", v ? "0" : "1");
@@ -937,6 +941,11 @@ export default function LinkChartPage() {
 
   const actions = (
     <div style={{display: "flex", gap: 8}}>
+      <button className="btn" onClick={() => setReportOpen(true)}
+        disabled={!network || verdict.length === 0}
+        title="Дарга нарт өгөх хэвлэмэл дүгнэлт — товч, энгийн үгээр">
+        ДҮГНЭЛТИЙН ТАЙЛАН
+      </button>
       <button className="btn btn-primary" onClick={onGenerate}
         disabled={generating}>
         {generating ? "БОЛОВСРУУЛЖ БАЙНА..." : "ХОЛБООС ҮҮСГЭХ"}
@@ -1731,6 +1740,18 @@ export default function LinkChartPage() {
         open={addConnectFrom != null}
         onClose={() => setAddConnectFrom(null)}
         onSaved={onNewPersonConnected}
+      />
+
+      {/* Дарга нарт өгөх хэвлэмэл дүгнэлт — зөвхөн үр дүн, программын ойлголт
+          байхгүй цаасан тайлан. */}
+      <LinkVerdictReport
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        caseName={caseQ.data?.activeCase?.caseName ?? "Идэвхтэй хэрэг"}
+        caseCode={caseQ.data?.activeCase?.caseId ?? ""}
+        nodes={network.nodes}
+        links={network.links}
+        verdict={verdict}
       />
     </div>
   );
