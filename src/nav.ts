@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : nav.ts
  * Created at  : 2026-07-02
- * Updated at  : 2026-07-02
+ * Updated at  : 2026-08-07
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -27,6 +27,7 @@ export const NAV_META: NavMeta[] = [
   {path: "/linkchart", label: "Холбоосын зураглал", icon: "\u{1F578}"},
   {path: "/reports", label: "Тайлан", icon: "\u{1F4C4}"},
   {path: "/settings", label: "Тохиргоо", icon: "\u{2699}"},
+  {path: "/support", label: "Алдаа мэдэгдэх", icon: "\u{1F6E0}"},
 ];
 
 export const STATUS_LABELS: Record<string, string> = {

@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : App.tsx
  * Created at  : 2026-06-23
- * Updated at  : 2026-06-23
+ * Updated at  : 2026-08-07
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -20,6 +20,7 @@ import TimelinePage from "./pages/TimelinePage";
 import LinkChartPage from "./pages/LinkChartPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
+import SupportPage from "./pages/SupportPage";
 import AdminPage from "./pages/AdminPage";
 import LoginPage from "./pages/LoginPage";
 import {useAuth} from "./lib/auth";
@@ -38,6 +39,7 @@ const PAGE_ELEMENTS: Record<string, ReactNode> = {
   "/linkchart": <LinkChartPage />,
   "/reports": <ReportsPage />,
   "/settings": <SettingsPage />,
+  "/support": <SupportPage />,
   "/admin": <AdminPage />,
 };
 
