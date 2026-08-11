@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : vite.config.ts
  * Created at  : 2026-06-23
- * Updated at  : 2026-08-07
+ * Updated at  : 2026-08-11
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -55,6 +55,15 @@ export default defineConfig(({mode}) => {
       port: 5173,
       // Tauri expects the dev server on a fixed port; fail rather than hop ports.
       strictPort: true,
+      // pnpm drops its content-addressed store at the project root, and vite
+      // ignores node_modules by default but NOT .pnpm-store — the dev server took
+      // tens of thousands of inotify watches on files nobody imports until the host
+      // hit `ENOSPC: System limit for number of file watchers reached` and no
+      // preview could start. .git is here for the same reason: a commit makes the
+      // watcher read zlib blobs as source and red-screen the app.
+      watch: {
+        ignored: ["**/.git/**", "**/.pnpm-store/**", "**/dist/**"],
+      },
       proxy,
     },
     // `npm run start` serves the built app from here. Same host/port and the
