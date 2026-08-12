@@ -297,24 +297,46 @@ export function LineChart(props: {
 // and spams "<image> attribute height: NaN" console errors.
 export function Heatmap(props: {data: number[][]; rowLabels: string[]}) {
   const zmax = Math.max(1, ...props.data.map((row) => Math.max(0, ...row)));
+  const hours = props.data[0]?.length ?? 24;
   return (
     <Plot
       height={props.rowLabels.length * 26 + 60}
-      layout={{yaxis: {
-        gridcolor: "#1A1A3E",
-        zerolinecolor: "#252550",
-        tickvals: props.rowLabels.map((_v, i) => i),
-        ticktext: props.rowLabels,
-      }}}
+      layout={{
+        // The columns are HOURS (0–23), not dates. Declare the type: left to
+        // infer, plotly could take it from another chart and place hour 0 at
+        // Jan 1970. Ticks every 3 hours so the labels fit at any card width.
+        xaxis: {
+          type: "linear",
+          tickmode: "array",
+          tickvals: Array.from({length: Math.ceil(hours / 3)},
+            (_v, i) => i * 3),
+          ticktext: Array.from({length: Math.ceil(hours / 3)},
+            (_v, i) => `${String(i * 3).padStart(2, "0")}:00`),
+          showgrid: false,
+        },
+        yaxis: {
+          tickvals: props.rowLabels.map((_v, i) => i),
+          ticktext: props.rowLabels,
+          showgrid: false,
+        },
+      }}
       data={[{
         type: "heatmap",
         z: props.data,
         y: props.rowLabels.map((_v, i) => i),
-        x: Array.from({length: props.data[0]?.length ?? 24}, (_v, i) => i),
+        x: Array.from({length: hours}, (_v, i) => i),
         colorscale: "Jet",
         showscale: true,
         zmin: 0,
         zmax,
+        // Hairline gaps turn a solid wash into 24×7 readable cells.
+        xgap: 1,
+        ygap: 1,
+        // y is numeric (see above), so the day name has to ride along per cell —
+        // %{y} would put "3" where the analyst expects "Лха".
+        customdata: props.data.map((row, day) =>
+          row.map(() => props.rowLabels[day] ?? "")),
+        hovertemplate: "%{customdata} %{x}:00 · %{z}<extra></extra>",
       }]}
     />
   );

@@ -17,15 +17,48 @@ import Plotly from "plotly.js-dist-min";
 // app's palette without each call repeating it.
 const PlotlyComponent = createPlotlyComponent(Plotly);
 
-export const DARK_LAYOUT = {
-  paper_bgcolor: "#0F1125",
-  plot_bgcolor: "#0A0A1F",
-  font: {color: "#8888AA", size: 10},
-  margin: {l: 50, r: 16, t: 16, b: 40},
-  xaxis: {gridcolor: "#1A1A3E", zerolinecolor: "#252550"},
-  yaxis: {gridcolor: "#1A1A3E", zerolinecolor: "#252550"},
-  legend: {orientation: "h", y: -0.2},
-};
+// ⚠️ Plotly MUTATES the layout object it is handed: it writes the axis type and
+// range it resolved back into layout.xaxis / layout.yaxis. A module-level layout
+// constant is therefore shared mutable state, and a shallow {...BASE} copy still
+// hands every chart the SAME nested axis objects.
+//
+// That leaked across charts. The dashboard's monthly chart plots "2025-08"
+// strings, which plotly types as a date axis and stamps into the shared xaxis;
+// the calls heatmap only overrides yaxis, so it inherited type:"date" and drew
+// its 0–23 hour columns as milliseconds after the epoch — a wall of empty blue
+// from 1970 with the real cells crushed against one edge. Nothing is shared now:
+// every chart gets its own layout, built fresh on each render.
+const AXIS = {gridcolor: "#1A1A3E", zerolinecolor: "#252550"};
+
+function baseLayout(): Record<string, unknown> {
+  return {
+    paper_bgcolor: "#0F1125",
+    plot_bgcolor: "#0A0A1F",
+    font: {color: "#8888AA", size: 10},
+    margin: {l: 50, r: 16, t: 16, b: 40},
+    xaxis: {...AXIS},
+    yaxis: {...AXIS},
+    legend: {orientation: "h", y: -0.2},
+  };
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+// One level of nesting is all the layouts use (xaxis.gridcolor, margin.l …), so
+// a per-key merge is enough — and it keeps a caller's `xaxis: {type: "date"}`
+// from throwing away the shared grid colours.
+function mergeLayout(
+  override?: Record<string, unknown>
+): Record<string, unknown> {
+  const out = baseLayout();
+  for (const [k, v] of Object.entries(override ?? {})) {
+    const base = out[k];
+    out[k] = isPlainObject(v) && isPlainObject(base) ? {...base, ...v} : v;
+  }
+  return out;
+}
 
 export interface PlotClickEvent {
   points: Array<{curveNumber: number; pointNumber: number; pointIndex?: number}>;
@@ -53,7 +86,7 @@ export default function Plot({data, layout, height, onClick}: PlotProps) {
   return (
     <PlotlyComponent
       data={data}
-      layout={{...DARK_LAYOUT, ...layout, autosize: true}}
+      layout={{...mergeLayout(layout), autosize: true}}
       config={{displayModeBar: false, responsive: true}}
       style={{width: "100%", height: height ?? 240}}
       onClick={onClick}
