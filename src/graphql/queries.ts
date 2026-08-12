@@ -535,6 +535,28 @@ export const REPORT_EXCEL = gql`
   }
 `;
 
+// ДАНСНЫ ДҮН ШИНЖИЛГЭЭ — the verdict document, in the shape of the client's
+// template. Figures are tables, not screenshots.
+export const REPORT_VERDICT_DOCX = gql`
+  query ReportVerdictDocx {
+    reportVerdictDocx { filename mimeType base64 }
+  }
+`;
+
+export const CASE_CONCLUSIONS_QUERY = gql`
+  query CaseConclusions {
+    caseConclusions { id bankAccountId text updatedAt }
+  }
+`;
+
+export const SAVE_CASE_CONCLUSION = gql`
+  mutation SaveCaseConclusion($bankAccountId: Int, $text: String!) {
+    saveCaseConclusion(bankAccountId: $bankAccountId, text: $text) {
+      id bankAccountId text updatedAt
+    }
+  }
+`;
+
 export const REPORT_WORD = gql`
   query ReportWord {
     reportWord { filename mimeType base64 }

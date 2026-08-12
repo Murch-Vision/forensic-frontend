@@ -14,6 +14,7 @@ import {
   REPORT_EXCEL,
   REPORT_MARKED_PDF,
   REPORT_PDF,
+  REPORT_VERDICT_DOCX,
 } from "../graphql/queries";
 import {
   Badge,
@@ -51,6 +52,13 @@ export default function ReportsPage() {
     REPORT_EXCEL,
     {fetchPolicy: "no-cache"}
   );
+  const [getVerdict, verdictQ] =
+    useLazyQuery<{reportVerdictDocx: ReportFile}>(REPORT_VERDICT_DOCX, {
+      fetchPolicy: "network-only",
+      onCompleted: (d) => {
+        if (d?.reportVerdictDocx) downloadBase64(d.reportVerdictDocx);
+      },
+    });
   const [getBundle, bundleQ] = useLazyQuery<{reportBundle: ReportFile}>(
     REPORT_BUNDLE,
     {fetchPolicy: "no-cache"}
@@ -110,6 +118,11 @@ export default function ReportsPage() {
         disabled={markedQ.loading}
         title="Банкны гүйлгээний тайланг PDF-ээр татах — босго тавибал түүнээс дээш гүйлгээтэй бүх этгээд орно">
         {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ГҮЙЛГЭЭНИЙ ТАЙЛАН (PDF)"}
+      </button>
+      <button className="btn btn-accent" onClick={() => void getVerdict()}
+        disabled={verdictQ.loading}
+        title="Дансны дүн шинжилгээний дүгнэлт — Word файл">
+        {verdictQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ДҮГНЭЛТ (WORD)"}
       </button>
       <button className="btn btn-primary" onClick={onPdf}
         disabled={pdfQ.loading}>

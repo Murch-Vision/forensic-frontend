@@ -11,8 +11,11 @@
  *               only the list tells you the amount.
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useState} from "react";
-import {useQuery} from "@apollo/client";
-import {ACCOUNT_ANALYSES_QUERY, DIRECT_TRANSFERS_QUERY} from "../graphql/queries";
+import {useMutation, useQuery} from "@apollo/client";
+import {
+  ACCOUNT_ANALYSES_QUERY, CASE_CONCLUSIONS_QUERY, DIRECT_TRANSFERS_QUERY,
+  SAVE_CASE_CONCLUSION,
+} from "../graphql/queries";
 import {BarChart, Card, DataTable, Empty, Loading, StatCard} from "./kit";
 import type {Column} from "./kit";
 import {Select} from "./inputs";
@@ -93,12 +96,81 @@ function ActivityBlock({title, buckets}: {title: string; buckets: Bucket[]}) {
   );
 }
 
+interface Conclusion {
+  id: number; bankAccountId: number | null; text: string; updatedAt: string;
+}
+
+// Дүгнэлт — typed by the examiner, never generated. The report places whatever
+// is stored here; an empty box means the report says so plainly.
+function ConclusionBox({title, accountId, stored, onSaved}: {
+  title: string;
+  accountId: number | null;
+  stored: string;
+  onSaved: () => void;
+}) {
+  const [saveMut] = useMutation(SAVE_CASE_CONCLUSION);
+  const [text, setText] = useState(stored);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err, setErr] = useState("");
+  // Selecting another account means this box now edits THAT account's
+  // conclusion, so the draft is replaced rather than carried across.
+  const [editing, setEditing] = useState(accountId);
+  if (editing !== accountId) {
+    setEditing(accountId);
+    setText(stored);
+    setDone(false);
+    setErr("");
+  }
+
+  async function save() {
+    setBusy(true); setErr(""); setDone(false);
+    try {
+      await saveMut({variables: {bankAccountId: accountId, text}});
+      setDone(true);
+      onSaved();
+    } catch (e) {
+      setErr(String(e).replace(/^(Error|ApolloError):\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card title={title} style={{marginBottom: 16}}>
+      <textarea className="form-input" rows={5}
+        style={{width: "100%", resize: "vertical"}}
+        value={text} onChange={(e) => {setText(e.target.value); setDone(false);}}
+        placeholder="Дүн шинжилгээгээр илэрсэн нөхцөл байдлыг бичнэ үү" />
+      <div style={{display: "flex", gap: 10, alignItems: "center",
+        marginTop: 10}}>
+        <button className="btn btn-primary" onClick={save} disabled={busy}>
+          {busy ? "Хадгалж байна…" : "Хадгалах"}
+        </button>
+        {done && (
+          <span style={{color: "var(--accent-green)", fontSize: 12}}>
+            Хадгалагдлаа
+          </span>
+        )}
+        {err && (
+          <span style={{color: "var(--accent-red)", fontSize: 12}}>{err}</span>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export default function AccountAnalysis() {
   const {data, loading} = useQuery<{accountAnalyses: Analysis[]}>(
     ACCOUNT_ANALYSES_QUERY);
   const transfersQ = useQuery<{directTransfers: Transfer[]}>(
     DIRECT_TRANSFERS_QUERY);
   const [acctId, setAcctId] = useState<number | null>(null);
+  const conclusionsQ = useQuery<{caseConclusions: Conclusion[]}>(
+    CASE_CONCLUSIONS_QUERY);
+  const conclusionFor = (id: number | null): string =>
+    (conclusionsQ.data?.caseConclusions ?? [])
+      .find((c) => c.bankAccountId === id)?.text ?? "";
 
   if (loading) return <Loading />;
   const list = data?.accountAnalyses ?? [];
@@ -217,6 +289,10 @@ export default function AccountAnalysis() {
           defaultSort={{col: 2, dir: "desc"}} />
       </Card>
 
+      <ConclusionBox title={`Дүгнэлт — данс ${a.accountNumber}`}
+        accountId={a.accountId} stored={conclusionFor(a.accountId)}
+        onSaved={() => void conclusionsQ.refetch()} />
+
       {transfers.length > 0 && (
         <Card noPadding style={{marginBottom: 16}}
           title={`Хоорондоо харилцсан шууд гүйлгээ (${transfers.length})`}>
@@ -225,6 +301,9 @@ export default function AccountAnalysis() {
             empty="Шууд гүйлгээ алга" />
         </Card>
       )}
+      <ConclusionBox title="Холбоосын дүгнэлт" accountId={null}
+        stored={conclusionFor(null)}
+        onSaved={() => void conclusionsQ.refetch()} />
     </>
   );
 }
