@@ -1047,7 +1047,7 @@ export default function TransactionsPage() {
               <div style={{marginTop: 18}}>
                 {!activeCase ? (
                   <div style={{fontSize: 11, color: "var(--text-muted)"}}>
-                    Нотлох баримт болгохын тулд идэвхтэй кейс сонгоно уу.
+                    Нотлох баримт болгохын тулд идэвхтэй хэрэг сонгоно уу.
                   </div>
                 ) : tagged != null ? (
                   <button className="btn" disabled style={{width: "100%"}}>

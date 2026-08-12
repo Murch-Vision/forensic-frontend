@@ -83,7 +83,7 @@ export default function CasesPage() {
   async function submitCase() {
     const caseId = form.caseId.trim();
     if (!caseId) {
-      setFormError("Кейсийн дугаар оруулна уу.");
+      setFormError("Хэргийн дугаар оруулна уу.");
       return;
     }
     const caseName = form.caseName.trim() || caseId;
@@ -110,7 +110,7 @@ export default function CasesPage() {
     if (!editCase) return;
     const caseName = editForm.caseName.trim();
     if (!caseName) {
-      setEditError("Кейсийн нэр хоосон байж болохгүй.");
+      setEditError("Хэргийн нэр хоосон байж болохгүй.");
       return;
     }
     try {
@@ -163,38 +163,38 @@ export default function CasesPage() {
     <div className="page-container">
       <PageHeader
         icon={"\u{1F4C1}"}
-        title="Кейсүүд"
-        subtitle="Кейсийн удирдлага — үүсгэх, төлөв солих, нэгтгэх. Бусад бүх хуудас толгой хэсэгт сонгосон кейсийн хүрээнд ажиллана."
+        title="Хэргийн бүртгэл"
+        subtitle="Хэргийн удирдлага — үүсгэх, төлөв солих, нэгтгэх. Бусад бүх хуудас толгой хэсэгт сонгосон хэргийн хүрээнд ажиллана."
         actions={
           <>
             {cases.length >= 2 && (
-              <button className="btn" onClick={openMerge}>КЕЙС НЭГТГЭХ</button>
+              <button className="btn" onClick={openMerge}>ХЭРЭГ НЭГТГЭХ</button>
             )}
             <button className="btn btn-accent" onClick={openForm}>
-              + ШИНЭ КЕЙС
+              + ШИНЭ ХЭРЭГ БҮРТГЭХ
             </button>
           </>
         }
       />
 
       <MetricsGrid>
-        <StatCard label="Нийт кейс" value={cases.length} />
+        <StatCard label="Нийт хэрэг" value={cases.length} />
         <StatCard label="Нээлттэй" value={count("OPEN")} color="info" />
         <StatCard label="Идэвхтэй" value={count("ACTIVE")} color="low" />
         <StatCard label="Хаагдсан" value={count("CLOSED")} />
         <StatCard label="Архивлагдсан" value={count("ARCHIVED")} color="warning" />
       </MetricsGrid>
 
-      <Card title="БҮХ КЕЙС" noPadding>
+      <Card title="БҮХ ХЭРЭГ" noPadding>
         {casesQ.loading ? (
           <Loading />
         ) : cases.length === 0 ? (
           <div className="empty-state">
             <div className="message" style={{marginBottom: 16}}>
-              Кейс бүртгэгдээгүй байна. Эхний кейсээ үүсгэнэ үү.
+              Хэрэг бүртгэгдээгүй байна. Эхний хэргээ үүсгэнэ үү.
             </div>
             <button className="btn btn-accent" onClick={openForm}>
-              + ШИНЭ КЕЙС
+              + ШИНЭ ХЭРЭГ БҮРТГЭХ
             </button>
           </div>
         ) : (
@@ -235,7 +235,7 @@ export default function CasesPage() {
                           await client.resetStore();
                         }
                       }}
-                      title="Кейсийн төлөв солих"
+                      title="Хэргийн төлөв солих"
                       style={{width: 150}}
                       options={["OPEN", "ACTIVE", "CLOSED", "ARCHIVED"].map(
                         (s) => ({value: s, label: STATUS_LABELS[s]}))} />
@@ -256,7 +256,7 @@ export default function CasesPage() {
                   </td>
                   <td style={{textAlign: "right", whiteSpace: "nowrap"}}>
                     <button className="btn btn-sm"
-                      title="Кейсийн мэдээлэл засах"
+                      title="Хэргийн мэдээлэл засах"
                       onClick={() => openEdit(c)}>
                       ЗАСАХ
                     </button>
@@ -268,7 +268,7 @@ export default function CasesPage() {
         )}
         {casesQ.error && (
           <div className="form-error-box" style={{margin: 16}}>
-            Кейсүүдийг ачаалж чадсангүй: {casesQ.error.message}
+            Хэргүүдийг ачаалж чадсангүй: {casesQ.error.message}
           </div>
         )}
       </Card>
@@ -282,14 +282,14 @@ export default function CasesPage() {
           >
             <div className="card-header">
               <span className="card-title" style={{color: "var(--accent-purple)"}}>
-                КЕЙС НЭГТГЭХ
+                ХЭРЭГ НЭГТГЭХ
               </span>
             </div>
             <div className="card-body">
               {mergeError && (
                 <div className="form-error-box">{mergeError}</div>
               )}
-              <label className="form-label">Хүлээн авах кейс (үндсэн)</label>
+              <label className="form-label">Хүлээн авах хэрэг (үндсэн)</label>
               <Select
                 value={mergeTarget ?? ""}
                 onChange={(v) => {
@@ -304,7 +304,7 @@ export default function CasesPage() {
                 style={{marginBottom: 14, width: "100%"}}
                 options={cases.map((c) => ({value: c.id,
                   label: `${c.caseId} · ${c.caseName}`}))} />
-              <label className="form-label">Нэгтгэх кейсүүд</label>
+              <label className="form-label">Нэгтгэх хэргүүд</label>
               <div style={{maxHeight: 240, overflowY: "auto",
                 border: "1px solid var(--border-primary)",
                 borderRadius: "var(--radius-sm)", marginBottom: 8}}>
@@ -327,8 +327,8 @@ export default function CasesPage() {
               </div>
               <div style={{fontSize: 11, color: "var(--text-muted)",
                 marginBottom: 16}}>
-                Нотлох баримт, тэмдэглэл үндсэн кейс рүү шилжиж, нэгтгэсэн
-                кейсүүд архивлагдана.
+                Нотлох баримт, тэмдэглэл үндсэн хэрэг рүү шилжиж, нэгтгэсэн
+                хэргүүд архивлагдана.
               </div>
               <div className="modal-actions">
                 <button className="btn"
@@ -350,7 +350,7 @@ export default function CasesPage() {
             onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span className="modal-title">
-                КЕЙС ЗАСАХ — {editCase.caseId}
+                ХЭРЭГ ЗАСАХ — {editCase.caseId}
               </span>
               <button className="modal-close" title="Хаах"
                 onClick={() => setEditCase(null)}>
@@ -361,7 +361,7 @@ export default function CasesPage() {
               {editError && (
                 <div className="form-error-box">{editError}</div>
               )}
-              <label className="form-label">Кейсийн нэр *</label>
+              <label className="form-label">Хэргийн нэр *</label>
               <input className="form-input" autoFocus
                 value={editForm.caseName}
                 onChange={(e) => setEditForm((f) =>
@@ -413,14 +413,14 @@ export default function CasesPage() {
           >
             <div className="card-header">
               <span className="card-title" style={{color: "var(--accent-purple)"}}>
-                ШИНЭ КЕЙС ҮҮСГЭХ
+                ШИНЭ ХЭРЭГ ҮҮСГЭХ
               </span>
             </div>
             <div className="card-body">
               {formError && (
                 <div className="form-error-box">{formError}</div>
               )}
-              <label className="form-label">Кейсийн дугаар</label>
+              <label className="form-label">Хэргийн дугаар</label>
               <input
                 className="form-input"
                 autoFocus
@@ -431,14 +431,14 @@ export default function CasesPage() {
                 placeholder="жишээ: CASE-0002"
                 style={{marginBottom: 14}}
               />
-              <label className="form-label">Кейсийн нэр</label>
+              <label className="form-label">Хэргийн нэр</label>
               <input
                 className="form-input"
                 value={form.caseName}
                 onChange={(e) =>
                   setForm((f) => ({...f, caseName: e.target.value}))}
                 onKeyDown={(e) => { if (e.key === "Enter") submitCase(); }}
-                placeholder="Кейсийн нэр (заавал биш)"
+                placeholder="Хэргийн нэр (заавал биш)"
                 style={{marginBottom: 18}}
               />
               <div className="modal-actions">

@@ -18,18 +18,32 @@ import {
   ADMIN_CASES_QUERY,
   CASE_MEMBERS_QUERY,
   CREATE_USER,
+  DELETE_USER,
   GRANT_CASE_ACCESS,
   RESET_USER_DEVICE,
   RESET_USER_PASSWORD,
   REVOKE_CASE_ACCESS,
   SET_USER_ACTIVE,
+  UPDATE_USER,
   USERS_QUERY,
 } from "../graphql/auth";
+
+// Цол + Нэр read as one string wherever a row just needs a person's label.
+export function personLabel(u: {rank?: string | null; fullName?: string | null;
+  username: string;}): string {
+  const both = [u.rank, u.fullName].filter(Boolean).join(" ").trim();
+  return both || u.username;
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: "Админ", DETECTIVE: "Мөрдөгч",
+};
 
 // The admin list carries the extra device-lock flag the small `me` payload
 // doesn't.
 interface AdminUser extends AuthUser {
   deviceBound: boolean;
+  ownedCaseCount: number;
 }
 
 interface CaseRef {
@@ -52,7 +66,7 @@ export default function AdminPage() {
   return (
     <div className="page-container">
       <PageHeader icon="🛡" title="Удирдлага"
-        subtitle="БҮРТГЭЛ БОЛОН КЕЙСИЙН ХАНДАХ ЭРХ" />
+        subtitle="БҮРТГЭЛ БОЛОН ХЭРГИЙН ХАНДАХ ЭРХ" />
       <UsersPanel meId={me?.id ?? -1} />
       <CaseAccessPanel />
     </div>
@@ -66,10 +80,21 @@ function UsersPanel({meId}: {meId: number}) {
   const [setActive] = useMutation(SET_USER_ACTIVE);
   const [resetPw] = useMutation(RESET_USER_PASSWORD);
   const [resetDevice] = useMutation(RESET_USER_DEVICE);
+  const [updateUser] = useMutation(UPDATE_USER);
+  const [deleteUser] = useMutation(DELETE_USER);
   // Two-click confirm for wiping a device binding (no native popup).
   const [confirmDevice, setConfirmDevice] = useState<number | null>(null);
+  // The account being edited (null = closed) and the account queued for
+  // deletion, which asks for a second click before it goes.
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  // Set when the account being deleted owns cases: those must be handed to a
+  // named account before it can go.
+  const [deleteUserRow, setDeleteUserRow] = useState<AdminUser | null>(null);
+  const [rowError, setRowError] = useState("");
 
   const [username, setUsername] = useState("");
+  const [rank, setRank] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("DETECTIVE");
@@ -90,8 +115,10 @@ function UsersPanel({meId}: {meId: number}) {
     setBusy(true); setError("");
     try {
       await createUser({variables: {input:
-        {username, password, fullName: fullName || null, role}}});
-      setUsername(""); setFullName(""); setPassword(""); setRole("DETECTIVE");
+        {username, password, rank: rank || null,
+          fullName: fullName || null, role}}});
+      setUsername(""); setRank(""); setFullName(""); setPassword("");
+      setRole("DETECTIVE");
       await refetch();
     } catch (err) {
       setError(String(err).replace(/^(Error|ApolloError):\s*/, ""));
@@ -131,12 +158,40 @@ function UsersPanel({meId}: {meId: number}) {
     await refetch();
   }
 
+  async function doDelete(id: number, transferToUserId: number | null) {
+    setRowError("");
+    try {
+      await deleteUser({variables: {userId: id, transferToUserId}});
+      setConfirmDelete(null);
+      setDeleteUserRow(null);
+      await refetch();
+    } catch (err) {
+      setRowError(String(err).replace(/^(Error|ApolloError):\s*/, ""));
+      throw err;
+    }
+  }
+
+  // Saves the whole edit form in ONE call, then closes.
+  async function saveEdit(patch: {username: string; rank: string;
+    fullName: string; role: string;}) {
+    if (!editUser) return;
+    await updateUser({variables: {userId: editUser.id, input: {
+      username: patch.username,
+      rank: patch.rank || null,
+      fullName: patch.fullName || null,
+      role: patch.role,
+    }}});
+    setEditUser(null);
+    await refetch();
+  }
+
   const allUsers = data?.users ?? [];
   const sq = search.trim().toLowerCase();
   const users = sq
     ? allUsers.filter((u) => u.username.toLowerCase().includes(sq)
       || u.fullName?.toLowerCase().includes(sq)
-      || (u.role === "ADMIN" ? "дарга админ" : "мөрдөгч").includes(sq))
+      || u.rank?.toLowerCase().includes(sq)
+      || ROLE_LABEL[u.role]?.toLowerCase().includes(sq))
     : allUsers;
 
   return (
@@ -160,7 +215,13 @@ function UsersPanel({meId}: {meId: number}) {
             onChange={(e) => setUsername(e.target.value)} placeholder="detective1" />
         </div>
         <div>
-          <div className="form-label">Бүтэн нэр</div>
+          <div className="form-label">Цол</div>
+          <input className="form-input" style={{width: 120}} value={rank}
+            name="new-account-rank" autoComplete="off"
+            onChange={(e) => setRank(e.target.value)} placeholder="д/х" />
+        </div>
+        <div>
+          <div className="form-label">Нэр</div>
           <input className="form-input" style={{width: 170}} value={fullName}
             name="new-account-fullname" autoComplete="off"
             onChange={(e) => setFullName(e.target.value)} placeholder="Овог Нэр" />
@@ -177,8 +238,8 @@ function UsersPanel({meId}: {meId: number}) {
           <div className="form-label">Үүрэг</div>
           <Select value={role} onChange={setRole} style={{width: 150}}
             options={[
-              {value: "DETECTIVE", label: "Мөрдөгч"},
-              {value: "ADMIN", label: "Дарга (админ)"},
+              {value: "DETECTIVE", label: ROLE_LABEL.DETECTIVE},
+              {value: "ADMIN", label: ROLE_LABEL.ADMIN},
             ]} />
         </div>
         <button className="btn btn-primary" type="submit" disabled={busy}>
@@ -189,18 +250,23 @@ function UsersPanel({meId}: {meId: number}) {
         )}
       </form>
 
+      {rowError && (
+        <div style={{color: "var(--accent-red)", fontSize: 13,
+          marginBottom: 10}}>{rowError}</div>
+      )}
+
       {loading ? <Loading /> : (
         <table className="data-grid" style={{width: "100%"}}>
           <thead>
             <tr>
-              <th>Нэвтрэх нэр</th><th>Бүтэн нэр</th><th>Үүрэг</th>
+              <th>Нэвтрэх нэр</th><th>Цол</th><th>Нэр</th><th>Үүрэг</th>
               <th>Төлөв</th><th>Төхөөрөмж</th>
               <th style={{textAlign: "right"}}>Үйлдэл</th>
             </tr>
           </thead>
           <tbody>
             {users.length === 0 && (
-              <tr><td colSpan={6} style={{color: "var(--text-muted)",
+              <tr><td colSpan={7} style={{color: "var(--text-muted)",
                 padding: "16px", textAlign: "center"}}>
                 «{search}» — тохирох бүртгэл олдсонгүй
               </td></tr>
@@ -208,11 +274,12 @@ function UsersPanel({meId}: {meId: number}) {
             {users.map((u) => (
               <tr key={u.id}>
                 <td style={{fontFamily: "var(--font-mono)"}}>{u.username}</td>
+                <td>{u.rank ?? "—"}</td>
                 <td>{u.fullName ?? "—"}</td>
                 <td>
                   <span className={`badge ${u.role === "ADMIN"
                     ? "warning" : "info"}`}>
-                    {u.role === "ADMIN" ? "Дарга" : "Мөрдөгч"}
+                    {ROLE_LABEL[u.role] ?? u.role}
                   </span>
                 </td>
                 <td>
@@ -253,23 +320,67 @@ function UsersPanel({meId}: {meId: number}) {
                 <td style={{textAlign: "right", whiteSpace: "nowrap"}}>
                   <span style={{display: "inline-flex", gap: 6}}>
                     <button className="btn btn-sm"
+                      onClick={() => {setRowError(""); setEditUser(u);}}
+                      title="Цол, нэр, нэвтрэх нэр, үүргийг засах">
+                      Засах
+                    </button>
+                    <button className="btn btn-sm"
                       onClick={() => openPwModal(u)}
                       title="Энэ хэрэглэгчийн нууц үгийг солих">
-                      🔑 Нууц үг солих
+                      Нууц үг солих
                     </button>
                     {u.id !== meId && (
                       <button className={`btn btn-sm ${u.active
                         ? "btn-danger" : ""}`}
                         onClick={() => toggleActive(u)}>
-                        {u.active ? "⏸ Идэвхгүй" : "▶ Идэвхжүүлэх"}
+                        {u.active ? "Идэвхгүй болгох" : "Идэвхжүүлэх"}
                       </button>
                     )}
+                    {/* Deleting asks a second time in place — the row's own
+                        buttons become the answer, no native popup. */}
+                    {u.id !== meId && (confirmDelete === u.id ? (
+                      <span style={{display: "inline-flex", gap: 6,
+                        alignItems: "center"}}>
+                        <span style={{fontSize: 12}}>Бүртгэлийг устгах уу?</span>
+                        <button className="btn btn-sm btn-danger"
+                          onClick={() => void doDelete(u.id, null)
+                            .catch(() => setConfirmDelete(null))}>
+                          Тийм, устга
+                        </button>
+                        <button className="btn btn-sm"
+                          onClick={() => setConfirmDelete(null)}>Болих</button>
+                      </span>
+                    ) : (
+                      <button className="btn btn-sm btn-danger"
+                        title="Бүртгэлийг бүрмөсөн устгах"
+                        onClick={() => {
+                          setRowError("");
+                          // Owns cases ⇒ the new owner must be named first.
+                          if (u.ownedCaseCount > 0) setDeleteUserRow(u);
+                          else setConfirmDelete(u.id);
+                        }}>
+                        Устгах
+                      </button>
+                    ))}
                   </span>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+
+      {deleteUserRow && (
+        <DeleteUserModal u={deleteUserRow}
+          candidates={allUsers.filter((x) => x.id !== deleteUserRow.id
+            && x.active)}
+          onClose={() => setDeleteUserRow(null)}
+          onDelete={(heir) => doDelete(deleteUserRow.id, heir)} />
+      )}
+
+      {editUser && (
+        <EditUserModal u={editUser} isSelf={editUser.id === meId}
+          onClose={() => setEditUser(null)} onSave={saveEdit} />
       )}
 
       {/* Password-change dialog — a clear modal, not an inline field. */}
@@ -287,7 +398,7 @@ function UsersPanel({meId}: {meId: number}) {
               <div style={{color: "var(--text-secondary)", fontSize: 13,
                 marginBottom: 14}}>
                 <b style={{color: "var(--text-primary)"}}>
-                  {pwUser.fullName ?? pwUser.username}</b>
+                  {personLabel(pwUser)}</b>
                 {" "}(<span style={{fontFamily: "var(--font-mono)"}}>
                   {pwUser.username}</span>) хэрэглэгчийн шинэ нууц үг:
               </div>
@@ -324,6 +435,157 @@ function UsersPanel({meId}: {meId: number}) {
         </div>
       )}
     </Card>
+  );
+}
+
+/* ----------------------------------------------------------- delete modal */
+// Deleting an account that owns cases: the cases must be handed to somebody by
+// name. No default, no "goes to me" — an owner change is its own decision.
+function DeleteUserModal({u, candidates, onClose, onDelete}: {
+  u: AdminUser;
+  candidates: AdminUser[];
+  onClose: () => void;
+  onDelete: (transferToUserId: number) => Promise<void>;
+}) {
+  const [heir, setHeir] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function submit() {
+    if (!heir) {setErr("Хэргийг хэн авахыг сонгоно уу"); return;}
+    setBusy(true); setErr("");
+    try {
+      await onDelete(Number(heir));
+    } catch (e) {
+      setErr(String(e).replace(/^(Error|ApolloError):\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={() => !busy && onClose()}>
+      <div className="modal-content" style={{width: "min(520px, 94vw)"}}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">Бүртгэл устгах</span>
+          <button className="modal-close" onClick={onClose}
+            aria-label="Хаах">×</button>
+        </div>
+        <div className="modal-body">
+          <div style={{fontSize: 13, marginBottom: 14}}>
+            <b>{personLabel(u)}</b> — {u.ownedCaseCount} хэрэг эзэмшиж байна.
+          </div>
+          <div className="form-label">Хэргийг хэн авах вэ</div>
+          <Select value={heir} onChange={setHeir} style={{width: "100%"}}
+            searchable
+            options={[{value: "", label: "Сонгоно уу…"},
+              ...candidates.map((c) => ({value: c.id,
+                label: personLabel(c)}))]} />
+          {err && (
+            <div style={{color: "var(--accent-red)", fontSize: 13,
+              marginTop: 12}}>{err}</div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn" onClick={onClose} disabled={busy}>
+            Болих
+          </button>
+          <button className="btn btn-danger" onClick={submit}
+            disabled={busy || !heir}>
+            {busy ? "Устгаж байна…" : "Шилжүүлээд устгах"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- edit modal */
+// One dialog, ONE save button: every field goes back in a single mutation.
+function EditUserModal({u, isSelf, onClose, onSave}: {
+  u: AdminUser;
+  isSelf: boolean;
+  onClose: () => void;
+  onSave: (patch: {username: string; rank: string; fullName: string;
+    role: string;}) => Promise<void>;
+}) {
+  const [username, setUsername] = useState(u.username);
+  const [rank, setRank] = useState(u.rank ?? "");
+  const [fullName, setFullName] = useState(u.fullName ?? "");
+  const [role, setRole] = useState<string>(u.role);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function submit() {
+    if (!username.trim()) {setErr("Нэвтрэх нэр хоосон байна"); return;}
+    setBusy(true); setErr("");
+    try {
+      await onSave({username: username.trim(), rank: rank.trim(),
+        fullName: fullName.trim(), role});
+    } catch (e) {
+      setErr(String(e).replace(/^(Error|ApolloError):\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={() => !busy && onClose()}>
+      <div className="modal-content" style={{width: "min(520px, 94vw)"}}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">Бүртгэл засах</span>
+          <button className="modal-close" onClick={onClose}
+            aria-label="Хаах">×</button>
+        </div>
+        <div className="modal-body">
+          <div style={{display: "grid",
+            gridTemplateColumns: "1fr 1fr", gap: 12}}>
+            <div>
+              <div className="form-label">Нэвтрэх нэр</div>
+              <input className="form-input" style={{width: "100%"}}
+                value={username} autoFocus
+                onChange={(e) => setUsername(e.target.value)} />
+            </div>
+            <div>
+              <div className="form-label">Үүрэг</div>
+              <Select value={role} onChange={setRole} style={{width: "100%"}}
+                disabled={isSelf}
+                options={[
+                  {value: "DETECTIVE", label: ROLE_LABEL.DETECTIVE},
+                  {value: "ADMIN", label: ROLE_LABEL.ADMIN},
+                ]} />
+            </div>
+            <div>
+              <div className="form-label">Цол</div>
+              <input className="form-input" style={{width: "100%"}}
+                value={rank} placeholder="д/х"
+                onChange={(e) => setRank(e.target.value)} />
+            </div>
+            <div>
+              <div className="form-label">Нэр</div>
+              <input className="form-input" style={{width: "100%"}}
+                value={fullName} placeholder="Овог Нэр"
+                onChange={(e) => setFullName(e.target.value)}
+                onKeyDown={(e) => {if (e.key === "Enter") submit();}} />
+            </div>
+          </div>
+          {err && (
+            <div style={{color: "var(--accent-red)", fontSize: 13,
+              marginTop: 12}}>{err}</div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn" onClick={onClose} disabled={busy}>
+            Болих
+          </button>
+          <button className="btn btn-primary" onClick={submit} disabled={busy}>
+            {busy ? "Хадгалж байна…" : "Хадгалах"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -366,28 +628,29 @@ function CaseAccessPanel() {
     .filter((u) => u.id !== owner?.id && !memberIds.has(u.id))
     .filter((u) => !query
       || u.fullName?.toLowerCase().includes(query)
+      || u.rank?.toLowerCase().includes(query)
       || u.username.toLowerCase().includes(query))
     .slice(0, 8);
 
   return (
-    <Card title="Кейсийн хандах эрх">
+    <Card title="Хэргийн хандах эрх">
       <div style={{display: "flex", gap: 8, alignItems: "flex-end",
         marginBottom: 16}}>
         <div>
-          <div className="form-label">Кейс сонгох</div>
+          <div className="form-label">Хэрэг сонгох</div>
           <Select value={caseId ?? ""}
             onChange={(v) => {setCaseId(v ? Number(v) : null); setQ("");}}
             style={{width: 300}}
             triggerLabel={selected
-              ? `${selected.caseId} · ${selected.caseName}` : "Кейс сонгоно уу…"}
-            options={[{value: "", label: "Кейс сонгоно уу…"},
+              ? `${selected.caseId} · ${selected.caseName}` : "Хэрэг сонгоно уу…"}
+            options={[{value: "", label: "Хэрэг сонгоно уу…"},
               ...cases.map((c) => ({value: c.id,
                 label: `${c.caseId} · ${c.caseName}`}))]} />
         </div>
       </div>
 
       {caseId == null ? (
-        <Empty message="Хандах эрхийг тохируулах кейсээ дээрээс сонгоно уу." />
+        <Empty message="Хандах эрхийг тохируулах хэргээ дээрээс сонгоно уу." />
       ) : (
         <div style={{display: "grid", gridTemplateColumns: "1fr 1fr",
           gap: 20, alignItems: "start"}}>
@@ -429,14 +692,14 @@ function CaseAccessPanel() {
                 <div style={{color: "var(--text-muted)", fontSize: 13}}>
                   {query
                     ? "Тохирох мөрдөгч алга."
-                    : "Бүх мөрдөгч энэ кейст хандах эрхтэй."}
+                    : "Бүх мөрдөгч энэ хэрэгт хандах эрхтэй."}
                 </div>
               ) : candidates.map((u) => (
                 <button key={u.id} type="button"
                   className="access-add-row" onClick={() => doGrant(u)}>
                   <span style={{flex: 1, textAlign: "left"}}>
                     <span style={{color: "var(--text-primary)"}}>
-                      {u.fullName ?? u.username}</span>
+                      {personLabel(u)}</span>
                     <span style={{color: "var(--text-muted)",
                       fontFamily: "var(--font-mono)", fontSize: 12,
                       marginLeft: 8}}>{u.username}</span>
@@ -469,7 +732,7 @@ function AccessRow({u, badge, onRemove}: {
       border: "1px solid var(--border-primary)", borderRadius: 6}}>
       <span style={{flex: 1}}>
         <span style={{color: "var(--text-primary)"}}>
-          {u.fullName ?? u.username}</span>
+          {personLabel(u)}</span>
         <span style={{color: "var(--text-muted)",
           fontFamily: "var(--font-mono)", fontSize: 12, marginLeft: 8}}>
           {u.username}</span>

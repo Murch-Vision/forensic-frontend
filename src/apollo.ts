@@ -13,22 +13,15 @@ import {setContext} from "@apollo/client/link/context";
 export const TOKEN_KEY = "forensic.authToken";
 
 // Endpoint resolution, in priority order:
-//   1. VITE_GRAPHQL_URL   – explicit build-time override of the full endpoint.
-//   2. window.__API_PORT__ – desktop (Tauri release): the Rust shell spawns the
-//                            bundled API on a local port and injects it
-//                            (see src-tauri/src/lib.rs).
-//   3. VITE_API_URL       – the API host, from API_URL/VITE_API_URL at build
-//                            time (see vite.config.ts).
-//   4. "/graphql"          – same-origin; the dev/preview server proxies it to
-//                            whatever API_URL points at.
+//   1. VITE_GRAPHQL_URL – explicit build-time override of the full endpoint.
+//   2. VITE_API_URL     – the API host, from API_URL/VITE_API_URL at build
+//                         time (see vite.config.ts).
+//   3. "/graphql"        – same-origin; the dev/preview server proxies it to
+//                         whatever API_URL points at.
 // Nothing here may fall back to a hardcoded remote host: an install with no
 // configuration must talk to its own machine, not somebody else's server.
-const tauriPort =
-  typeof window !== "undefined" ? window.__API_PORT__ : undefined;
-
 const uri =
   import.meta.env.VITE_GRAPHQL_URL ||
-  (tauriPort ? `http://localhost:${tauriPort}/` : undefined) ||
   import.meta.env.VITE_API_URL ||
   "/graphql";
 

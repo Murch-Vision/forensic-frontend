@@ -18,6 +18,7 @@ export type Role = "ADMIN" | "DETECTIVE";
 export interface AuthUser {
   id       : number;
   username : string;
+  rank     : string | null;
   fullName : string | null;
   role     : Role;
   active   : boolean;

@@ -18,10 +18,10 @@ export interface NavMeta {
 
 export const NAV_META: NavMeta[] = [
   {path: "/dashboard", label: "Хяналтын самбар", icon: "\u{1F4CA}"},
-  {path: "/cases", label: "Кейсүүд", icon: "\u{1F4C1}"},
-  {path: "/people", label: "Хүмүүсийн сан", icon: "\u{1F465}"},
+  {path: "/cases", label: "Хэргийн бүртгэл", icon: "\u{1F4C1}"},
+  {path: "/people", label: "Субьектийн жагсаалт", icon: "\u{1F465}"},
   {path: "/import", label: "Өгөгдөл импорт", icon: "\u{1F4E5}"},
-  {path: "/transactions", label: "Гүйлгээ", icon: "\u{1F4B0}"},
+  {path: "/transactions", label: "Дансны дүн шинжилгээ", icon: "\u{1F4B0}"},
   {path: "/calls", label: "Дуудлагын бүртгэл", icon: "\u{1F4DE}"},
   {path: "/timeline", label: "Он цагийн хэлхээ", icon: "\u{23F1}"},
   {path: "/linkchart", label: "Холбоосын зураглал", icon: "\u{1F578}"},

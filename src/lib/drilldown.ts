@@ -9,7 +9,7 @@
 import {useEffect} from "react";
 import {makeVar} from "@apollo/client";
 
-// Third breadcrumb level for the AppHeader: Кейс › Хуудас › <entity>.
+// Third breadcrumb level for the AppHeader: Хэрэг › Хуудас › <entity>.
 // A detail view publishes the entity it is drilled into (selected person,
 // suspect filter, network node) and the header renders it; cleared on
 // deselect and on unmount so stale crumbs never leak across pages.

@@ -93,7 +93,7 @@ export default function App() {
             borderBottom: "1px solid var(--border-primary)",
           }}
         >
-          FORENSIC ANALYST
+          МӨРЧ v1
         </div>
         {NAV.map((n) => (
           <NavLink

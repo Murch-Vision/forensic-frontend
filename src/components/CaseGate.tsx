@@ -45,12 +45,12 @@ export default function CaseGate({children}: {children: ReactNode}) {
   return (
     <div className="case-gate">
       <div className="case-gate-icon">{"\u{1F4C1}"}</div>
-      <div className="case-gate-label">Кейс сонгоогүй</div>
-      <div className="case-gate-title">Эхлээд кейс сонгоно уу</div>
+      <div className="case-gate-label">Хэрэг сонгоогүй</div>
+      <div className="case-gate-title">Эхлээд хэрэг сонгоно уу</div>
       <p className="case-gate-text">
-        Гүйлгээ, дуудлага болон холбоосын өгөгдөл зөвхөн кейсийн хүрээнд
-        харагдана: <b>Кейс → Өгөгдөл</b>. Доороос кейсээ сонгох эсвэл шинэ
-        кейс үүсгэнэ үү.
+        Гүйлгээ, дуудлага болон холбоосын өгөгдөл зөвхөн хэргийн хүрээнд
+        харагдана: <b>Хэрэг → Өгөгдөл</b>. Доороос хэргээ сонгох эсвэл шинэ
+        хэрэг үүсгэнэ үү.
       </p>
       {caseFiles.length > 0 && (
         <Select
@@ -60,7 +60,7 @@ export default function CaseGate({children}: {children: ReactNode}) {
             if (v) void onSelect(Number(v));
           }}
           options={[
-            {value: "", label: "Кейс сонгох..."},
+            {value: "", label: "Хэрэг сонгох..."},
             ...caseFiles.map((c) => ({
               value: c.id,
               label: `${c.caseId}${c.caseName ? " · " + c.caseName : ""}`,
@@ -68,7 +68,7 @@ export default function CaseGate({children}: {children: ReactNode}) {
           ]} />
       )}
       <Link to="/cases" className="btn">
-        КЕЙС УДИРДАХ →
+        ХЭРЭГ УДИРДАХ →
       </Link>
     </div>
   );

@@ -9,14 +9,7 @@
     "start": "vite preview",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview",
-    "tauri": "tauri",
-    "desktop:prepare": "node scripts/prepare-sidecar.mjs",
-    "desktop": "pnpm desktop:prepare && tauri dev",
-    "build:desktop": "pnpm desktop:prepare && tauri build",
-    "build:mac": "pnpm desktop:prepare && tauri build --bundles app,dmg",
-    "build:windows": "pnpm desktop:prepare && tauri build --bundles nsis,msi",
-    "build:linux": "pnpm desktop:prepare && tauri build --bundles deb,appimage"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@apollo/client": "^3.12.6",
@@ -35,7 +28,6 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@types/react-plotly.js": "^2.6.4",
-    "@tauri-apps/cli": "^2",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"

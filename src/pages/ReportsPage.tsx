@@ -143,7 +143,7 @@ export default function ReportsPage() {
           color="green" />
       </div>
 
-      <Card title="Кейсүүд" noPadding style={{marginBottom: 16}}>
+      <Card title="Хэргүүд" noPadding style={{marginBottom: 16}}>
         <DataTable
           rows={data.caseFiles}
           rowKey={(c) => c.id}

@@ -41,7 +41,8 @@ export default defineConfig(({mode}) => {
 
   return {
     plugins: [react()],
-    // Tauri picks up build errors itself; don't let Vite wipe the terminal.
+    // At boot the Windows launcher is the only reader of this output and it
+    // logs to a file — wiping the terminal would erase the build error with it.
     clearScreen: false,
     // Expose the API URL to the browser bundle so the Apollo client can talk to
     // the API directly (the API serves GraphQL with permissive CORS).
@@ -53,7 +54,8 @@ export default defineConfig(({mode}) => {
       // just the machine it runs on.
       host: true,
       port: 5173,
-      // Tauri expects the dev server on a fixed port; fail rather than hop ports.
+      // The Windows launcher and the nginx preview both address :5173 by
+      // number, so fail loudly rather than silently hopping to a free port.
       strictPort: true,
       // pnpm drops its content-addressed store at the project root, and vite
       // ignores node_modules by default but NOT .pnpm-store — the dev server took

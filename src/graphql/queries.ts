@@ -21,23 +21,43 @@ export const DASHBOARD_OVERVIEW_QUERY = gql`
 `;
 
 // Dashboard, active case: the evidence queries are case-scoped server-side,
-// so these lists ARE the case; patterns stay global and are filtered against
-// the case's accounts/phones client-side.
+// so these lists ARE the case. Counterparty figures come from caseRelations
+// below, not from counting these rows in the browser.
 export const DASHBOARD_CASE_QUERY = gql`
   query DashboardCase {
     activeCase {
       id caseId caseName description status priority leadInvestigator createdAt
     }
-    suspects {
-      id suspectId fullName riskLevel occupation initials
-      bankAccounts { id }
-      phoneNumbers { id number }
-    }
+    suspects { id suspectId fullName riskLevel occupation initials }
     bankAccounts { id bankName maskedNumber suspectId }
     transactions { id bankAccountId timestamp amount type flagStatus }
     callRecords { id startTime }
     suspectLinks { id }
-    patterns { alertType severity description timestamp relatedAccountId }
+  }
+`;
+
+// Харьцаа — the counterparty picture behind the dashboard lists. Aggregated on
+// the server so the browser never receives every transaction just to count it.
+export const CASE_RELATIONS_QUERY = gql`
+  query CaseRelations {
+    caseRelations {
+      statementAccounts totalRelations mutualRelations
+      txnCount creditCount debitCount
+      creditTotal debitTotal netTotal unnamedTxnCount
+      relations {
+        key name account nationalId
+        txnCount creditCount debitCount
+        creditTotal debitTotal netTotal
+        accountIds mutual subjectMatch
+      }
+      byAccount {
+        accountId label txnCount relationCount
+        relations {
+          key name account txnCount creditTotal debitTotal netTotal
+          mutual subjectMatch
+        }
+      }
+    }
   }
 `;
 

@@ -71,12 +71,12 @@ export default function AppHeader() {
   return (
     <header className="app-header">
       <div className="app-header-group">
-        <span className="app-header-label">Кейс</span>
+        <span className="app-header-label">Хэрэг</span>
         <Select
           className="app-header-status"
           value={statusFilter}
           onChange={onFilterChange}
-          title="Кейсийн жагсаалтыг төлвөөр шүүх"
+          title="Хэргийн жагсаалтыг төлвөөр шүүх"
           options={[
             {value: "", label: "Бүх төлөв"},
             ...["OPEN", "ACTIVE", "CLOSED", "ARCHIVED"].map((s) => ({
@@ -86,13 +86,13 @@ export default function AppHeader() {
           className="app-header-select"
           value={activeCase?.id ?? ""}
           onChange={(v) => onSelectCase(v ? Number(v) : null)}
-          title="Идэвхтэй кейс — бүх хуудсанд үйлчилнэ"
+          title="Идэвхтэй хэрэг — бүх хуудсанд үйлчилнэ"
           triggerLabel={activeCase
             ? `${activeCase.caseId} · ${activeCase.caseName} (${
               STATUS_LABELS[activeCase.status] ?? activeCase.status})`
-            : "Кейс сонгоогүй"}
+            : "Хэрэг сонгоогүй"}
           options={[
-            {value: "", label: "Кейс сонгоогүй"},
+            {value: "", label: "Хэрэг сонгоогүй"},
             ...visibleCases.map((c) => ({value: c.id,
               label: `${c.caseId} · ${c.caseName} (${
                 STATUS_LABELS[c.status] ?? c.status})`})),
@@ -104,11 +104,12 @@ export default function AppHeader() {
         gap: 12}}>
         <div style={{textAlign: "right", lineHeight: 1.2}}>
           <div style={{fontSize: 13, color: "var(--text-primary)"}}>
-            {user?.fullName || user?.username}
+            {[user?.rank, user?.fullName].filter(Boolean).join(" ")
+              || user?.username}
           </div>
           <div style={{fontSize: 11, color: isAdmin
             ? "var(--accent-amber)" : "var(--text-secondary)"}}>
-            {isAdmin ? "Хэлтсийн дарга" : "Мөрдөгч"}
+            {isAdmin ? "Админ" : "Мөрдөгч"}
           </div>
         </div>
         <button className="btn" onClick={() => logout()}

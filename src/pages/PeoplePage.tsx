@@ -337,8 +337,8 @@ export default function PeoplePage() {
   }
 
   const header = (
-    <PageHeader icon={"\u{1F465}"} title="Хүмүүсийн сан"
-      subtitle="КЕЙС ДАМНАСАН ХҮМҮҮСИЙН НЭГДСЭН БҮРТГЭЛ"
+    <PageHeader icon={"\u{1F465}"} title="Субьектийн жагсаалт"
+      subtitle="ХЭРЭГ ДАМНАСАН ХҮМҮҮСИЙН НЭГДСЭН БҮРТГЭЛ"
       actions={
         <button className="btn btn-accent" onClick={startAdd}>
           + ХҮН НЭМЭХ
@@ -379,7 +379,7 @@ export default function PeoplePage() {
                   onChange={(v) => setCaseFilter(Number(v))}
                   style={{width: "100%", marginBottom: 8}}
                   options={[
-                    {value: 0, label: `Бүх кейс (${people.length})`},
+                    {value: 0, label: `Бүх хэрэг (${people.length})`},
                     ...caseOptions.map((c) => ({value: c.id,
                       label: `${c.name} (${c.count})`})),
                   ]} />
@@ -389,7 +389,7 @@ export default function PeoplePage() {
                   onChange={(e) => setSearch(e.target.value)} />
                 <div className="people-panel-stats">
                   <span><b>{filtered.length}</b> хүн</span>
-                  <span><b>{crossCase}</b> олон кейст</span>
+                  <span><b>{crossCase}</b> олон хэрэгт</span>
                   <span><b>{grouped}</b> давхардсан</span>
                   <span className="risk"><b>{highRisk}</b> эрсдэлтэй</span>
                 </div>
@@ -428,7 +428,7 @@ export default function PeoplePage() {
                       {p.cases.length > 0 && (
                         <span className={`badge ${
                           p.cases.length > 1 ? "warning" : "unknown"}`}>
-                          {p.cases.length} кейс
+                          {p.cases.length} хэрэг
                         </span>
                       )}
                       {(p.riskLevel === "HIGH"
@@ -511,15 +511,15 @@ export default function PeoplePage() {
                     {activeCase && (
                       activeCaseRef ? (
                         <span className="badge low"
-                          title={`Идэвхтэй кейст №${
+                          title={`Идэвхтэй хэрэгт №${
                             activeCaseRef.exhibitNumber} нотлох баримт`}>
                           НОТЛОХ БАРИМТ №{activeCaseRef.exhibitNumber}
                         </span>
                       ) : (
                         <button className="btn btn-accent"
-                          title={`«${activeCase.caseName}» кейст нотлох баримт болгох`}
+                          title={`«${activeCase.caseName}» хэрэгт нотлох баримт болгох`}
                           onClick={tagIntoActiveCase}>
-                          КЕЙСТ ТЭМДЭГЛЭХ
+                          ХЭРЭГТ ТЭМДЭГЛЭХ
                         </button>
                       )
                     )}
@@ -553,7 +553,7 @@ export default function PeoplePage() {
                     <div className="stat-strip-value">
                       {selected.cases.length}
                     </div>
-                    <div className="stat-strip-label">Кейс</div>
+                    <div className="stat-strip-label">Хэрэг</div>
                   </div>
                   <div className="stat-strip-item">
                     <div className="stat-strip-value">
@@ -583,14 +583,14 @@ export default function PeoplePage() {
                 </div>
               </Card>
 
-              <Card title="Холбогдсон кейсүүд" noPadding
+              <Card title="Холбогдсон хэргүүд" noPadding
                 style={{marginTop: 16}}>
                 <DataTable<PersonCaseRef>
                   rows={selected.cases}
                   rowKey={(r) => r.caseFile.id}
-                  empty="Нотлох баримтаар кейст холбогдоогүй байна"
+                  empty="Нотлох баримтаар хэрэгт холбогдоогүй байна"
                   columns={[
-                    {header: "Кейс", render: (r) => (
+                    {header: "Хэрэг", render: (r) => (
                       <span style={{fontWeight: 600}}>
                         {r.caseFile.caseName}
                       </span>

@@ -11,6 +11,7 @@ import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {useNavigate} from "react-router-dom";
 import {
   ACTIVE_CASE_QUERY,
+  CASE_RELATIONS_QUERY,
   DASHBOARD_CASE_QUERY,
   DASHBOARD_OVERVIEW_QUERY,
   EVIDENCE_FOR_CASE,
@@ -27,14 +28,14 @@ import {
 } from "../components/kit";
 import type {Column} from "../components/kit";
 import {
-  formatDate, formatDateTime, formatMoney, formatNum, riskClass, sevClass,
+  formatDate, formatDateTime, formatMoney, formatNum,
 } from "../lib/format";
 import {
   PRIORITY_BADGE, PRIORITY_LABELS, STATUS_BADGE, STATUS_LABELS,
 } from "../nav";
-import type {DashboardStats, PatternAlert, RiskLevel} from "../types";
+import type {DashboardStats, RiskLevel} from "../types";
 
-// Кейс-төвтэй самбар. ДҮРЭМ: зөвхөн БАЙГАА өгөгдлийг харуулна — хоосон
+// Хэрэг-төвтэй самбар. ДҮРЭМ: зөвхөн БАЙГАА өгөгдлийг харуулна — хоосон
 // section, тэг карт, цэс давхардуулсан товч огт байхгүй. Тоо бүр нь өөрийн
 // хуудас руу drill-down, алерт нь шүүлттэй /transactions руу үсэрнэ.
 
@@ -56,8 +57,6 @@ interface DashSuspect {
   riskLevel: RiskLevel;
   occupation: string | null;
   initials: string;
-  bankAccounts: {id: number}[];
-  phoneNumbers: {id: number; number: string}[];
 }
 
 interface DashAccount {
@@ -83,32 +82,56 @@ interface CaseData {
   transactions: DashTxn[];
   callRecords: {id: number; startTime: string}[];
   suspectLinks: {id: number}[];
-  patterns: PatternAlert[];
 }
 
-const SEV_ORDER: Record<string, number> = {
-  CRITICAL: 0, HIGH: 1, ALERT: 2, MEDIUM: 3, WARNING: 3, LOW: 4, INFO: 5,
-};
+// Харьцаа — server-side counterparty aggregate (see relationService.ts).
+interface Relation {
+  key         : string;
+  name        : string;
+  account     : string | null;
+  nationalId? : string | null;
+  txnCount    : number;
+  creditCount?: number;
+  debitCount? : number;
+  creditTotal : number;
+  debitTotal  : number;
+  netTotal    : number;
+  accountIds? : number[];
+  mutual      : boolean;
+  subjectMatch: boolean;
+}
 
-const SEV_COLOR: Record<string, string> = {
-  CRITICAL: "var(--risk-critical)",
-  HIGH: "var(--risk-high)",
-  MEDIUM: "var(--severity-warning)",
-  LOW: "var(--risk-low)",
-  INFO: "var(--severity-info)",
-};
+interface AccountRelations {
+  accountId     : number;
+  label         : string;
+  txnCount      : number;
+  relationCount : number;
+  relations     : Relation[];
+}
 
-const RISK_ORDER: Record<string, number> = {
-  CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, UNKNOWN: 4,
-};
+interface RelationData {
+  caseRelations: {
+    statementAccounts : number;
+    totalRelations    : number;
+    mutualRelations   : number;
+    txnCount          : number;
+    creditCount       : number;
+    debitCount        : number;
+    creditTotal       : number;
+    debitTotal        : number;
+    netTotal          : number;
+    unnamedTxnCount   : number;
+    relations         : Relation[];
+    byAccount         : AccountRelations[];
+  };
+}
 
-// analysisService.detectPatterns() alert types.
-const ALERT_LABELS: Record<string, string> = {
-  RAPID_TRANSACTIONS: "Дараалсан түргэн гүйлгээ",
-  ROUND_TRIP: "Буцаан шилжүүлэг",
-  SMURFING: "Жижиглэсэн орлого (смөрфинг)",
-  BURST_CALLING: "Олон давтан дуудлага",
-};
+// Улаан нь регистрийн таарсныг, шар нь дундын харьцааг илэрхийлнэ.
+function relColor(r: {subjectMatch: boolean; mutual: boolean}): string {
+  if (r.subjectMatch) return "var(--accent-red)";
+  if (r.mutual) return "var(--accent-amber)";
+  return "var(--text-primary)";
+}
 
 function Shell({subtitle, children}: {
   subtitle: string;
@@ -122,7 +145,7 @@ function Shell({subtitle, children}: {
   );
 }
 
-// === Кейс сонгоогүй =========================================================
+// === Хэрэг сонгоогүй =========================================================
 
 interface OverviewData {
   dashboardStats: DashboardStats;
@@ -140,12 +163,12 @@ function Overview() {
   }
 
   if (loading || !data) {
-    return <Shell subtitle="КЕЙС СОНГООГҮЙ"><Loading /></Shell>;
+    return <Shell subtitle="ХЭРЭГ СОНГООГҮЙ"><Loading /></Shell>;
   }
 
   const s = data.dashboardStats;
   const stats: {label: string; value: React.ReactNode; color?: string}[] = [
-    {label: "Нээлттэй кейс", value: s.openCases},
+    {label: "Нээлттэй хэрэг", value: s.openCases},
     {label: "Нийт сэжигтэн", value: s.totalSuspects},
     {label: "Нийт гүйлгээ", value: formatNum(s.totalTransactions)},
     {label: "Нийт дуудлага", value: formatNum(s.totalCallRecords)},
@@ -155,7 +178,7 @@ function Overview() {
   ].filter((c) => c.value !== 0 && c.value !== "0");
 
   const cols: Column<CaseRef>[] = [
-    {header: "Кейс", render: (c) => <b>{c.caseId}</b>,
+    {header: "Хэрэг", render: (c) => <b>{c.caseId}</b>,
       sortValue: (c) => c.caseId},
     {header: "Нэр", render: (c) => c.caseName},
     {header: "Төлөв", render: (c) => (
@@ -170,7 +193,7 @@ function Overview() {
   ];
 
   return (
-    <Shell subtitle="КЕЙС СОНГООГҮЙ">
+    <Shell subtitle="ХЭРЭГ СОНГООГҮЙ">
       {stats.length > 0 && (
         <div className="metrics-grid">
           {stats.map((c) => (
@@ -179,17 +202,17 @@ function Overview() {
           ))}
         </div>
       )}
-      <Card title="Кейс сонгох — мөр дээр дарж идэвхжүүлнэ" noPadding>
+      <Card title="Хэрэг сонгох — мөр дээр дарж идэвхжүүлнэ" noPadding>
         <DataTable columns={cols} rows={data.caseFiles}
           rowKey={(c) => c.id}
-          empty="Кейс алга"
+          empty="Хэрэг алга"
           onRowClick={(c) => void pick(c.id)} />
       </Card>
     </Shell>
   );
 }
 
-// === Кейс идэвхтэй ==========================================================
+// === Хэрэг идэвхтэй ==========================================================
 
 interface Derived {
   volume: number;
@@ -199,8 +222,6 @@ interface Derived {
   months: string[];
   credit: number[];
   debit: number[];
-  alerts: PatternAlert[];
-  topSuspects: DashSuspect[];
   topTxns: DashTxn[];
   acctLabel: (id: number | null) => string;
 }
@@ -246,23 +267,6 @@ function derive(data: CaseData): Derived {
     return [a.bankName, a.maskedNumber, owner].filter(Boolean).join(" · ");
   };
 
-  // patterns нь глобал — зөвхөн энэ кейсийн данс/дугаарт хамаатайг үлдээнэ.
-  const acctIds = new Set(accounts.map((a) => a.id));
-  const phones = suspects
-    .flatMap((s) => s.phoneNumbers.map((p) => p.number))
-    .filter(Boolean);
-  const alerts = data.patterns
-    .filter((p) => p.relatedAccountId != null
-      ? acctIds.has(p.relatedAccountId)
-      : phones.some((n) => p.description.includes(n)))
-    .sort((a, b) =>
-      (SEV_ORDER[a.severity] ?? 9) - (SEV_ORDER[b.severity] ?? 9)
-      || b.timestamp.localeCompare(a.timestamp));
-
-  const topSuspects = [...suspects].sort((a, b) =>
-    (RISK_ORDER[a.riskLevel] ?? 9) - (RISK_ORDER[b.riskLevel] ?? 9)
-    || a.fullName.localeCompare(b.fullName));
-
   const topTxns = [...txns].sort((a, b) => b.amount - a.amount).slice(0, 10);
 
   return {
@@ -272,7 +276,7 @@ function derive(data: CaseData): Derived {
     months,
     credit: months.map((k) => monthMap.get(k)!.credit),
     debit: months.map((k) => monthMap.get(k)!.debit),
-    alerts, topSuspects, topTxns, acctLabel,
+    topTxns, acctLabel,
   };
 }
 
@@ -283,13 +287,14 @@ const META: React.CSSProperties = {
 function CaseDashboard({caseFileId}: {caseFileId: number}) {
   const nav = useNavigate();
   const {data, loading} = useQuery<CaseData>(DASHBOARD_CASE_QUERY);
+  const relQ = useQuery<RelationData>(CASE_RELATIONS_QUERY);
   const evQ = useQuery<{evidenceForCase: {id: number}[]}>(EVIDENCE_FOR_CASE, {
     variables: {caseFileId},
   });
   const d = useMemo(() => (data ? derive(data) : null), [data]);
 
   if (loading || !data || !d) {
-    return <Shell subtitle="КЕЙСИЙН ТОЙМ"><Loading /></Shell>;
+    return <Shell subtitle="ХЭРГИЙН ТОЙМ"><Loading /></Shell>;
   }
 
   const cf = data.activeCase;
@@ -315,17 +320,17 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     </div>
   );
 
-  // Шинэ / хоосон кейс: самбар биш, нэг л мэдэгдэл.
+  // Шинэ / хоосон хэрэг: самбар биш, нэг л мэдэгдэл.
   if (isEmpty) {
     return (
-      <Shell subtitle={cf ? `${cf.caseId} · ${cf.caseName}` : "КЕЙСИЙН ТОЙМ"}>
+      <Shell subtitle={cf ? `${cf.caseId} · ${cf.caseName}` : "ХЭРГИЙН ТОЙМ"}>
         {meta}
         <div className="case-gate">
           <div className="case-gate-icon">🗂</div>
-          <div className="case-gate-title">Энэ кейст өгөгдөл алга</div>
+          <div className="case-gate-title">Энэ хэрэгт өгөгдөл алга</div>
           <p className="case-gate-text">
             <b>Өгөгдөл импорт</b> хуудсаар гүйлгээ, дуудлагын файл оруулах
-            эсвэл <b>Хүмүүсийн сан</b>-гаас хүн тэмдэглэхэд самбар идэвхжинэ.
+            эсвэл <b>Субьектийн жагсаалт</b>-аас хүн тэмдэглэхэд самбар идэвхжинэ.
           </p>
         </div>
       </Shell>
@@ -333,21 +338,32 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   }
 
   // Тэг картыг харуулахгүй — байгаа өгөгдөл л карт болно.
+  const rel = relQ.data?.caseRelations;
   const stats: {
     label: string; value: React.ReactNode; color?: string; to?: string;
   }[] = [
-    {label: "Сэжигтэн", value: data.suspects.length, to: "/people"},
-    {label: "Данс", value: data.bankAccounts.length, to: "/transactions"},
-    {label: "Гүйлгээ", value: hasTxns ? formatNum(data.transactions.length)
-      : 0, to: "/transactions"},
-    {label: "Дуудлага", value: data.callRecords.length === 0 ? 0
-      : formatNum(data.callRecords.length), to: "/calls"},
-    {label: "Холбоос", value: data.suspectLinks.length, to: "/linkchart"},
-    {label: "Тэмдэглэгдсэн", value: d.flagged, color: "red",
+    {label: "Нийт хуулсан данс", value: rel ? rel.statementAccounts : 0,
       to: "/transactions"},
-    {label: "Эд мөрийн баримт", value: evidenceCount, color: "amber"},
-    {label: "Нийт дүн", value: d.volume === 0 ? 0 : formatMoney(d.volume),
-      color: "green"},
+    {label: "Нийт харьцаа", value: rel ? formatNum(rel.totalRelations) : 0,
+      to: "/transactions"},
+    {label: "Дундын харьцаа", value: rel ? formatNum(rel.mutualRelations) : 0,
+      color: "amber", to: "/transactions"},
+    {label: "Нийт гүйлгээ", value: hasTxns
+      ? formatNum(data.transactions.length) : 0, to: "/transactions"},
+    {label: "Орлогын гүйлгээ", value: rel ? formatNum(rel.creditCount) : 0,
+      to: "/transactions"},
+    {label: "Зарлагын гүйлгээ", value: rel ? formatNum(rel.debitCount) : 0,
+      to: "/transactions"},
+    {label: "Нийт орлого",
+      value: rel && rel.creditTotal !== 0 ? formatMoney(rel.creditTotal) : 0,
+      color: "green", to: "/transactions"},
+    {label: "Нийт зарлага",
+      value: rel && rel.debitTotal !== 0 ? formatMoney(rel.debitTotal) : 0,
+      color: "red", to: "/transactions"},
+    // The difference is the point of the pair above, so it shows even at zero.
+    {label: "Орлого зарлагын зөрүү",
+      value: rel ? formatMoney(rel.netTotal) : "—",
+      color: rel && rel.netTotal < 0 ? "red" : "green"},
   ].filter((c) => c.value !== 0);
 
   const txnCols: Column<DashTxn>[] = [
@@ -371,69 +387,136 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
         ? <Badge text="Сэжигтэй" kind="medium" /> : null},
   ];
 
+  const money = (v: number) => (
+    <span style={{fontFamily: "var(--font-mono)"}}>{formatMoney(v)}</span>
+  );
+
+  // Дундын харьцаа: нэр | данс | орлого | зарлага | зөрүү.
+  const relCols: Column<Relation>[] = [
+    // Улаан = регистр нь субьектийн жагсаалттай таарсан; шар = дундын харьцаа.
+    {header: "Харьцаа", sortValue: (r) => r.name,
+      render: (r) => (
+        <span style={{color: relColor(r)}}>{r.name}</span>
+      )},
+    {header: "Данс", render: (r) => (
+      <span style={{fontFamily: "var(--font-mono)", fontSize: 11}}>
+        {r.account ?? "—"}
+      </span>
+    )},
+    {header: "Гүйлгээ", align: "right", sortValue: (r) => r.txnCount,
+      render: (r) => formatNum(r.txnCount)},
+    {header: "Орлого", align: "right", sortValue: (r) => r.creditTotal,
+      render: (r) => money(r.creditTotal)},
+    {header: "Зарлага", align: "right", sortValue: (r) => r.debitTotal,
+      render: (r) => money(r.debitTotal)},
+    {header: "Зөрүү", align: "right", sortValue: (r) => r.netTotal,
+      render: (r) => (
+        <span style={{fontFamily: "var(--font-mono)", color: r.netTotal < 0
+          ? "var(--accent-red)" : "var(--accent-green)"}}>
+          {formatMoney(r.netTotal)}
+        </span>
+      )},
+  ];
+
+  // Slide 6 — one row per direction, biggest money first. A counterparty that
+  // both received and sent appears once for each, which is what "Төрөл" is for.
+  interface FlowRow {
+    key: string; name: string; count: number; amount: number; credit: boolean;
+  }
+  const topFlows: FlowRow[] = (rel?.relations ?? [])
+    .flatMap((r) => {
+      const rows: FlowRow[] = [];
+      if (r.creditTotal > 0) {
+        rows.push({key: `${r.key}:in`, name: r.name,
+          count: r.creditCount ?? 0, amount: r.creditTotal, credit: true});
+      }
+      if (r.debitTotal > 0) {
+        rows.push({key: `${r.key}:out`, name: r.name,
+          count: r.debitCount ?? 0, amount: r.debitTotal, credit: false});
+      }
+      return rows;
+    })
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 25);
+
+  const flowCols: Column<FlowRow>[] = [
+    {header: "Давтамж", align: "right", sortValue: (f) => f.count,
+      render: (f) => `${formatNum(f.count)} удаа`},
+    {header: "Дүн", align: "right", sortValue: (f) => f.amount,
+      render: (f) => money(f.amount)},
+    {header: "Төрөл", render: (f) => (
+      <span style={{color: f.credit
+        ? "var(--accent-green)" : "var(--accent-red)"}}>
+        {f.credit ? "Орлого" : "Зарлага"}
+      </span>
+    )},
+    {header: "Харьцаа", sortValue: (f) => f.name, render: (f) => f.name},
+  ];
+
+  // Улаан/шар нь тайлбаргүй бол таагдахгүй — хоёр шошго хажууд нь.
+  const relLegend = (
+    <span style={{display: "inline-flex", gap: 12, fontSize: 11}}>
+      <span style={{color: "var(--accent-red)"}}>Регистр таарсан</span>
+      <span style={{color: "var(--accent-amber)"}}>Дундын</span>
+    </span>
+  );
+
   // Зөвхөн агуулгатай section-ууд — хоосон хайрцаг зурахгүй.
   const sections: React.ReactNode[] = [];
 
-  if (d.alerts.length > 0) {
+  // Дундын харьцаа — the counterparties seen on more than one of our
+  // statement accounts. This replaced the old Сэрэмжлүүлэг panel.
+  const mutual = (rel?.relations ?? []).filter((r) => r.mutual);
+  if (mutual.length > 0) {
     sections.push(
-      <Card key="alerts" title={`Сэрэмжлүүлэг (${d.alerts.length})`} noPadding>
+      <Card key="mutual" title={`Дундын харилцааны жагсаалт (${mutual.length})`}
+        actions={relLegend} noPadding>
         <div style={{maxHeight: 360, overflowY: "auto"}}>
-          {d.alerts.map((a, i) => (
-            <div key={i} className="alert-item"
-              style={{cursor: "pointer"}}
-              onClick={() => a.relatedAccountId != null
-                ? nav(`/transactions?acct=${a.relatedAccountId}`)
-                : nav("/calls")}>
-              <div className="alert-severity-bar" style={{
-                background: SEV_COLOR[a.severity] ?? "var(--text-muted)",
-              }} />
-              <div style={{flex: 1, minWidth: 0}}>
-                <div style={{display: "flex", gap: 8,
-                  justifyContent: "space-between"}}>
-                  <span style={{fontSize: 12, fontWeight: 600}}>
-                    {ALERT_LABELS[a.alertType] ?? a.alertType}
-                  </span>
-                  <Badge text={a.severity} kind={sevClass(a.severity)} />
-                </div>
-                <div style={{fontSize: 11, marginTop: 2,
-                  color: "var(--text-secondary)"}}>
-                  {a.description}
-                </div>
-                <div style={{fontSize: 10, marginTop: 2,
-                  color: "var(--text-muted)"}}>
-                  {[d.acctLabel(a.relatedAccountId),
-                    formatDateTime(a.timestamp)]
-                    .filter(Boolean).join(" · ")}
-                </div>
-              </div>
-            </div>
-          ))}
+          <DataTable columns={relCols} rows={mutual}
+            rowKey={(r) => r.key} empty="Дундын харьцаа алга"
+            pageSize={50}
+            onRowClick={(r) => nav(`/transactions?cp=${
+              encodeURIComponent(r.account ?? r.name)}`)} />
         </div>
       </Card>
     );
   }
 
-  if (data.suspects.length > 0) {
+  // Нийт харьцаанууд — every statement account with its own counterparty list,
+  // busiest first (slide 4).
+  if (rel && rel.byAccount.length > 0) {
     sections.push(
-      <Card key="suspects" title={`Сэжигтнүүд (${data.suspects.length})`}
-        noPadding>
-        <div style={{maxHeight: 360, overflowY: "auto"}}>
-          {d.topSuspects.map((su) => (
-            <div key={su.id} className="suspect-row"
-              style={{cursor: "pointer"}}
-              onClick={() => nav("/people")}>
-              <div className={`avatar ${riskClass(su.riskLevel)}`}>
-                {su.initials}
+      <Card key="byacct"
+        title={`Нийт харьцаа — гүйлгээний тоогоор (${rel.totalRelations})`}
+        actions={relLegend} noPadding>
+        <div style={{maxHeight: 420, overflowY: "auto"}}>
+          {rel.byAccount.map((g) => (
+            <div key={g.accountId}>
+              <div style={{padding: "8px 12px", fontSize: 11, fontWeight: 700,
+                color: "var(--accent-cyan)", background: "var(--bg-input)",
+                borderTop: "1px solid var(--border-primary)",
+                position: "sticky", top: 0}}>
+                {g.label} — {formatNum(g.relationCount)} харьцаа ·{" "}
+                {formatNum(g.txnCount)} гүйлгээ
               </div>
-              <div className="info">
-                <div className="name">{su.fullName}</div>
-                <div className="detail">
-                  {su.suspectId} · {su.occupation ?? "—"} ·{" "}
-                  {su.bankAccounts.length} данс ·{" "}
-                  {su.phoneNumbers.length} утас
+              {g.relations.map((r) => (
+                <div key={`${g.accountId}:${r.key}`}
+                  style={{display: "flex", gap: 8, alignItems: "center",
+                    padding: "6px 12px", fontSize: 12, cursor: "pointer",
+                    borderTop: "1px solid var(--border-primary)"}}
+                  onClick={() => nav(`/transactions?acct=${g.accountId}`)}>
+                  <span style={{flex: 1, minWidth: 0, overflow: "hidden",
+                    textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    color: relColor(r)}}
+                    title={r.account ?? undefined}>
+                    {r.name}
+                  </span>
+                  <span style={{fontFamily: "var(--font-mono)",
+                    color: "var(--text-secondary)"}}>
+                    {formatNum(r.txnCount)}
+                  </span>
                 </div>
-              </div>
-              <Badge text={su.riskLevel} kind={riskClass(su.riskLevel)} />
+              ))}
             </div>
           ))}
         </div>
@@ -455,6 +538,19 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     );
   }
 
+  if (topFlows.length > 0) {
+    sections.push(
+      <Card key="topflows" title="Хамгийн өндөр дүнгээр гүйлгээ хийсэн харьцаа"
+        noPadding>
+        <div style={{maxHeight: 360, overflowY: "auto"}}>
+          <DataTable columns={flowCols} rows={topFlows}
+            rowKey={(f) => f.key} empty="Харьцаа алга"
+            defaultSort={{col: 1, dir: "desc"}} />
+        </div>
+      </Card>
+    );
+  }
+
   if (hasTxns) {
     sections.push(
       <Card key="toptxns" title="Хамгийн том гүйлгээнүүд" noPadding>
@@ -471,7 +567,7 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   }
 
   return (
-    <Shell subtitle={cf ? `${cf.caseId} · ${cf.caseName}` : "КЕЙСИЙН ТОЙМ"}>
+    <Shell subtitle={cf ? `${cf.caseId} · ${cf.caseName}` : "ХЭРГИЙН ТОЙМ"}>
       {meta}
       {stats.length > 0 && (
         <div className="metrics-grid">

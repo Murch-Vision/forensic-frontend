@@ -7,9 +7,9 @@
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {gql} from "@apollo/client";
 
-const USER_FIELDS = "id username fullName role active";
+const USER_FIELDS = "id username rank fullName role active";
 // deviceBound only matters in the admin list; keep it off the small `me` payload.
-const ADMIN_USER_FIELDS = `${USER_FIELDS} deviceBound`;
+const ADMIN_USER_FIELDS = `${USER_FIELDS} deviceBound ownedCaseCount`;
 
 export const ME_QUERY = gql`
   query Me { me { ${USER_FIELDS} } }
@@ -41,6 +41,18 @@ export const RESET_USER_DEVICE = gql`
 export const CREATE_USER = gql`
   mutation CreateUser($input: CreateUserInput!) {
     createUser(input: $input) { ${USER_FIELDS} }
+  }
+`;
+
+export const UPDATE_USER = gql`
+  mutation UpdateUser($userId: Int!, $input: UpdateUserInput!) {
+    updateUser(userId: $userId, input: $input) { ${ADMIN_USER_FIELDS} }
+  }
+`;
+
+export const DELETE_USER = gql`
+  mutation DeleteUser($userId: Int!, $transferToUserId: Int) {
+    deleteUser(userId: $userId, transferToUserId: $transferToUserId)
   }
 `;
 
