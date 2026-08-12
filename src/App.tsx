@@ -9,6 +9,7 @@
 import {NavLink, Navigate, Route, Routes} from "react-router-dom";
 import type {ReactNode} from "react";
 import AppHeader from "./components/AppHeader";
+import FeedbackWidget from "./components/FeedbackWidget";
 import {NAV_META} from "./nav";
 import CasesPage from "./pages/CasesPage";
 import PeoplePage from "./pages/PeoplePage";
@@ -20,7 +21,6 @@ import TimelinePage from "./pages/TimelinePage";
 import LinkChartPage from "./pages/LinkChartPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
-import SupportPage from "./pages/SupportPage";
 import AdminPage from "./pages/AdminPage";
 import LoginPage from "./pages/LoginPage";
 import {useAuth} from "./lib/auth";
@@ -39,7 +39,6 @@ const PAGE_ELEMENTS: Record<string, ReactNode> = {
   "/linkchart": <LinkChartPage />,
   "/reports": <ReportsPage />,
   "/settings": <SettingsPage />,
-  "/support": <SupportPage />,
   "/admin": <AdminPage />,
 };
 
@@ -131,6 +130,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>
+        <FeedbackWidget />
       </div>
     </div>
   );

@@ -1781,3 +1781,35 @@ input:-webkit-autofill:active {
     }
     body.report-open .no-print { display: none !important; }
 }
+
+/* Санал хүсэлт — floating intake, admin only (FeedbackWidget.tsx).
+   Bottom RIGHT: the sidebar owns the left edge of every screen. */
+.feedback-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  border-radius: 999px;
+  padding: 10px 18px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+/* Drop target for screenshots. Dashed until a file is over it. */
+.feedback-drop {
+  flex: 1 1 100%;
+  min-height: 64px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px dashed var(--border-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color .12s, color .12s;
+}
+
+.feedback-drop:hover,
+.feedback-drop.dragging {
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+}
