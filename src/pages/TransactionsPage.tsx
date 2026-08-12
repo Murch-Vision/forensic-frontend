@@ -24,6 +24,7 @@ import {
   StatCard,
 } from "../components/kit";
 import {DateInput, Select} from "../components/inputs";
+import AccountAnalysis from "../components/AccountAnalysis";
 import CaseGate from "../components/CaseGate";
 import Plot from "../components/Plot";
 import {formatDateTime, formatMoney} from "../lib/format";
@@ -162,8 +163,9 @@ export default function TransactionsPage() {
   const filterTo = params.get("to") ?? "";
   const filterDesc = params.get("q") ?? "";
   // Page view: the analysis itself, or the dedicated restore ("removed") tab.
-  const view: "txns" | "removed" =
-    params.get("view") === "removed" ? "removed" : "txns";
+  const view: "txns" | "analysis" | "removed" =
+    params.get("view") === "removed" ? "removed"
+      : params.get("view") === "analysis" ? "analysis" : "txns";
   const setFilterAccount = (v: string) =>
     patchParams({acct: v === "All" ? null : v});
   const setFilterCounterparty = (v: string) => patchParams({cp: v});
@@ -550,8 +552,9 @@ export default function TransactionsPage() {
       <div style={{display: "flex", gap: 2, marginBottom: 16,
         borderBottom: "1px solid var(--border-primary)"}}>
         {([
-          {key: "txns", label: "💳 Гүйлгээний шинжилгээ"},
-          {key: "removed", label: `↩ Хасагдсаныг сэргээх${
+          {key: "txns", label: "Гүйлгээний шинжилгээ"},
+          {key: "analysis", label: "Дансны дүн шинжилгээ"},
+          {key: "removed", label: `Хасагдсаныг сэргээх${
             restoreCount > 0 ? ` (${restoreCount})` : ""}`},
         ] as const).map((tab) => (
           <button key={tab.key} className="btn"
@@ -836,6 +839,8 @@ export default function TransactionsPage() {
         />
       </Card>
       </>}
+
+      {view === "analysis" && <AccountAnalysis />}
 
       {view === "removed" && <>
       <div className="metrics-grid">

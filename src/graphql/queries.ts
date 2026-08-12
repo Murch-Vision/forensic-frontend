@@ -61,6 +61,41 @@ export const CASE_RELATIONS_QUERY = gql`
   }
 `;
 
+// Дансны дүн шинжилгээ — per-account figures, activity groupings and the rated
+// counterparty list. Aggregated server-side from the same rows the transaction
+// list shows.
+const BUCKET_FIELDS =
+  "key label count creditCount debitCount creditTotal debitTotal";
+
+export const ACCOUNT_ANALYSES_QUERY = gql`
+  query AccountAnalyses($topLimit: Int) {
+    accountAnalyses(topLimit: $topLimit) {
+      accountId label accountNumber ownerName
+      txnCount counterpartyCount creditCount debitCount
+      creditTotal debitTotal netTotal
+      hasTimeOfDay nightCount nightTotal
+      firstTxn lastTxn
+      byHour { ${BUCKET_FIELDS} }
+      byWeekday { ${BUCKET_FIELDS} }
+      byMonth { ${BUCKET_FIELDS} }
+      peakHour peakWeekday peakMonth
+      topCounterparties {
+        key name account txnCount creditTotal debitTotal netTotal
+        mutual subjectMatch rating
+      }
+    }
+  }
+`;
+
+export const DIRECT_TRANSFERS_QUERY = gql`
+  query DirectTransfers {
+    directTransfers {
+      fromAccountId toAccountId fromLabel toLabel txnCount total
+      byMonth { ${BUCKET_FIELDS} }
+    }
+  }
+`;
+
 export const TRANSACTIONS_QUERY = gql`
   query Transactions {
     bankAccounts { id accountNumber bankName maskedNumber suspectId }
