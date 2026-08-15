@@ -363,15 +363,33 @@ export default function TransactionsPage() {
     const nm = sid != null ? nameBySuspect.get(sid) : null;
     return realName(nm) ? nm! : null;
   };
-  // Account dropdown options — masked number labelled with its owner so the
-  // analyst can tell whose account it is (numbers alone are unreadable).
+  // Account dropdown — ONLY the accounts a statement was actually imported for.
+  // The importer also creates an account row for every counterparty number it
+  // meets, so the raw list ran to hundreds of numbers nobody is investigating
+  // and the one account the analyst wanted was lost in them. Holding rows of
+  // its own is what makes an account a subject of the case; it is the same rule
+  // the Дансны дүн шинжилгээ tab already applies (analyseAccounts).
+  const txnCountByAcct = new Map<number, number>();
+  for (const t of allTxns) {
+    txnCountByAcct.set(t.bankAccountId,
+      (txnCountByAcct.get(t.bankAccountId) ?? 0) + 1);
+  }
+  // Name FIRST, number after: the analyst knows these people by name, and a
+  // list that opens with digits cannot be read at a glance.
   const accountOptions = [
     {value: "All", label: "Бүх данс"},
-    ...accounts.map((a) => {
-      const owner = a.suspectId != null ? nameBySuspect.get(a.suspectId) : null;
-      return {value: String(a.id),
-        label: owner ? `${a.maskedNumber} · ${owner}` : a.maskedNumber};
-    }),
+    ...accounts
+      // A deep link (?acct=…) must keep working even when that account is not
+      // one of ours, or the page would silently drop a filter it is applying.
+      .filter((a) => (txnCountByAcct.get(a.id) ?? 0) > 0
+        || String(a.id) === filterAccount)
+      .sort((x, y) =>
+        (txnCountByAcct.get(y.id) ?? 0) - (txnCountByAcct.get(x.id) ?? 0))
+      .map((a) => {
+        const owner = acctOwnerName(a.id);
+        return {value: String(a.id),
+          label: owner ? `${owner} · ${a.maskedNumber}` : a.maskedNumber};
+      }),
   ];
   const calls = callsQ.data?.callRecords ?? [];
   interface CorrRow {
