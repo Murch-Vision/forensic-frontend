@@ -482,14 +482,21 @@ export const PREVIEW_IMPORT = gql`
     $filename: String
     $sheetName: String
     $uploadId: String
+    $headerRow: Int
+    $startRow: Int
+    $endRow: Int
   ) {
     previewImport(
       content: $content
       filename: $filename
       sheetName: $sheetName
       uploadId: $uploadId
+      headerRow: $headerRow
+      startRow: $startRow
+      endRow: $endRow
     ) {
       headers sampleRows totalRows detectedProfile domain confidence
+      headerRow firstDataRow lastDataRow sheetRows
       mapping { field column }
     }
   }
@@ -506,6 +513,9 @@ export const IMPORT_DATA = gql`
     $subjectNumber: String
     $mapping: [ColumnMapInput!]
     $uploadId: String
+    $headerRow: Int
+    $startRow: Int
+    $endRow: Int
   ) {
     importData(
       content: $content
@@ -517,6 +527,9 @@ export const IMPORT_DATA = gql`
       subjectNumber: $subjectNumber
       mapping: $mapping
       uploadId: $uploadId
+      headerRow: $headerRow
+      startRow: $startRow
+      endRow: $endRow
     ) {
       totalRows importedRows skippedRows errors messages detectedProfile domain
     }

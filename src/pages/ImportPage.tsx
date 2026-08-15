@@ -30,6 +30,40 @@ interface Preview {
   domain: string | null;
   confidence: string;
   mapping: {field: string; column: string}[];
+  // The rows the server read, numbered as the spreadsheet numbers them.
+  headerRow: number;
+  firstDataRow: number;
+  lastDataRow: number;
+  sheetRows: number;
+}
+
+// Which rows to read. null = whatever the file says: the detected header, the
+// row after it, and the last row that holds data. A number pins that one.
+interface RowRange {
+  headerRow : number | null;
+  startRow  : number | null;
+  endRow    : number | null;
+}
+
+const AUTO_RANGE: RowRange = {headerRow: null, startRow: null, endRow: null};
+
+// One row-number box. Uncontrolled and re-keyed on the server's answer, so
+// typing stays local and a value the server clamped (or re-detected after a
+// sheet change) replaces what is shown instead of fighting it.
+function RowNumberInput({label, value, onCommit}: {
+  label: string; value: number; onCommit: (raw: string) => void;
+}) {
+  return (
+    <div>
+      <label className="form-label">{label}</label>
+      <input key={value} type="text" inputMode="numeric"
+        className="form-input" defaultValue={value} style={{width: 96}}
+        onBlur={(e) => onCommit(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }} />
+    </div>
+  );
 }
 
 // Editable bank column mapping — mirrors the C# ImportView mapping card.
@@ -122,6 +156,7 @@ export default function ImportPage() {
     phoneNumbers: {number: string}[]}[]}>(IMPORT_SUSPECTS);
   const suspects = suspectsQ.data?.suspects ?? [];
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [rowRange, setRowRange] = useState<RowRange>(AUTO_RANGE);
   const [uploadId, setUploadId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
@@ -158,6 +193,7 @@ export default function ImportPage() {
 
   async function handleFile(file: File) {
     setPreview(null);
+    setRowRange(AUTO_RANGE);
     setSheets([]);
     setSheetName(null);
     setUploadId(null);
@@ -210,6 +246,7 @@ export default function ImportPage() {
     setSheets([]);
     setSheetName(null);
     setPreview(null);
+    setRowRange(AUTO_RANGE);
     setUploadId(null);
     setError(null);
     if (fileInput.current) fileInput.current.value = "";
@@ -227,7 +264,10 @@ export default function ImportPage() {
     contentArg: string,
     filenameArg: string | null,
     sheetArg: string | null,
-    uploadArg: string | null
+    uploadArg: string | null,
+    // Passed in rather than read off state: a commit re-previews in the same
+    // tick it sets the range, when the state has not updated yet.
+    rangeArg: RowRange = rowRange
   ) {
     if (!contentArg && !uploadArg) return;
     setBusy(true);
@@ -235,7 +275,8 @@ export default function ImportPage() {
       const res = await client.query<{previewImport: Preview}>({
         query: PREVIEW_IMPORT,
         variables: {content: uploadArg ? "" : contentArg,
-          filename: filenameArg, sheetName: sheetArg, uploadId: uploadArg},
+          filename: filenameArg, sheetName: sheetArg, uploadId: uploadArg,
+          ...rangeArg},
         fetchPolicy: "no-cache",
       });
       const pv = res.data.previewImport;
@@ -251,6 +292,15 @@ export default function ImportPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Pin one row number and re-read the file with it. An empty (or zero) box
+  // hands that decision back to the detector rather than freezing a guess.
+  function commitRow(field: keyof RowRange, raw: string) {
+    const n = Number(raw.replace(/[^\d]/g, ""));
+    const next: RowRange = {...rowRange, [field]: n > 0 ? n : null};
+    setRowRange(next);
+    void doPreview(content, filename, sheetName, uploadId, next);
   }
 
   async function onImport() {
@@ -271,6 +321,7 @@ export default function ImportPage() {
           ? subjectNumber.trim() : null,
         bankAccountId: null,
         mapping: mappingArg.length > 0 ? mappingArg : null,
+        ...rowRange,
       },
     });
     try {
@@ -367,7 +418,8 @@ export default function ImportPage() {
               <Select value={sheetName ?? ""}
                 onChange={(v) => {
                   setSheetName(v);
-                  void doPreview(content, filename, v, uploadId);
+                  setRowRange(AUTO_RANGE);
+                  void doPreview(content, filename, v, uploadId, AUTO_RANGE);
                 }}
                 options={sheets.map((s) => ({value: s, label: s}))}
                 style={{maxWidth: 240}}
@@ -450,6 +502,20 @@ export default function ImportPage() {
             <Badge text={preview.confidence}
               kind={preview.confidence === "HIGH" ? "low" : "medium"} />
             {" · "}{preview.totalRows} мөр
+          </div>
+          <div style={{padding: "12px 16px", display: "flex", gap: 12,
+            alignItems: "flex-end", flexWrap: "wrap",
+            borderBottom: "1px solid var(--border-primary)"}}>
+            <RowNumberInput label="Толгой мөр" value={preview.headerRow}
+              onCommit={(v) => commitRow("headerRow", v)} />
+            <RowNumberInput label="Эхлэх мөр" value={preview.firstDataRow}
+              onCommit={(v) => commitRow("startRow", v)} />
+            <RowNumberInput label="Дуусах мөр" value={preview.lastDataRow}
+              onCommit={(v) => commitRow("endRow", v)} />
+            <div style={{fontSize: 11, color: "var(--text-muted)",
+              paddingBottom: 8}}>
+              Файлд {preview.sheetRows} мөр. Excel-ийн мөрийн дугаараар.
+            </div>
           </div>
           {preview.headers.length === 0 ? (
             <Empty message="Багана танигдсангүй" />
