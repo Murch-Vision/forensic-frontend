@@ -65,11 +65,17 @@ export function StatCard(props: {
   onClick?: () => void;
 }) {
   const c = props.color ?? "";
+  // A money figure is twice the width of a count — "₮ 10,783,049" against
+  // "482" — and at 28px it no longer fit the card, so it broke after the
+  // symbol. Long values are drawn a size smaller instead; the card is one cell
+  // of a grid row and cannot widen to hold them.
+  const text = typeof props.value === "string" ? props.value : "";
+  const compact = text.length > 11 ? " compact" : "";
   return (
     <div className={`metric-card ${c}`} onClick={props.onClick}
       style={props.onClick ? {cursor: "pointer"} : undefined}>
       <div className="metric-label">{props.label}</div>
-      <div className={`metric-value ${c}`}>{props.value}</div>
+      <div className={`metric-value ${c}${compact}`}>{props.value}</div>
     </div>
   );
 }

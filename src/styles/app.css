@@ -465,7 +465,13 @@ body {
     font-weight: 800;
     font-family: var(--font-mono);
     line-height: 1;
+    /* A figure must never break across lines: "₮ 10,783,049" wrapped after the
+       symbol and left ₮ sitting alone above its own number. Long values step
+       down a size instead (see StatCard) — the card is one cell of a grid row
+       and cannot widen for them. */
+    white-space: nowrap;
 }
+.metric-value.compact { font-size: 20px; }
 .metric-value.cyan { color: var(--accent-cyan); }
 .metric-value.green { color: var(--accent-green); }
 .metric-value.red { color: var(--accent-red); }
@@ -490,11 +496,16 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    /* A header holds a title AND a control; without a gap they touch, and
+       without min-width the control is free to run off the card. */
+    gap: 12px;
+    min-width: 0;
     padding: 14px 18px;
     border-bottom: 1px solid var(--border-primary);
     background: rgba(0,229,255,0.02);
 }
 .card-title {
+    flex-shrink: 0;
     font-size: 12px;
     font-weight: 700;
     color: var(--text-primary);
@@ -1093,7 +1104,7 @@ body {
 
 /* ── Styled Select / DateInput (components/inputs.tsx) ────────
    Replaces every browser-native <select> and date picker. */
-.select { position: relative; display: inline-block; }
+.select { position: relative; display: inline-block; max-width: 100%; }
 .select-trigger {
     display: flex;
     align-items: center;
@@ -1103,6 +1114,15 @@ body {
     text-align: left;
     user-select: none;
     white-space: nowrap;
+    min-width: 0;
+}
+/* The chosen option is as long as the data makes it — an account line runs to
+   a name plus a 17-digit number. Nowrap without this let it run straight out
+   of the trigger, across the card edge and off the page. */
+.select-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .select-trigger:hover { border-color: var(--accent-cyan); }
 .select-placeholder { color: var(--text-muted); }

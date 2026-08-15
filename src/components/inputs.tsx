@@ -168,8 +168,8 @@ export function Select(props: {
           setQuery("");
           setOpen((v) => !v);
         }}>
-        <span className={
-          props.triggerLabel || selected ? "" : "select-placeholder"}>
+        <span className={`select-label${
+          props.triggerLabel || selected ? "" : " select-placeholder"}`}>
           {props.triggerLabel ?? selected?.label ?? "—"}
         </span>
         <span className={`select-chevron${open ? " open" : ""}`}>▾</span>

@@ -102,6 +102,16 @@ interface Conclusion {
 
 // Дүгнэлт — typed by the examiner, never generated. The report places whatever
 // is stored here; an empty box means the report says so plainly.
+// The owner leads, the number follows: the analyst knows these accounts by
+// whose they are, and a line that opens with seventeen digits says nothing
+// until it is read to the end. "-" is the bank's empty value, not a name.
+function acctOption(x: Analysis): string {
+  const owner = (x.ownerName ?? "").trim();
+  const who = owner && !/^-+$/.test(owner) ? owner : null;
+  return `${who ? `${who} · ` : ""}${x.accountNumber}`
+    + ` — ${formatNum(x.txnCount)} гүйлгээ`;
+}
+
 function ConclusionBox({title, accountId, stored, onSaved}: {
   title: string;
   accountId: number | null;
@@ -241,9 +251,9 @@ export default function AccountAnalysis() {
       <Card title="Дансны дүн шинжилгээ" style={{marginBottom: 16}}
         actions={
           <Select value={a.accountId} onChange={(v) => setAcctId(Number(v))}
-            style={{width: 380}} searchable
+            style={{width: 420, maxWidth: "100%"}} searchable
             options={list.map((x) => ({value: x.accountId,
-              label: `${x.label} — ${formatNum(x.txnCount)} гүйлгээ`}))} />
+              label: acctOption(x)}))} />
         }>
         <div className="metrics-grid">
           <StatCard label="Нийт гүйлгээ" value={formatNum(a.txnCount)} />
