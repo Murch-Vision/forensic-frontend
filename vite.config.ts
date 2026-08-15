@@ -27,8 +27,17 @@ export default defineConfig(({mode}) => {
   // Only pin an absolute URL into the bundle when one was configured on
   // purpose. Otherwise the app calls same-origin /graphql and the server below
   // proxies it, so the built files stay portable between machines.
-  const explicit = env.API_URL || env.VITE_API_URL || "";
-  const apiUrl = explicit || LOCAL_API;
+  //
+  // On a maestro preview the platform states the linked API's own public
+  // address itself, and that comes FIRST: a hand-written API_URL is a copy of
+  // an address, and this one went on naming the API's old per-project
+  // subdomain for weeks after the API had been moved to its own name. The
+  // workstation has no such platform, which is what .env is for.
+  const explicit = env.MAESTRO_PREVIEW_FORENSIC_API || env.API_URL ||
+    env.VITE_API_URL || "";
+  // The proxy runs SERVER-side, so it may use the container-network address
+  // (http://forensic-api:3000) the browser cannot resolve.
+  const apiUrl = env.MAESTRO_LINK_FORENSIC_API || explicit || LOCAL_API;
   const proxy = {
     // Fallback for the same-origin /graphql path: proxy it to the API.
     "/graphql": {
