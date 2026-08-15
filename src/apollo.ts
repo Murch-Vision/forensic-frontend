@@ -14,20 +14,16 @@ export const TOKEN_KEY = "forensic.authToken";
 
 // Endpoint resolution, in priority order:
 //   1. VITE_GRAPHQL_URL – explicit build-time override of the full endpoint.
-//   2. VITE_API_URL     – an absolute API host, only if one was set on purpose.
-//   3. "/api/"          – same-origin, the normal case. Whatever serves this
-//                         app also answers /api: the vite dev/preview server
-//                         proxies it to API_URL, and on a maestro preview
-//                         nginx sends it to the forensic-api container. Both
-//                         strip the prefix, so the API sees its own root.
+//   2. VITE_API_URL     – the API host, from API_URL/VITE_API_URL at build
+//                         time (see vite.config.ts).
+//   3. "/graphql"        – same-origin; the dev/preview server proxies it to
+//                         whatever API_URL points at.
 // Nothing here may fall back to a hardcoded remote host: an install with no
 // configuration must talk to its own machine, not somebody else's server.
-// The trailing slash is load-bearing — nginx answers a bare /api with a 301,
-// and a redirected POST arrives at the API as a GET with no body.
 const uri =
   import.meta.env.VITE_GRAPHQL_URL ||
   import.meta.env.VITE_API_URL ||
-  "/api/";
+  "/graphql";
 
 // Attach the stored bearer token to every request so the API knows the caller.
 const authLink = setContext((_op, {headers}) => {

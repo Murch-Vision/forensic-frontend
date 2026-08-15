@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : vite.config.ts
  * Created at  : 2026-06-23
- * Updated at  : 2026-08-15
+ * Updated at  : 2026-08-11
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -24,25 +24,18 @@ export default defineConfig(({mode}) => {
   // environment variable still wins over the file.
   const env = {...loadEnv(mode, process.cwd(), ""), ...process.env} as
     Record<string, string>;
-  // On a maestro preview the platform injects the API's in-network address
-  // itself, and that beats anything a .env remembers — a hand-written API_URL
-  // outlives the address it was written for (it was still naming the API's own
-  // old subdomain weeks after the API moved to /api of this domain).
-  const apiUrl = env.MAESTRO_LINK_FORENSIC_API || env.API_URL ||
-    env.VITE_API_URL || LOCAL_API;
-  // The app calls its API same-origin at /api, so nothing absolute is baked
-  // into the bundle and the built files stay portable between machines. Two
-  // servers answer that path, and they must agree:
-  //   - here (dev + `npm run start`), by proxying it to apiUrl;
-  //   - on a maestro preview, nginx owns /api/ ahead of this server and sends
-  //     it straight to the forensic-api container.
-  // Both strip the /api prefix, because the API serves GraphQL at its root.
+  // Only pin an absolute URL into the bundle when one was configured on
+  // purpose. Otherwise the app calls same-origin /graphql and the server below
+  // proxies it, so the built files stay portable between machines.
+  const explicit = env.API_URL || env.VITE_API_URL || "";
+  const apiUrl = explicit || LOCAL_API;
   const proxy = {
-    "/api": {
+    // Fallback for the same-origin /graphql path: proxy it to the API.
+    "/graphql": {
       target: apiUrl,
       changeOrigin: true,
       secure: false,
-      rewrite: (path: string) => path.replace(/^\/api/, "") || "/",
+      rewrite: () => "/",
     },
   };
 
@@ -51,6 +44,11 @@ export default defineConfig(({mode}) => {
     // At boot the Windows launcher is the only reader of this output and it
     // logs to a file — wiping the terminal would erase the build error with it.
     clearScreen: false,
+    // Expose the API URL to the browser bundle so the Apollo client can talk to
+    // the API directly (the API serves GraphQL with permissive CORS).
+    define: {
+      "import.meta.env.VITE_API_URL": JSON.stringify(explicit),
+    },
     server: {
       // 0.0.0.0 — the workstation serves the whole department over LAN, not
       // just the machine it runs on.
@@ -71,7 +69,8 @@ export default defineConfig(({mode}) => {
       proxy,
     },
     // `npm run start` serves the built app from here. Same host/port and the
-    // same /api proxy as the dev server, so nothing downstream has to change.
+    // same /graphql proxy as the dev server, so nothing downstream has to
+    // change.
     preview: {
       host: true,
       port: 5173,
