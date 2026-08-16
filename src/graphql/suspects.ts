@@ -58,7 +58,7 @@ export const SUSPECT_DETAIL_QUERY = gql`
         currency
         currentBalance
         status
-        maskedNumber
+
       }
       phoneNumbers {
         id

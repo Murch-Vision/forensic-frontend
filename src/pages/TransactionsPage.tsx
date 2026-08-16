@@ -52,7 +52,6 @@ interface TxnAccount {
   id            : number;
   accountNumber : string;
   bankName      : string | null;
-  maskedNumber  : string;
   suspectId     : number | null;
 }
 
@@ -309,7 +308,7 @@ export default function TransactionsPage() {
 
   // Duplicated transactions between account pairs: within one
   // данс ↔ харьцсан данс pair, the same amount moving 2+ times.
-  const acctById = new Map(accounts.map((a) => [a.id, a.maskedNumber]));
+  const acctById = new Map(accounts.map((a) => [a.id, a.accountNumber]));
   interface PairAgg {
     key: string; bankAccountId: number; cpAccount: string;
     account: string; counterparty: string; cpName: string;
@@ -388,7 +387,7 @@ export default function TransactionsPage() {
       .map((a) => {
         const owner = acctOwnerName(a.id);
         return {value: String(a.id),
-          label: owner ? `${owner} · ${a.maskedNumber}` : a.maskedNumber};
+          label: owner ? `${owner} · ${a.accountNumber}` : a.accountNumber};
       }),
   ];
   // Харьцаа dropdown — everyone the accounts in view actually traded with,
@@ -651,7 +650,7 @@ export default function TransactionsPage() {
           alignItems: "flex-end", marginBottom: 16}}>
           <div>
             <label className="form-label">Данс эзэмшигч сонгох</label>
-            <Select value={filterAccount}
+            <Select value={filterAccount} searchable
               onChange={(v) => patchParams(
                 {acct: v === "All" ? null : v, cp: null})}
               style={{minWidth: 220}}
@@ -659,7 +658,9 @@ export default function TransactionsPage() {
           </div>
           <div>
             <label className="form-label">Харьцаа сонгох</label>
-            <Select value={filterCounterparty}
+            {/* searchable: the counterparty list runs to hundreds of names —
+                scrolling it to find one person is not a way to work. */}
+            <Select value={filterCounterparty} searchable
               onChange={(v) => setFilterCounterparty(v)}
               style={{minWidth: 220}}
               options={counterpartyOptions} />

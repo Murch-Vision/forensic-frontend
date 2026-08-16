@@ -107,7 +107,7 @@ interface LcData {
 interface TxData {
   bankAccounts: Array<{
     id: number; accountNumber: string; bankName: string;
-    maskedNumber: string; suspectId: number | null;
+    suspectId: number | null;
   }>;
   transactions: Array<{
     id: number; bankAccountId: number; amount: number; type: string;

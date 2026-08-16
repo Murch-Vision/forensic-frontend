@@ -31,7 +31,6 @@ export interface BankAccount {
   currency      : string;
   currentBalance : number;
   status        : string;
-  maskedNumber  : string;
 }
 
 export interface PhoneNumber {

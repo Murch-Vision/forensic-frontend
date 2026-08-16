@@ -93,7 +93,6 @@ interface GraphAccount {
   id            : number;
   accountNumber : string;
   bankName      : string;
-  maskedNumber  : string;
   suspectId     : number | null;
 }
 
@@ -196,7 +195,7 @@ export function buildEvidenceNetwork(
       // the account stays identifiable (and searchable) in the detail panel.
       endpoint = owner;
       nodes.get(owner)?.stats.push(
-        [a.bankName || "Данс", a.maskedNumber || a.accountNumber]);
+        [a.bankName || "Данс", a.accountNumber]);
     } else {
       const accId = `a:${a.id}`;
       endpoint = accId;
@@ -206,7 +205,7 @@ export function buildEvidenceNetwork(
         type    : "ACCOUNT",
         weight  : 0.9,
         cluster : accId,
-        sub     : a.maskedNumber || a.accountNumber,
+        sub     : a.accountNumber,
         stats   : [["Дансны дугаар", a.accountNumber]],
       });
     }

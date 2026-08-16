@@ -29,7 +29,7 @@ export const DASHBOARD_CASE_QUERY = gql`
       id caseId caseName description status priority leadInvestigator createdAt
     }
     suspects { id suspectId fullName riskLevel occupation initials }
-    bankAccounts { id bankName maskedNumber suspectId }
+    bankAccounts { id bankName accountNumber suspectId }
     transactions { id bankAccountId timestamp amount type flagStatus }
     callRecords { id startTime }
     suspectLinks { id }
@@ -98,7 +98,7 @@ export const DIRECT_TRANSFERS_QUERY = gql`
 
 export const TRANSACTIONS_QUERY = gql`
   query Transactions {
-    bankAccounts { id accountNumber bankName maskedNumber suspectId }
+    bankAccounts { id accountNumber bankName suspectId }
     transactions(includeRemoved: true) {
       id bankAccountId timestamp amount type category description
       counterpartyAccount counterpartyName channel runningBalance flagStatus
@@ -322,7 +322,7 @@ export const AUDIT_SEARCH = gql`
 export const ANALYSIS_QUERY = gql`
   query Analysis {
     bankAccounts {
-      id accountNumber bankName accountHolderName maskedNumber
+      id accountNumber bankName accountHolderName
     }
     analysisResults {
       id bankAccountId analyzedAt benfordPasses nearThresholdPercentage

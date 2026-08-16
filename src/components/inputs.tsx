@@ -178,8 +178,8 @@ export function Select(props: {
         <div className="select-menu" role="listbox" ref={menuRef}
           style={menuStyle}>
           {props.searchable && (
-            <input className="form-input" autoFocus
-              style={{width: "100%", marginBottom: 4}}
+            <input className="form-input select-search" autoFocus
+              style={{width: "100%"}}
               placeholder="Хайх…"
               value={query}
               onChange={(e) => { setQuery(e.target.value); setHighlight(0); }}

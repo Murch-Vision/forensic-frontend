@@ -62,7 +62,7 @@ interface DashSuspect {
 interface DashAccount {
   id: number;
   bankName: string | null;
-  maskedNumber: string;
+  accountNumber: string;
   suspectId: number | null;
 }
 
@@ -264,7 +264,7 @@ function derive(data: CaseData): Derived {
     if (!a) return `Данс #${id}`;
     const owner = a.suspectId != null
       ? suspectById.get(a.suspectId)?.fullName : null;
-    return [a.bankName, a.maskedNumber, owner].filter(Boolean).join(" · ");
+    return [a.bankName, a.accountNumber, owner].filter(Boolean).join(" · ");
   };
 
   const topTxns = [...txns].sort((a, b) => b.amount - a.amount).slice(0, 10);

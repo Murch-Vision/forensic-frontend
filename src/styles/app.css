@@ -1146,6 +1146,17 @@ body {
     box-shadow: var(--shadow);
     z-index: 1200;
 }
+/* Type-to-filter box on a long dropdown. Sticky: the menu itself scrolls, and
+   a search box that scrolls away with the list is a search box you have to
+   scroll back up to reach. */
+.select-search {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg-card);
+    border-radius: 0;
+    border-width: 0 0 1px 0;
+}
 .select-option {
     display: flex;
     align-items: center;
