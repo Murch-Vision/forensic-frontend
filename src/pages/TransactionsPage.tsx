@@ -563,8 +563,10 @@ export default function TransactionsPage() {
     {
       header: "Дүн",
       align: "right" as const,
-      sortValue: (t: BankTransaction) =>
-        t.type === "credit" ? t.amount : -t.amount,
+      // By SIZE, biggest first — the signed value sorted every credit above
+      // every debit, so "ихээс бага" showed the smallest debits as the
+      // "largest". The +/− and the colour already carry the direction.
+      sortValue: (t: BankTransaction) => t.amount,
       render: (t: BankTransaction) => (
         <span style={{fontWeight: 600, color: t.type === "credit"
           ? "var(--accent-green)" : "var(--accent-red)"}}>
