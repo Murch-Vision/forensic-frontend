@@ -391,6 +391,35 @@ export default function TransactionsPage() {
           label: owner ? `${owner} · ${a.maskedNumber}` : a.maskedNumber};
       }),
   ];
+  // Харьцаа dropdown — everyone the accounts in view actually traded with,
+  // commonest first, keyed by the counterparty ACCOUNT (what ?cp= filters on).
+  // ⚠️ Placeholder counterparties are left out on purpose: the bank writes "-"
+  // for "no value" into both the name and the account, so a single "-" entry
+  // would fold thousands of unrelated rows into one fake counterparty and top
+  // the list. Those rows are simply not a counterparty anyone can pick.
+  const cpAgg = new Map<string, {name: string; count: number}>();
+  for (const t of cleanTxns) {
+    const acct = (t.counterpartyAccount ?? "").trim();
+    if (!realName(acct)) continue;
+    const a = cpAgg.get(acct) ?? {name: "", count: 0};
+    if (!a.name && realName(t.counterpartyName)) {
+      a.name = t.counterpartyName!.trim();
+    }
+    a.count++;
+    cpAgg.set(acct, a);
+  }
+  const counterpartyOptions = [
+    {value: "", label: "Бүх харьцаа"},
+    // A deep link (?cp=…) or a pair-table drill must keep working even when
+    // that counterparty is filtered out of the list above.
+    ...(filterCounterparty && !cpAgg.has(filterCounterparty)
+      ? [{value: filterCounterparty, label: filterCounterparty}] : []),
+    ...[...cpAgg.entries()]
+      .sort((x, y) => y[1].count - x[1].count)
+      .map(([acct, a]) => ({value: acct,
+        label: a.name ? `${a.name} · ${acct}` : acct})),
+  ];
+
   const calls = callsQ.data?.callRecords ?? [];
   interface CorrRow {
     call: CorrCall; txn: BankTransaction;
@@ -464,9 +493,7 @@ export default function TransactionsPage() {
   });
 
   // "Who with whom" — follow the money. The case account and the counterparty,
-  // each shown as a name + its account number. For income (credit) the
-  // counterparty is the SENDER and our account the receiver; for an outgoing
-  // payment (debit) it is the other way round.
+  // each shown as a name + its account number.
   interface Party {name: string; account: string | null}
   const ourParty = (t: BankTransaction): Party => {
     const sid = suspectByAcct.get(t.bankAccountId);
@@ -478,10 +505,18 @@ export default function TransactionsPage() {
     name: t.counterpartyName ?? (t.counterpartyAccount ? "Тодорхойгүй" : "—"),
     account: t.counterpartyAccount ?? null,
   });
-  const senderOf = (t: BankTransaction) =>
-    t.type === "credit" ? cpParty(t) : ourParty(t);
-  const receiverOf = (t: BankTransaction) =>
-    t.type === "credit" ? ourParty(t) : cpParty(t);
+  // The ДАНС ЭЗЭМШИГЧ is ALWAYS the left column and the ХАРЬЦАА always the
+  // right one, so the eye reads a single subject straight down the page. The
+  // sides used to swap with the direction of the money, which made the same
+  // person appear in either column. Direction is now carried by the ARROW
+  // alone: income (credit) means the counterparty sent money to the owner, so
+  // it points back at him.
+  const flowArrow = (t: BankTransaction, muted?: boolean) => (
+    <span style={{fontSize: 16, color: muted ? "var(--text-muted)"
+      : t.type === "credit" ? "var(--accent-green)" : "var(--accent-red)"}}>
+      {t.type === "credit" ? "←" : "→"}
+    </span>
+  );
   const partyCell = (p: Party) => (
     <div style={{lineHeight: 1.3}}>
       <div>{p.name}</div>
@@ -499,22 +534,19 @@ export default function TransactionsPage() {
       render: (t: BankTransaction) => formatDateTime(t.timestamp),
     },
     {
-      header: "Хэнээс (илгээгч)",
-      sortValue: (t: BankTransaction) => senderOf(t).name,
-      render: (t: BankTransaction) => partyCell(senderOf(t)),
+      header: "Данс эзэмшигч",
+      sortValue: (t: BankTransaction) => ourParty(t).name,
+      render: (t: BankTransaction) => partyCell(ourParty(t)),
     },
     {
       header: "",
       align: "center" as const,
-      render: (t: BankTransaction) => (
-        <span style={{color: t.type === "credit"
-          ? "var(--accent-green)" : "var(--accent-red)", fontSize: 16}}>→</span>
-      ),
+      render: (t: BankTransaction) => flowArrow(t),
     },
     {
-      header: "Хэнд (хүлээн авагч)",
-      sortValue: (t: BankTransaction) => receiverOf(t).name,
-      render: (t: BankTransaction) => partyCell(receiverOf(t)),
+      header: "Харьцаа",
+      sortValue: (t: BankTransaction) => cpParty(t).name,
+      render: (t: BankTransaction) => partyCell(cpParty(t)),
     },
     {
       header: "Дүн",
@@ -618,12 +650,19 @@ export default function TransactionsPage() {
         <div style={{display: "flex", gap: 12, flexWrap: "wrap",
           alignItems: "flex-end", marginBottom: 16}}>
           <div>
-            <label className="form-label">Данс</label>
+            <label className="form-label">Данс эзэмшигч сонгох</label>
             <Select value={filterAccount}
               onChange={(v) => patchParams(
                 {acct: v === "All" ? null : v, cp: null})}
               style={{minWidth: 220}}
               options={accountOptions} />
+          </div>
+          <div>
+            <label className="form-label">Харьцаа сонгох</label>
+            <Select value={filterCounterparty}
+              onChange={(v) => setFilterCounterparty(v)}
+              style={{minWidth: 220}}
+              options={counterpartyOptions} />
           </div>
           <div>
             <label className="form-label">Төрөл</label>
@@ -656,18 +695,9 @@ export default function TransactionsPage() {
               style={{width: "100%"}} />
           </div>
         </div>
-        {filterCounterparty && (
-          <div style={{display: "flex", flexWrap: "wrap", gap: 8,
-            marginBottom: 16}}>
-            <span className="badge info" style={{display: "inline-flex",
-              alignItems: "center", gap: 6}}>
-              Харьцсан данс: {filterCounterparty}
-              <button className="modal-close" style={{fontSize: 14}}
-                title="Хос шүүлтийг арилгах"
-                onClick={() => setFilterCounterparty("")}>×</button>
-            </span>
-          </div>
-        )}
+        {/* No badge chip for the counterparty drill: the Харьцаа сонгох
+            dropdown IS where that selection lives, and showing the same
+            filter twice reads as two controls fighting over one job. */}
         <div style={{margin: "0 -18px -18px",
           borderTop: "1px solid var(--border-primary)"}}>
           <DataTable<BankTransaction>
@@ -941,13 +971,12 @@ export default function TransactionsPage() {
               {header: "Огноо",
                 sortValue: (t) => t.timestamp,
                 render: (t) => formatDateTime(t.timestamp)},
-              {header: "Хэнээс (илгээгч)",
-                render: (t) => partyCell(senderOf(t))},
+              {header: "Данс эзэмшигч",
+                render: (t) => partyCell(ourParty(t))},
               {header: "", align: "center" as const,
-                render: () => <span style={{color: "var(--text-muted)",
-                  fontSize: 16}}>→</span>},
-              {header: "Хэнд (хүлээн авагч)",
-                render: (t) => partyCell(receiverOf(t))},
+                render: (t) => flowArrow(t, true)},
+              {header: "Харьцаа",
+                render: (t) => partyCell(cpParty(t))},
               {header: "Дүн", align: "right" as const,
                 sortValue: (t) => t.amount,
                 render: (t) => formatMoney(t.amount)},
