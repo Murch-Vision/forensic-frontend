@@ -25,6 +25,8 @@ interface RepoVersion {
   // Commit the served build was made from — null for the backend (runs from
   // source), "" when unknown. commit ≠ builtCommit means the screen is stale.
   builtCommit: string | null;
+  // Why the checkout could not be read at all, when it could not.
+  error: string | null;
 }
 
 interface VersionInfo {
@@ -198,9 +200,19 @@ export default function SettingsPage() {
               <tbody>
                 {v.repos.map((r) => (
                   <tr key={r.path}>
-                    <td title={r.path} style={{overflow: "hidden",
-                      textOverflow: "ellipsis", whiteSpace: "nowrap"}}>
-                      {r.name}
+                    {/* The folder it is actually looking at, under the name —
+                        an error about a checkout is unusable until you know
+                        WHICH folder it means. */}
+                    <td title={r.path} style={{overflow: "hidden"}}>
+                      <div style={{overflow: "hidden",
+                        textOverflow: "ellipsis", whiteSpace: "nowrap"}}>
+                        {r.name}
+                      </div>
+                      <div style={{fontSize: 11, color: "var(--text-muted)",
+                        fontFamily: "var(--font-mono)", overflow: "hidden",
+                        textOverflow: "ellipsis", whiteSpace: "nowrap"}}>
+                        {r.path}
+                      </div>
                     </td>
                     <td>{r.version}</td>
                     <td style={{fontFamily: "var(--font-mono)"}}>{r.commit}</td>
@@ -303,6 +315,13 @@ export default function SettingsPage() {
 // One glance answers "is the screen I'm looking at the latest code?":
 // the frontend row compares the served build's commit against the pulled one.
 function RepoState({r}: {r: RepoVersion}) {
+  // A checkout git cannot even read says so HERE, with the reason — the row
+  // used to show "unknown" commit and a green "Шинэчлэгдсэн" beside it.
+  if (r.error) {
+    return <span style={{color: "var(--accent-red)"}} title={r.path}>
+      {r.error}
+    </span>;
+  }
   if (r.dirty) {
     return <span style={{color: "var(--accent-amber, #FFAB00)"}}>
       Хадгалаагүй өөрчлөлттэй

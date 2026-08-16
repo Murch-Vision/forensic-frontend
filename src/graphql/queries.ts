@@ -739,7 +739,7 @@ export const APP_VERSION_QUERY = gql`
   query AppVersion {
     appVersion {
       version commit branch
-      repos { name path version commit branch dirty builtCommit }
+      repos { name path version commit branch dirty builtCommit error }
     }
   }
 `;
