@@ -157,6 +157,10 @@ export default function TransactionsPage() {
   }
   const filterAccount = params.get("acct") ?? "All";
   const filterCounterparty = params.get("cp") ?? "";
+  // A counterparty by NAME rather than by account number. The dashboard now
+  // treats a counterparty as a person and merges his accounts, so a drill-down
+  // from there cannot be expressed as one account number.
+  const filterCpName = params.get("cpname") ?? "";
   const filterType = params.get("type") ?? "";
   const filterFrom = params.get("from") ?? "";
   const filterTo = params.get("to") ?? "";
@@ -167,7 +171,9 @@ export default function TransactionsPage() {
       : params.get("view") === "analysis" ? "analysis" : "txns";
   const setFilterAccount = (v: string) =>
     patchParams({acct: v === "All" ? null : v});
-  const setFilterCounterparty = (v: string) => patchParams({cp: v});
+  // Picking from the dropdown replaces a name drill — one counterparty filter.
+  const setFilterCounterparty = (v: string) =>
+    patchParams({cp: v, cpname: null});
   const setFilterType = (v: string) => patchParams({type: v});
   const setFilterFrom = (v: string) => patchParams({from: v});
   const setFilterTo = (v: string) => patchParams({to: v});
@@ -241,10 +247,16 @@ export default function TransactionsPage() {
   // Drilling into one pair (click a row in "Данс хоорондын гүйлгээ") narrows the
   // table/stats to just that account↔counterparty — WITHOUT shrinking the pair
   // list, so the analyst can keep clicking other pairs.
+  const cpNameNeedle = filterCpName.trim().toLowerCase();
   const cpFiltered = filterCounterparty
     ? cleanTxns.filter((t) =>
       (t.counterpartyAccount ?? "").trim() === filterCounterparty)
-    : cleanTxns;
+    : cpNameNeedle
+      // By name: every account that name transacted from, which is the whole
+      // point of arriving here from the dashboard.
+      ? cleanTxns.filter((t) =>
+        (t.counterpartyName ?? "").trim().toLowerCase() === cpNameNeedle)
+      : cleanTxns;
   // filtered = the ACTIVE set (also minus removed pairs) for stats/charts/table.
   const filtered = cpFiltered.filter((t) => !isPairUnimportant(txnPairKey(t)));
   const tableRows = filtered.filter((t) =>
@@ -272,7 +284,8 @@ export default function TransactionsPage() {
   function filterBy(patch: {
     account?: string; desc?: string; day?: string; counterparty?: string;
   }) {
-    const p: Record<string, string | null> = {cp: patch.counterparty ?? null};
+    const p: Record<string, string | null> = {
+      cp: patch.counterparty ?? null, cpname: null};
     if (patch.account !== undefined) {
       p.acct = patch.account === "All" ? null : patch.account;
     }
@@ -282,12 +295,12 @@ export default function TransactionsPage() {
     setSelectedTxn(null);
   }
   const hasFilter = filterAccount !== "All" || filterCounterparty !== ""
-    || filterType !== "" || filterFrom !== "" || filterTo !== ""
-    || filterDesc !== "";
+    || filterCpName !== "" || filterType !== "" || filterFrom !== ""
+    || filterTo !== "" || filterDesc !== "";
 
   function clearFilters() {
-    patchParams({acct: null, cp: null, type: null, from: null, to: null,
-      q: null});
+    patchParams({acct: null, cp: null, cpname: null, type: null, from: null,
+      to: null, q: null});
   }
 
   // Duplicated гүйлгээний утга: identical descriptions used 2+ times.
@@ -652,7 +665,7 @@ export default function TransactionsPage() {
             <label className="form-label">Данс эзэмшигч сонгох</label>
             <Select value={filterAccount} searchable
               onChange={(v) => patchParams(
-                {acct: v === "All" ? null : v, cp: null})}
+                {acct: v === "All" ? null : v, cp: null, cpname: null})}
               style={{minWidth: 220}}
               options={accountOptions} />
           </div>
@@ -662,6 +675,9 @@ export default function TransactionsPage() {
                 scrolling it to find one person is not a way to work. */}
             <Select value={filterCounterparty} searchable
               onChange={(v) => setFilterCounterparty(v)}
+              // Arrived by NAME from the dashboard: show whose rows these are,
+              // instead of an empty box under a filtered list.
+              triggerLabel={filterCpName || undefined}
               style={{minWidth: 220}}
               options={counterpartyOptions} />
           </div>

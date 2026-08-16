@@ -6,7 +6,7 @@
  * Purpose     :
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
-import {useMemo} from "react";
+import {useMemo, useState} from "react";
 import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {useNavigate} from "react-router-dom";
 import {
@@ -27,6 +27,7 @@ import {
   StatCard,
 } from "../components/kit";
 import type {Column} from "../components/kit";
+import {Select} from "../components/inputs";
 import {
   formatDate, formatDateTime, formatMoney, formatNum,
 } from "../lib/format";
@@ -286,6 +287,8 @@ const META: React.CSSProperties = {
 
 function CaseDashboard({caseFileId}: {caseFileId: number}) {
   const nav = useNavigate();
+  // Which statement account the харьцаа columns show ("All" = every one).
+  const [acctFilter, setAcctFilter] = useState("All");
   const {data, loading} = useQuery<CaseData>(DASHBOARD_CASE_QUERY);
   const relQ = useQuery<RelationData>(CASE_RELATIONS_QUERY);
   const evQ = useQuery<{evidenceForCase: {id: number}[]}>(EVIDENCE_FOR_CASE, {
@@ -338,28 +341,27 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   }
 
   // Тэг картыг харуулахгүй — байгаа өгөгдөл л карт болно.
+  // ⛔ The cards do NOT link anywhere. Every one of them opened the same
+  // unfiltered /transactions page, so the click promised a drill-down it never
+  // performed; the number is the whole point of the card.
   const rel = relQ.data?.caseRelations;
   const stats: {
-    label: string; value: React.ReactNode; color?: string; to?: string;
+    label: string; value: React.ReactNode; color?: string;
   }[] = [
-    {label: "Нийт хуулсан данс", value: rel ? rel.statementAccounts : 0,
-      to: "/transactions"},
-    {label: "Нийт харьцаа", value: rel ? formatNum(rel.totalRelations) : 0,
-      to: "/transactions"},
+    {label: "Нийт хуулсан данс", value: rel ? rel.statementAccounts : 0},
+    {label: "Нийт харьцаа", value: rel ? formatNum(rel.totalRelations) : 0},
     {label: "Дундын харьцаа", value: rel ? formatNum(rel.mutualRelations) : 0,
-      color: "amber", to: "/transactions"},
+      color: "amber"},
     {label: "Нийт гүйлгээ", value: hasTxns
-      ? formatNum(data.transactions.length) : 0, to: "/transactions"},
-    {label: "Орлогын гүйлгээ", value: rel ? formatNum(rel.creditCount) : 0,
-      to: "/transactions"},
-    {label: "Зарлагын гүйлгээ", value: rel ? formatNum(rel.debitCount) : 0,
-      to: "/transactions"},
+      ? formatNum(data.transactions.length) : 0},
+    {label: "Орлогын гүйлгээ", value: rel ? formatNum(rel.creditCount) : 0},
+    {label: "Зарлагын гүйлгээ", value: rel ? formatNum(rel.debitCount) : 0},
     {label: "Нийт орлого",
       value: rel && rel.creditTotal !== 0 ? formatMoney(rel.creditTotal) : 0,
-      color: "green", to: "/transactions"},
+      color: "green"},
     {label: "Нийт зарлага",
       value: rel && rel.debitTotal !== 0 ? formatMoney(rel.debitTotal) : 0,
-      color: "red", to: "/transactions"},
+      color: "red"},
     // The difference is the point of the pair above, so it shows even at zero.
     {label: "Орлого зарлагын зөрүү",
       value: rel ? formatMoney(rel.netTotal) : "—",
@@ -391,18 +393,17 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     <span style={{fontFamily: "var(--font-mono)"}}>{formatMoney(v)}</span>
   );
 
-  // Дундын харьцаа: нэр | данс | орлого | зарлага | зөрүү.
+  // Дундын харьцаа: нэр | гүйлгээ | орлого | зарлага | зөрүү.
+  // ⛔ No "Данс" column and no amber: one person's accounts are merged into a
+  // single row now (relationService keys by the PERSON), so a column holding
+  // one of his numbers would be picking a favourite. And inside a list whose
+  // every row is дундын, painting them all amber says nothing.
   const relCols: Column<Relation>[] = [
-    // Улаан = регистр нь субьектийн жагсаалттай таарсан; шар = дундын харьцаа.
     {header: "Харьцаа", sortValue: (r) => r.name,
       render: (r) => (
-        <span style={{color: relColor(r)}}>{r.name}</span>
+        <span style={{color: r.subjectMatch
+          ? "var(--accent-red)" : "var(--text-primary)"}}>{r.name}</span>
       )},
-    {header: "Данс", render: (r) => (
-      <span style={{fontFamily: "var(--font-mono)", fontSize: 11}}>
-        {r.account ?? "—"}
-      </span>
-    )},
     {header: "Гүйлгээ", align: "right", sortValue: (r) => r.txnCount,
       render: (r) => formatNum(r.txnCount)},
     {header: "Орлого", align: "right", sortValue: (r) => r.creditTotal,
@@ -453,13 +454,27 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     {header: "Харьцаа", sortValue: (f) => f.name, render: (f) => f.name},
   ];
 
-  // Улаан/шар нь тайлбаргүй бол таагдахгүй — хоёр шошго хажууд нь.
+  // Улаан/шар нь тайлбаргүй бол таагдахгүй — шошго хажууд нь.
   const relLegend = (
     <span style={{display: "inline-flex", gap: 12, fontSize: 11}}>
       <span style={{color: "var(--accent-red)"}}>Регистр таарсан</span>
       <span style={{color: "var(--accent-amber)"}}>Дундын</span>
     </span>
   );
+  // The дундын list needs only the red one — see relCols.
+  const matchLegend = (
+    <span style={{fontSize: 11, color: "var(--accent-red)"}}>
+      Регистр таарсан
+    </span>
+  );
+  // Drill-through: the counterparty is a PERSON now, so filter the transaction
+  // list by his name — an account number would only carry one of his.
+  const relLink = (r: Relation, accountId?: number): string => {
+    const q = r.name && r.name !== "—"
+      ? `cpname=${encodeURIComponent(r.name)}`
+      : `cp=${encodeURIComponent(r.account ?? "")}`;
+    return `/transactions?${accountId ? `acct=${accountId}&` : ""}${q}`;
+  };
 
   // Зөвхөн агуулгатай section-ууд — хоосон хайрцаг зурахгүй.
   const sections: React.ReactNode[] = [];
@@ -470,53 +485,81 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   if (mutual.length > 0) {
     sections.push(
       <Card key="mutual" title={`Дундын харилцааны жагсаалт (${mutual.length})`}
-        actions={relLegend} noPadding>
+        actions={matchLegend} noPadding>
         <div style={{maxHeight: 360, overflowY: "auto"}}>
           <DataTable columns={relCols} rows={mutual}
             rowKey={(r) => r.key} empty="Дундын харьцаа алга"
             pageSize={50}
-            onRowClick={(r) => nav(`/transactions?cp=${
-              encodeURIComponent(r.account ?? r.name)}`)} />
+            onRowClick={(r) => nav(relLink(r))} />
         </div>
       </Card>
     );
   }
 
-  // Нийт харьцаанууд — every statement account with its own counterparty list,
-  // busiest first (slide 4).
+  // Нийт харьцаанууд — ONE COLUMN PER STATEMENT ACCOUNT, side by side, exactly
+  // the layout the client drew: the account and its transaction total as the
+  // head, then whom it dealt with and how many times. Stacking the accounts
+  // vertically (as this did) meant the second account's list only existed
+  // below the fold, and the two could never be compared. More accounts than
+  // fit ⇒ the strip scrolls sideways; the filter picks one out.
+  const shownGroups = acctFilter === "All"
+    ? (rel?.byAccount ?? [])
+    : (rel?.byAccount ?? []).filter((g) => String(g.accountId) === acctFilter);
   if (rel && rel.byAccount.length > 0) {
     sections.push(
       <Card key="byacct"
         title={`Нийт харьцаа — гүйлгээний тоогоор (${rel.totalRelations})`}
-        actions={relLegend} noPadding>
-        <div style={{maxHeight: 420, overflowY: "auto"}}>
-          {rel.byAccount.map((g) => (
-            <div key={g.accountId}>
-              <div style={{padding: "8px 12px", fontSize: 11, fontWeight: 700,
-                color: "var(--accent-cyan)", background: "var(--bg-input)",
-                borderTop: "1px solid var(--border-primary)",
-                position: "sticky", top: 0}}>
-                {g.label} — {formatNum(g.relationCount)} харьцаа ·{" "}
-                {formatNum(g.txnCount)} гүйлгээ
-              </div>
-              {g.relations.map((r) => (
-                <div key={`${g.accountId}:${r.key}`}
-                  style={{display: "flex", gap: 8, alignItems: "center",
-                    padding: "6px 12px", fontSize: 12, cursor: "pointer",
-                    borderTop: "1px solid var(--border-primary)"}}
-                  onClick={() => nav(`/transactions?acct=${g.accountId}`)}>
-                  <span style={{flex: 1, minWidth: 0, overflow: "hidden",
-                    textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    color: relColor(r)}}
-                    title={r.account ?? undefined}>
-                    {r.name}
-                  </span>
-                  <span style={{fontFamily: "var(--font-mono)",
-                    color: "var(--text-secondary)"}}>
-                    {formatNum(r.txnCount)}
-                  </span>
+        actions={
+          <div style={{display: "flex", gap: 12, alignItems: "center"}}>
+            {relLegend}
+            <Select value={acctFilter} onChange={setAcctFilter} searchable
+              style={{minWidth: 200}}
+              options={[
+                {value: "All", label: "Бүх данс"},
+                ...rel.byAccount.map((g) => ({
+                  value: String(g.accountId), label: g.label})),
+              ]} />
+          </div>
+        }
+        noPadding>
+        <div style={{display: "flex", overflowX: "auto"}}>
+          {shownGroups.map((g) => (
+            <div key={g.accountId}
+              style={{flex: "0 0 320px", minWidth: 320,
+                borderRight: "1px solid var(--border-primary)"}}>
+              <div title={g.label}
+                style={{padding: "8px 12px", fontSize: 11, fontWeight: 700,
+                  color: "var(--accent-cyan)", background: "var(--bg-input)",
+                  borderTop: "1px solid var(--border-primary)",
+                  borderBottom: "1px solid var(--border-primary)"}}>
+                <div style={{overflow: "hidden", textOverflow: "ellipsis",
+                  whiteSpace: "nowrap"}}>{g.label}</div>
+                <div style={{color: "var(--text-secondary)", fontWeight: 400,
+                  marginTop: 2}}>
+                  {formatNum(g.txnCount)} гүйлгээ ·{" "}
+                  {formatNum(g.relationCount)} харьцаа
                 </div>
-              ))}
+              </div>
+              <div style={{maxHeight: 420, overflowY: "auto"}}>
+                {g.relations.map((r) => (
+                  <div key={`${g.accountId}:${r.key}`}
+                    style={{display: "flex", gap: 8, alignItems: "center",
+                      padding: "6px 12px", fontSize: 12, cursor: "pointer",
+                      borderTop: "1px solid var(--border-primary)"}}
+                    onClick={() => nav(relLink(r, g.accountId))}>
+                    <span style={{flex: 1, minWidth: 0, overflow: "hidden",
+                      textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      color: relColor(r)}}
+                      title={r.name}>
+                      {r.name}
+                    </span>
+                    <span style={{fontFamily: "var(--font-mono)",
+                      color: "var(--text-secondary)"}}>
+                      {formatNum(r.txnCount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -573,8 +616,7 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
         <div className="metrics-grid">
           {stats.map((c) => (
             <StatCard key={c.label} label={c.label} value={c.value}
-              color={c.color}
-              onClick={c.to ? () => nav(c.to!) : undefined} />
+              color={c.color} />
           ))}
         </div>
       )}
