@@ -302,7 +302,9 @@ interface Derived {
   months: string[];
   credit: number[];
   debit: number[];
-  topTxns: DashTxn[];
+  // Every transaction in view, biggest first — the card decides how many
+  // of them to show.
+  sortedTxns: DashTxn[];
   // Нэр дээрээ, данс доороо — the pieces, not a joined string.
   acctParty: (id: number | null) => {name: string; account: string | null};
 }
@@ -351,7 +353,7 @@ function derive(data: CaseData): Derived {
       : {name: a.accountNumber, account: null};
   };
 
-  const topTxns = [...txns].sort((a, b) => b.amount - a.amount).slice(0, 10);
+  const sortedTxns = [...txns].sort((a, b) => b.amount - a.amount);
 
   return {
     volume, flagged,
@@ -360,7 +362,7 @@ function derive(data: CaseData): Derived {
     months,
     credit: months.map((k) => monthMap.get(k)!.credit),
     debit: months.map((k) => monthMap.get(k)!.debit),
-    topTxns, acctParty,
+    sortedTxns, acctParty,
   };
 }
 
@@ -378,6 +380,10 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   const nav = useNavigate();
   // Which statement accounts the whole page describes. EMPTY = all of them.
   const [acctSel, setAcctSel] = useState<string[]>([]);
+  // Босго дүн for the biggest-transactions card. Empty = show NOTHING: the
+  // question "which transactions are big" has no answer until he says what
+  // big means, and a top-10 guess answered it for him.
+  const [minAmountText, setMinAmountText] = useState("");
   const {data, loading} = useQuery<CaseData>(DASHBOARD_CASE_QUERY);
   const relQ = useQuery<RelationData>(CASE_RELATIONS_QUERY);
   const evQ = useQuery<{evidenceForCase: {id: number}[]}>(EVIDENCE_FOR_CASE, {
@@ -645,6 +651,11 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     return `/transactions?${accountId ? `acct=${accountId}&` : ""}${q}`;
   };
 
+  // Босго дүн: everything at or above it, biggest first.
+  const minAmount = Number(minAmountText.replace(/[^\d.]/g, "")) || 0;
+  const bigTxns = minAmount
+    ? d.sortedTxns.filter((t) => t.amount >= minAmount) : [];
+
   // Зөвхөн агуулгатай section-ууд — хоосон хайрцаг зурахгүй.
   const sections: React.ReactNode[] = [];
 
@@ -722,13 +733,31 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
 
   if (hasTxns) {
     sections.push(
-      <Card key="toptxns" title="Хамгийн том гүйлгээнүүд"
+      <Card key="toptxns"
+        title={`Хамгийн том гүйлгээнүүд${
+          minAmount ? ` (${formatNum(bigTxns.length)})` : ""}`}
+        actions={
+          <input type="text" inputMode="numeric" className="form-input"
+            value={minAmountText}
+            onChange={(e) => setMinAmountText(e.target.value)}
+            placeholder="Босго дүн ₮" style={{width: 160}}
+            title="Энэ дүнгээс дээш гүйлгээг харуулна" />
+        }
         style={{gridColumn: "1 / -1"}} fill noPadding>
-        <DataTable columns={txnCols} rows={d.topTxns} scroll={SCROLL}
-          rowKey={(t) => t.id}
-          empty="Гүйлгээ алга"
-          defaultSort={{col: 2, dir: "desc"}}
-          onRowClick={(t) => nav(`/transactions?acct=${t.bankAccountId}`)} />
+        {minAmount ? (
+          <DataTable columns={txnCols} rows={bigTxns} scroll={SCROLL}
+            rowKey={(t) => t.id}
+            empty="Энэ дүнгээс дээш гүйлгээ алга"
+            pageSize={50}
+            defaultSort={{col: 2, dir: "desc"}}
+            onRowClick={(t) => nav(`/transactions?acct=${t.bankAccountId}`)} />
+        ) : (
+          <div style={{...SCROLL, display: "flex", alignItems: "center",
+            justifyContent: "center", color: "var(--text-muted)",
+            fontSize: 13, textAlign: "center", padding: 24}}>
+            Босго дүн оруулна уу — түүнээс дээш гүйлгээ жагсана
+          </div>
+        )}
       </Card>
     );
   }
