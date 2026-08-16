@@ -44,12 +44,11 @@ if not defined NPM (
 )
 call :log "using npm: !NPM!"
 
-REM Install dependencies on first run / after an update.
-if not exist "node_modules" (
-    call :log "installing dependencies..."
-    call "!NPM!" install >> "%LOG%" 2>&1
-    if !errorlevel! neq 0 call :log "WARNING: npm install exited !errorlevel!"
-)
+REM ALWAYS install, not just when node_modules is missing — a pull that adds a
+REM dependency otherwise leaves the tree incomplete and the build fails.
+call :log "installing dependencies..."
+call "!NPM!" install >> "%LOG%" 2>&1
+if !errorlevel! neq 0 call :log "WARNING: npm install exited !errorlevel!"
 
 REM Serve the app built at install/update time. Building here would add half a
 REM minute to every boot; this only fires as a safety net if dist is missing.
