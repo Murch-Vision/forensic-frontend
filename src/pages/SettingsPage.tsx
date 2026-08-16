@@ -37,6 +37,9 @@ interface VersionInfo {
 interface RepoUpdate {
   name: string;
   updated: boolean;
+  // The pull or the build errored — a different thing from "nothing to do",
+  // and the only one worth painting red.
+  failed: boolean;
   previousCommit: string;
   newCommit: string;
   message: string;
@@ -44,6 +47,7 @@ interface RepoUpdate {
 
 interface UpdateResult {
   updated: boolean;
+  failed: boolean;
   previousVersion: string;
   newVersion: string;
   previousCommit: string;
@@ -262,18 +266,24 @@ export default function SettingsPage() {
 
           {result && (
             <div style={{marginTop: 16, padding: "10px 14px", borderRadius: 6,
-              background: result.updated
-                ? "rgba(46,200,120,0.08)" : "rgba(120,140,160,0.08)",
-              color: result.updated
-                ? "var(--accent-green)" : "var(--text-secondary)",
+              background: result.failed
+                ? "rgba(255,60,60,0.08)"
+                : result.updated
+                  ? "rgba(46,200,120,0.08)" : "rgba(120,140,160,0.08)",
+              color: result.failed
+                ? "var(--accent-red)"
+                : result.updated
+                  ? "var(--accent-green)" : "var(--text-secondary)",
               fontSize: 12.5}}>
               <div>{result.message}</div>
               {result.repos?.length > 0 && (
                 <div style={{marginTop: 6}}>
                   {result.repos.map((r) => (
                     <div key={r.name} style={{
-                      color: r.updated
-                        ? "var(--accent-green)" : "var(--text-muted)",
+                      color: r.failed
+                        ? "var(--accent-red)"
+                        : r.updated
+                          ? "var(--accent-green)" : "var(--text-muted)",
                       fontSize: 11.5, marginTop: 2}}>
                       <b>{r.name}</b>
                       <span style={{fontFamily: "var(--font-mono)",

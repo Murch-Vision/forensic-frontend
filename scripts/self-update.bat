@@ -33,7 +33,13 @@ call npm install
 REM Rebuild here rather than at boot — the task only serves dist\.
 echo [self-update] Rebuilding...
 call npm run build
-if !errorlevel! neq 0 echo [self-update] WARNING: build failed, serving the OLD build.
+if !errorlevel! neq 0 (
+    echo [self-update] WARNING: build failed, serving the OLD build.
+) else (
+    REM Stamp the built commit, or the Settings page keeps reporting the
+    REM screen as stale and the in-app Update button rebuilds every click.
+    >"dist\.commit" echo !AFTER!
+)
 
 REM Close the running launcher window (titled by the installer shim) and start
 REM it again on the new build.

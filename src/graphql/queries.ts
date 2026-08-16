@@ -758,9 +758,9 @@ export const UPDATE_LOG_QUERY = gql`
 export const SELF_UPDATE = gql`
   mutation SelfUpdate {
     selfUpdate {
-      updated previousVersion newVersion previousCommit newCommit
+      updated failed previousVersion newVersion previousCommit newCommit
       message restarting
-      repos { name updated previousCommit newCommit message }
+      repos { name updated failed previousCommit newCommit message }
     }
   }
 `;

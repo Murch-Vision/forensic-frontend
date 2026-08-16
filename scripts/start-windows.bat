@@ -56,7 +56,11 @@ REM minute to every boot; this only fires as a safety net if dist is missing.
 if not exist "dist\index.html" (
     call :log "no build found — building once..."
     call "!NPM!" run build >> "%LOG%" 2>&1
-    if !errorlevel! neq 0 call :log "WARNING: build exited !errorlevel!"
+    if !errorlevel! neq 0 (
+        call :log "WARNING: build exited !errorlevel!"
+    ) else (
+        call :stamp
+    )
 )
 
 call :log "starting frontend..."
@@ -69,4 +73,12 @@ endlocal & exit /b %CODE%
 :log
 echo [%date% %time%] %~1
 echo [%date% %time%] %~1 >> "%LOG%"
+goto :eof
+
+REM Record WHICH commit the build in dist\ was made from. The Settings page
+REM compares this marker against the checked-out commit to say whether the
+REM screen is current; a build made without writing it reads as permanently
+REM stale, and the in-app Update button then rebuilds on every single click.
+:stamp
+for /f "delims=" %%i in ('git rev-parse HEAD 2^>nul') do >"dist\.commit" echo %%i
 goto :eof
