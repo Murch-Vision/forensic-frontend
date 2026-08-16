@@ -1823,10 +1823,11 @@ input:-webkit-autofill:active {
 }
 
 /* Санал хүсэлт — floating intake, admin only (FeedbackWidget.tsx).
-   Bottom RIGHT: the sidebar owns the left edge of every screen. */
+   Bottom LEFT (his call): the sidebar ends well above the fold, so the pill
+   sits in dead space instead of over the last rows of a table. */
 .feedback-fab {
   position: fixed;
-  right: 20px;
+  left: 20px;
   bottom: 20px;
   z-index: 40;
   border-radius: 999px;
