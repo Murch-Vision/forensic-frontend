@@ -22,7 +22,6 @@ import {
   Card,
   DataTable,
   Loading,
-  MultiLineChart,
   PageHeader,
   StatCard,
 } from "../components/kit";
@@ -534,39 +533,78 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
       )},
   ];
 
-  // Slide 6 — one row per direction, biggest money first. A counterparty that
-  // both received and sent appears once for each, which is what "Төрөл" is for.
+  // Данс ↔ харьцаа. ONE ROW PER PAIR — which of our accounts, with whom.
+  // ⛔ Not one row per direction: the same person appeared twice (once
+  // "Орлого", once "Зарлага") and the two halves of his story sat apart. The
+  // direction is in the COLUMNS now, with the зөрүү beside them, and Давтамж
+  // is the pair's whole transaction count, not one direction's.
   interface FlowRow {
-    key: string; name: string; count: number; amount: number; credit: boolean;
+    key: string; accountId: number; account: string;
+    name: string; cpAccount: string | null;
+    count: number; creditN: number; debitN: number;
+    credit: number; debit: number; net: number; turnover: number;
   }
-  const topFlows: FlowRow[] = relations
-    .flatMap((r) => {
-      const rows: FlowRow[] = [];
-      if (r.creditTotal > 0) {
-        rows.push({key: `${r.key}:in`, name: r.name,
-          count: r.creditCount ?? 0, amount: r.creditTotal, credit: true});
-      }
-      if (r.debitTotal > 0) {
-        rows.push({key: `${r.key}:out`, name: r.name,
-          count: r.debitCount ?? 0, amount: r.debitTotal, credit: false});
-      }
-      return rows;
-    })
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 25);
+  const flowRows: FlowRow[] = sel
+    .flatMap((grp) => grp.relations.map((r) => ({
+      key: `${grp.accountId}:${r.key}`,
+      accountId: grp.accountId,
+      account: grp.label,
+      name: r.name,
+      cpAccount: r.account,
+      count: r.txnCount,
+      creditN: r.creditCount ?? 0,
+      debitN: r.debitCount ?? 0,
+      credit: r.creditTotal,
+      debit: r.debitTotal,
+      net: r.netTotal,
+      turnover: r.creditTotal + r.debitTotal,
+    })))
+    .sort((a, b) => b.count - a.count || b.turnover - a.turnover)
+    .slice(0, 100);
+
+  const amountWithCount = (amount: number, n: number) => (
+    <div style={{lineHeight: 1.3}}>
+      <div>{money(amount)}</div>
+      <div style={{fontSize: 11, color: "var(--text-muted)"}}>
+        {n > 0 ? `${formatNum(n)} удаа` : "—"}
+      </div>
+    </div>
+  );
+
+  const partyCell = (main: string, sub: string | null) => (
+    <div style={{lineHeight: 1.3, minWidth: 0}}>
+      <div style={{overflow: "hidden", textOverflow: "ellipsis",
+        whiteSpace: "nowrap"}}>{main}</div>
+      {sub && (
+        <div style={{fontSize: 11, color: "var(--text-muted)",
+          fontFamily: "var(--font-mono)"}}>{sub}</div>
+      )}
+    </div>
+  );
 
   const flowCols: Column<FlowRow>[] = [
+    {header: "Данс", sortValue: (f) => f.account,
+      render: (f) => (
+        <span title={f.account}>{partyCell(f.account, null)}</span>
+      )},
+    {header: "Харьцаа", sortValue: (f) => f.name,
+      render: (f) => partyCell(f.name, f.cpAccount)},
     {header: "Давтамж", align: "right", sortValue: (f) => f.count,
+      title: "Энэ хос хооронд хийгдсэн нийт гүйлгээ",
       render: (f) => `${formatNum(f.count)} удаа`},
-    {header: "Дүн", align: "right", sortValue: (f) => f.amount,
-      render: (f) => money(f.amount)},
-    {header: "Төрөл", render: (f) => (
-      <span style={{color: f.credit
-        ? "var(--accent-green)" : "var(--accent-red)"}}>
-        {f.credit ? "Орлого" : "Зарлага"}
-      </span>
-    )},
-    {header: "Харьцаа", sortValue: (f) => f.name, render: (f) => f.name},
+    // Money AND how many times it moved — a single 5,890,000₮ and thirty
+    // small ones are not the same finding.
+    {header: "Орлого", align: "right", sortValue: (f) => f.credit,
+      render: (f) => amountWithCount(f.credit, f.creditN)},
+    {header: "Зарлага", align: "right", sortValue: (f) => f.debit,
+      render: (f) => amountWithCount(f.debit, f.debitN)},
+    {header: "Зөрүү", align: "right", sortValue: (f) => f.net,
+      render: (f) => (
+        <span style={{fontFamily: "var(--font-mono)", color: f.net < 0
+          ? "var(--accent-red)" : "var(--accent-green)"}}>
+          {formatMoney(f.net)}
+        </span>
+      )},
   ];
 
   // Шар өнгө ганцаараа — тайлбартай. (Улаан тэмдэглэгээ авагдсан: relColor.)
@@ -634,28 +672,21 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     );
   }
 
-  if (d.months.length > 1) {
+  if (flowRows.length > 0) {
     sections.push(
-      <Card key="flow" title="Мөнгөн урсгал (сараар)">
-        <MultiLineChart
-          x={d.months}
-          series={[
-            {name: "Орлого", y: d.credit, color: "#00E676"},
-            {name: "Зарлага", y: d.debit, color: "#FF5252"},
-          ]}
-        />
-      </Card>
-    );
-  }
-
-  if (topFlows.length > 0) {
-    sections.push(
-      <Card key="topflows" title="Хамгийн өндөр дүнгээр гүйлгээ хийсэн харьцаа"
-        noPadding>
-        <div style={{maxHeight: 360, overflowY: "auto"}}>
-          <DataTable columns={flowCols} rows={topFlows}
+      // Six columns of substance do not fit in half a row — this one takes
+      // the whole width instead of cutting the money off the right edge.
+      <Card key="topflows" title={`Данс ↔ харьцаа (${flowRows.length})`}
+        style={{gridColumn: "1 / -1"}} fill noPadding>
+        <div style={{...SCROLL, overflowX: "auto"}}>
+          <DataTable columns={flowCols} rows={flowRows}
             rowKey={(f) => f.key} empty="Харьцаа алга"
-            defaultSort={{col: 1, dir: "desc"}} />
+            pageSize={50}
+            defaultSort={{col: 2, dir: "desc"}}
+            onRowClick={(f) => nav(`/transactions?acct=${f.accountId}&${
+              f.name && f.name !== "—"
+                ? `cpname=${encodeURIComponent(f.name)}`
+                : `cp=${encodeURIComponent(f.cpAccount ?? "")}`}`)} />
         </div>
       </Card>
     );
