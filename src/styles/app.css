@@ -1812,6 +1812,16 @@ input:-webkit-autofill:active {
   border-radius: 999px;
   padding: 10px 18px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  /* OPAQUE. It inherits .btn, whose background is transparent — fine inside a
+     card, unreadable for a pill floating over a dense table, which is exactly
+     where it sits. */
+  background: var(--bg-card);
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+}
+.feedback-fab:hover {
+  background: var(--bg-card-hover);
+  color: var(--accent-cyan);
 }
 
 /* Drop target for screenshots. Dashed until a file is over it. */
