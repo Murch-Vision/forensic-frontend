@@ -35,6 +35,11 @@ export default defineConfig(({mode}) => {
   // workstation has no such platform, which is what .env is for.
   const explicit = env.MAESTRO_PREVIEW_FORENSIC_API || env.API_URL ||
     env.VITE_API_URL || "";
+  // API_PORT — the on-prem answer to "no static IP". The workstation serves
+  // the app over the LAN and its address changes; naming only the PORT lets
+  // the browser build the API address from whatever host it reached the app
+  // on (see apollo.ts). An explicit URL still wins.
+  const apiPort = (env.API_PORT || env.VITE_API_PORT || "").trim();
   // The proxy runs SERVER-side, so it may use the container-network address
   // (http://forensic-api:3000) the browser cannot resolve.
   const apiUrl = env.MAESTRO_LINK_FORENSIC_API || explicit || LOCAL_API;
@@ -57,6 +62,7 @@ export default defineConfig(({mode}) => {
     // the API directly (the API serves GraphQL with permissive CORS).
     define: {
       "import.meta.env.VITE_API_URL": JSON.stringify(explicit),
+      "import.meta.env.VITE_API_PORT": JSON.stringify(explicit ? "" : apiPort),
     },
     server: {
       // 0.0.0.0 — the workstation serves the whole department over LAN, not
