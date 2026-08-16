@@ -38,10 +38,15 @@ export function Card(props: {
   actions?: ReactNode;
   noPadding?: boolean;
   style?: React.CSSProperties;
+  // Fill the grid cell: the header stays put and the body takes the rest, so
+  // two cards side by side end at the same line instead of one of them
+  // stopping short and leaving a hand of empty box under its last row.
+  fill?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="card" style={props.style}>
+    <div className={props.fill ? "card card-fill" : "card"}
+      style={props.style}>
       {props.title && (
         <div className="card-header">
           <span className="card-title">{props.title}</span>

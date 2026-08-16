@@ -156,7 +156,8 @@ function AcctColumn({g, nav, link}: {
     // Grows to fill the card when there are few columns (one selected account
     // used to leave two thirds of the box empty) and holds 320px when there
     // are many, so the strip scrolls sideways instead of squeezing names.
-    <div style={{flex: "1 1 320px", minWidth: 320,
+    <div style={{flex: "1 1 320px", minWidth: 320, display: "flex",
+      flexDirection: "column",
       borderRight: "1px solid var(--border-primary)"}}>
       <div title={g.label}
         style={{padding: "8px 12px", fontSize: 11, fontWeight: 700,
@@ -170,7 +171,7 @@ function AcctColumn({g, nav, link}: {
           {formatNum(g.txnCount)} гүйлгээ · {formatNum(g.relationCount)} харьцаа
         </div>
       </div>
-      <div style={{maxHeight: 420, overflowY: "auto"}}>
+      <div style={{flex: 1, minHeight: 0, overflowY: "auto"}}>
         {g.relations.map((r) => (
           <div key={`${g.accountId}:${r.key}`}
             style={{display: "flex", gap: 8, alignItems: "center",
@@ -340,6 +341,12 @@ function derive(data: CaseData): Derived {
     topTxns, acctLabel,
   };
 }
+
+// One rule for every panel that holds a long list: take the row's height,
+// never grow past 62vh, scroll inside.
+const SCROLL: React.CSSProperties = {
+  flex: "1 1 auto", minHeight: 240, maxHeight: "62vh", overflowY: "auto",
+};
 
 const META: React.CSSProperties = {
   fontSize: 12, color: "var(--text-secondary)",
@@ -589,11 +596,12 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   if (mutual.length > 0 && acctSel.length !== 1) {
     sections.push(
       <Card key="mutual" title={`Дундын харилцааны жагсаалт (${mutual.length})`}
-        style={{height: "100%", display: "flex", flexDirection: "column"}}
-        noPadding>
-        {/* Fill the row's height instead of stopping at 360px and leaving a
-            hand's width of empty box under the last row. */}
-        <div style={{flex: 1, minHeight: 240, overflowY: "auto"}}>
+        fill noPadding>
+        {/* Both panels use the SAME rule — grow to the row's height, cap at
+            62vh — so neither ends before the other. A fixed pixel height on
+            one of them is what kept leaving a hand of empty box in the
+            other. */}
+        <div style={SCROLL}>
           <DataTable columns={relCols} rows={mutual}
             rowKey={(r) => r.key} empty="Дундын харьцаа алга"
             pageSize={50}
@@ -615,8 +623,8 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
         title={`Нийт харьцаа — гүйлгээний тоогоор (${
           formatNum(relations.length)})`}
         actions={relLegend}
-        noPadding>
-        <div style={{display: "flex", overflowX: "auto"}}>
+        fill noPadding>
+        <div style={{...SCROLL, display: "flex", overflowX: "auto"}}>
           {sel.map((col) => (
             <AcctColumn key={col.accountId} g={col} nav={nav}
               link={relLink} />
