@@ -195,8 +195,8 @@ export default function AccountAnalysis() {
 
   const cpCols: Column<Rated>[] = [
     {header: "Харилцагч", sortValue: (r) => r.name, render: (r) => (
-      <span style={{color: r.subjectMatch ? "var(--accent-red)"
-        : r.mutual ? "var(--accent-amber)" : "var(--text-primary)"}}>
+      <span style={{color: r.mutual
+        ? "var(--accent-amber)" : "var(--text-primary)"}}>
         {r.name}
       </span>
     )},

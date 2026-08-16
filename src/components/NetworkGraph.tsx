@@ -350,21 +350,36 @@ function NetworkGraph(props, ref) {
       // Pin the center where it already sits — the cluster forms around it.
       center.fx = center.ax = center.x;
       center.fy = center.ay = center.y;
-      const place = (arr: SimNode[], radius: number) => {
+      const place = (arr: SimNode[], radius: number, from: number) => {
         arr.forEach((n, i) => {
-          const a = -Math.PI / 2 + (i / Math.max(1, arr.length)) * Math.PI * 2;
+          const a = from + (i / Math.max(1, arr.length)) * Math.PI * 2;
           const x = center.x + Math.cos(a) * radius;
           const y = center.y + Math.sin(a) * radius;
           n.x = n.fx = n.ax = x;
           n.y = n.fy = n.ay = y;
         });
       };
-      // Many neighbors → two concentric rings so nodes don't collide.
-      if (nbrs.length > 18) {
-        place(nbrs.filter((_, i) => i % 2 === 0), 135);
-        place(nbrs.filter((_, i) => i % 2 === 1), 225);
-      } else {
-        place(nbrs, Math.min(210, 95 + nbrs.length * 6));
+      // AS MANY RINGS AS THE NODES NEED. Two fixed rings (135 / 225) held
+      // whatever was thrown at them: a hub with 200 neighbours got ~100 bodies
+      // onto an 848px circumference — 8px of arc for a 36px node — so the ring
+      // was a solid overlapping band. Pinned nodes skip collision resolution,
+      // so nothing pulled them apart afterwards either.
+      //
+      // Instead: each ring holds only what fits at one node-width per slot,
+      // and the next ring starts a node-width further out.
+      const slot = nbrs.reduce((m, n) => Math.max(m, radiusOf(n)), 14) * 2 + 20;
+      let radius = Math.max(110, radiusOf(center) + slot);
+      let i = 0;
+      let ring = 0;
+      while (i < nbrs.length) {
+        const cap = Math.max(6, Math.floor((2 * Math.PI * radius) / slot));
+        // Offset every other ring by half a slot so the rings interleave
+        // instead of lining up into spokes.
+        place(nbrs.slice(i, i + cap), radius,
+          -Math.PI / 2 + (ring % 2 ? Math.PI / cap : 0));
+        i += cap;
+        radius += slot;
+        ring++;
       }
       ensureRunning();
       emitLayout(currentPositions());
@@ -1073,12 +1088,36 @@ function NetworkGraph(props, ref) {
       }
       (arr[cl.dist] ??= []).push(n);
     }
-    const ringR = (count: number) => Math.min(230, 95 + count * 6);
+    // A satellite ring holds only what FITS on it: one node-width of arc per
+    // node. The old ringR() capped the radius at 230px and then split anything
+    // over 18 nodes onto two rings — a hub with 200 satellites got a hundred
+    // bodies onto a 1,450px circumference and drew a solid overlapping band
+    // (pinned nodes never separate afterwards, they skip collision).
+    const SLOT = 56;
+    const ringsFor = (count: number, startR: number) => {
+      const out: {r: number; take: number}[] = [];
+      let r = startR;
+      let left = count;
+      while (left > 0) {
+        const cap = Math.max(6, Math.floor((2 * Math.PI * r) / SLOT));
+        const take = Math.min(cap, left);
+        out.push({r, take});
+        left -= take;
+        r += SLOT;
+      }
+      return out;
+    };
+    const ringStart = (d: number) => 110 + (d - 1) * 85;
+    // How far this hub's satellites actually reach — what keeps two hubs from
+    // being placed on top of each other.
     const hubRadius = (cid: string) => {
       const arr = sats.get(cid) ?? [];
       let r = 70;
       for (let d = 1; d < arr.length; d++) {
-        if (arr[d]?.length) r = ringR(arr[d].length) + (d - 1) * 85;
+        const n = arr[d]?.length ?? 0;
+        if (!n) continue;
+        const rings = ringsFor(n, ringStart(d));
+        r = Math.max(r, rings[rings.length - 1].r);
       }
       return r;
     };
@@ -1109,10 +1148,9 @@ function NetworkGraph(props, ref) {
         if (!ring?.length) continue;
         ring.sort((a, b) => rank(a.type) - rank(b.type)
           || a.label.localeCompare(b.label));
-        const place = (list: SimNode[], r: number) => {
+        const place = (list: SimNode[], r: number, from: number) => {
           list.forEach((n, i) => {
-            const a = -Math.PI / 2 + (i / Math.max(1, list.length))
-              * Math.PI * 2;
+            const a = from + (i / Math.max(1, list.length)) * Math.PI * 2;
             const x = base.x + Math.cos(a) * r;
             const y = base.y + Math.sin(a) * r;
             n.x = n.fx = n.ax = x;
@@ -1120,13 +1158,15 @@ function NetworkGraph(props, ref) {
             pos.set(n.id, {x, y});
           });
         };
-        const r = ringR(ring.length) + (d - 1) * 85;
-        if (ring.length > 18) {
-          place(ring.filter((_, i) => i % 2 === 0), r - 45);
-          place(ring.filter((_, i) => i % 2 === 1), r + 45);
-        } else {
-          place(ring, r);
-        }
+        let idx = 0;
+        ringsFor(ring.length, ringStart(d)).forEach((rg, k) => {
+          const slice = ring.slice(idx, idx + rg.take);
+          // Offset alternate rings by half a slot so they interleave rather
+          // than line up into spokes.
+          place(slice, rg.r,
+            -Math.PI / 2 + (k % 2 ? Math.PI / Math.max(1, slice.length) : 0));
+          idx += rg.take;
+        });
       }
     }
 

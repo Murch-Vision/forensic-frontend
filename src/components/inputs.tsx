@@ -212,6 +212,101 @@ export function Select(props: {
   );
 }
 
+/* ── MultiSelect ─────────────────────────────────────────────────────────── */
+
+// Same popover as Select, but the menu stays open and every option toggles.
+// An EMPTY selection means "all" — the filter is off, not empty — so the first
+// row clears it rather than offering a fake "everything" value that would then
+// have to be excluded from every count downstream.
+export function MultiSelect(props: {
+  values: string[];
+  onChange: (values: string[]) => void;
+  options: SelectOption[];
+  // Trigger text when nothing is picked, e.g. "Бүх данс (3)".
+  allLabel: string;
+  // Trigger text for 2+, given the count, e.g. (n) => `${n} данс`.
+  manyLabel?: (n: number) => string;
+  disabled?: boolean;
+  title?: string;
+  style?: React.CSSProperties;
+  searchable?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useOutsideClose(open, () => setOpen(false), [ref, menuRef]);
+  const menuStyle = usePopoverStyle(open, ref,
+    Math.min(280, props.options.length * 34 + 44));
+
+  const picked = new Set(props.values.map(String));
+  const filtered = props.searchable && query.trim()
+    ? props.options.filter((o) =>
+      o.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : props.options;
+
+  const label = picked.size === 0
+    ? props.allLabel
+    : picked.size === 1
+      ? props.options.find((o) => picked.has(String(o.value)))?.label
+        ?? props.values[0]
+      : (props.manyLabel ?? ((n: number) => `${n} сонгосон`))(picked.size);
+
+  function toggle(value: string) {
+    const next = new Set(picked);
+    if (next.has(value)) next.delete(value); else next.add(value);
+    props.onChange([...next]);
+  }
+
+  return (
+    <div ref={ref} className="select" style={props.style} title={props.title}>
+      <button type="button" className="form-input select-trigger"
+        disabled={props.disabled}
+        aria-haspopup="listbox" aria-expanded={open}
+        onClick={() => {setQuery(""); setOpen((v) => !v);}}>
+        <span className="select-label">{label}</span>
+        <span className={`select-chevron${open ? " open" : ""}`}>▾</span>
+      </button>
+      {open && menuStyle && createPortal(
+        <div className="select-menu" role="listbox" ref={menuRef}
+          style={menuStyle}>
+          {props.searchable && (
+            <input className="form-input select-search" autoFocus
+              style={{width: "100%"}}
+              placeholder="Хайх…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onClick={(e) => e.stopPropagation()} />
+          )}
+          <div className={`select-option${picked.size === 0 ? " selected" : ""}`}
+            role="option" aria-selected={picked.size === 0}
+            onClick={() => props.onChange([])}>
+            {props.allLabel}
+            {picked.size === 0 && <span className="select-check">✓</span>}
+          </div>
+          {filtered.length === 0 && (
+            <div className="select-option" style={{opacity: 0.6}}>
+              Илэрц алга
+            </div>
+          )}
+          {filtered.map((o) => {
+            const isSel = picked.has(String(o.value));
+            return (
+              <div key={String(o.value)} role="option" aria-selected={isSel}
+                className={`select-option${isSel ? " selected" : ""}`}
+                onClick={() => toggle(String(o.value))}>
+                {o.label}
+                {isSel && <span className="select-check">✓</span>}
+              </div>
+            );
+          })}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
 /* ── DateInput ───────────────────────────────────────────────────────────── */
 
 const WEEKDAYS = ["Да", "Мя", "Лх", "Пү", "Ба", "Бя", "Ня"];

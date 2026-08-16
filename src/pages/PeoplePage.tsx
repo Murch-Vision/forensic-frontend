@@ -11,18 +11,16 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useMemo, useState} from "react";
-import {useLazyQuery, useMutation, useQuery} from "@apollo/client";
+import {useMutation, useQuery} from "@apollo/client";
 import {
   ACTIVE_CASE_QUERY,
   CREATE_BANK_ACCOUNT,
   CREATE_PHONE_NUMBER,
   GLOBAL_PEOPLE_QUERY,
   MARK_AS_SUSPECT,
-  REPORT_SUSPECT_PDF,
   TAG_EVIDENCE,
 } from "../graphql/queries";
 import {DELETE_SUSPECT} from "../graphql/suspects";
-import {downloadBase64, type ReportFile} from "../lib/download";
 import {
   Badge,
   Card,
@@ -186,9 +184,6 @@ export default function PeoplePage() {
   const [createPhoneNumber] = useMutation(CREATE_PHONE_NUMBER);
   const [tagEvidence] = useMutation(TAG_EVIDENCE);
   const [markAsSuspect, markQ] = useMutation(MARK_AS_SUSPECT);
-  const [getSuspectPdf, suspectPdfQ] =
-    useLazyQuery<{reportSuspectPdf: ReportFile}>(REPORT_SUSPECT_PDF,
-      {fetchPolicy: "no-cache"});
 
   // Evidence tagging follows the case picked in the global AppHeader.
   interface CaseRef {id: number; caseId: string; caseName: string}
@@ -300,14 +295,6 @@ export default function PeoplePage() {
     const marked = primary.status === "UNDER_INVESTIGATION";
     await markAsSuspect({variables: {id: primary.id, marked: !marked}});
     await refetch();
-  }
-
-  // Export a per-suspect financial PDF (profile, income/outgoing totals and the
-  // full transaction ledger) for the selected person.
-  async function exportSuspectPdf() {
-    if (!primary) return;
-    const r = await getSuspectPdf({variables: {suspectId: primary.id}});
-    if (r.data?.reportSuspectPdf) downloadBase64(r.data.reportSuspectPdf);
   }
 
   async function submitAccount() {
@@ -530,12 +517,6 @@ export default function PeoplePage() {
                       title="Энэ хүнийг сэжигтэн болгон тэмдэглэх">
                       {primary.status === "UNDER_INVESTIGATION"
                         ? "✓ СЭЖИГТЭН" : "СЭЖИГТЭН БОЛГОХ"}
-                    </button>
-                    <button className="btn btn-primary"
-                      onClick={exportSuspectPdf}
-                      disabled={suspectPdfQ.loading}
-                      title="Сэжигтний гүйлгээний тайлан (орлого/зарлага) PDF">
-                      {suspectPdfQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "PDF ТАЙЛАН"}
                     </button>
                     <button className="btn" onClick={() => startEdit(primary)}>
                       ЗАСАХ

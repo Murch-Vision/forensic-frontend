@@ -10,8 +10,13 @@
 // Mirrors AmlConfig.Money (₮ default) and assorted ToString formats used in
 // the WPF/Blazor UI.
 
+// The symbol goes AFTER the number, the way it is written in Mongolian
+// (479,800₮). Every screen formats money through here, so this is the one
+// place that decides it.
 export function formatMoney(amount: number, symbol = "₮"): string {
-  return `${symbol} ${Math.round(amount).toLocaleString("en-US")}`;
+  const n = Math.round(amount);
+  return `${Math.abs(n).toLocaleString("en-US")}${symbol}`.replace(
+    /^/, n < 0 ? "−" : "");
 }
 
 export function formatNum(n: number): string {
