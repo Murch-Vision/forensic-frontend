@@ -121,6 +121,10 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
+// Empty space kept between a cluster's center and its first ring of
+// satellites — the hub needs room for its own label to be readable.
+const INNER_R = 210;
+
 // One simulation step. Mutates the node array in place and returns the next
 // alpha (cooling factor). Forces scale with alpha so the layout settles.
 function tick(nodes: SimNode[], links: SimLink[], alpha: number): number {
@@ -368,7 +372,7 @@ function NetworkGraph(props, ref) {
       // Instead: each ring holds only what fits at one node-width per slot,
       // and the next ring starts a node-width further out.
       const slot = nbrs.reduce((m, n) => Math.max(m, radiusOf(n)), 14) * 2 + 20;
-      let radius = Math.max(110, radiusOf(center) + slot);
+      let radius = Math.max(INNER_R, radiusOf(center) + slot);
       let i = 0;
       let ring = 0;
       while (i < nbrs.length) {
@@ -1107,7 +1111,10 @@ function NetworkGraph(props, ref) {
       }
       return out;
     };
-    const ringStart = (d: number) => 110 + (d - 1) * 85;
+    // Breathing room around the hub itself: the first ring starts well clear
+    // of the center node and its label, so the middle of a cluster reads as a
+    // center and not as the densest part of the crowd.
+    const ringStart = (d: number) => INNER_R + (d - 1) * 85;
     // How far this hub's satellites actually reach — what keeps two hubs from
     // being placed on top of each other.
     const hubRadius = (cid: string) => {
