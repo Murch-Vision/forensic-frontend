@@ -5,8 +5,8 @@ REM  Started automatically at boot by the registered Scheduled
 REM  Task (see install-startup-windows.bat). Can also be run
 REM  manually by double-clicking.
 REM
-REM  Uses npm (not pnpm) so it works from the SYSTEM account at
-REM  boot.
+REM  Uses pnpm — these are pnpm projects and npm would install a
+REM  different tree than the one that was tested.
 REM
 REM  Everything is logged to logs\startup.log — at boot there is
 REM  no console to read, so that file is the only way to see why
@@ -24,37 +24,46 @@ set "LOG=%CD%\logs\startup.log"
 call :log "=========================================================="
 call :log "start-windows: booting (user=%USERNAME%, cwd=%CD%)"
 
-REM --- Locate npm -------------------------------------------------------
-REM At boot this runs as SYSTEM, whose PATH is the MACHINE path only. A
-REM per-user Node install (nvm, fnm, winget-to-user) is invisible there, which
-REM is the usual reason autostart works when clicked but not after a restart.
-set "NPM="
-for /f "delims=" %%i in ('where npm.cmd 2^>nul') do if not defined NPM set "NPM=%%i"
-if not defined NPM if exist "%ProgramFiles%\nodejs\npm.cmd" set "NPM=%ProgramFiles%\nodejs\npm.cmd"
-if not defined NPM if exist "%ProgramFiles(x86)%\nodejs\npm.cmd" set "NPM=%ProgramFiles(x86)%\nodejs\npm.cmd"
-if not defined NPM if exist "%LOCALAPPDATA%\Programs\nodejs\npm.cmd" set "NPM=%LOCALAPPDATA%\Programs\nodejs\npm.cmd"
-if not defined NPM if exist "%ProgramData%\chocolatey\bin\npm.cmd" set "NPM=%ProgramData%\chocolatey\bin\npm.cmd"
+REM --- Locate pnpm ------------------------------------------------------
+REM pnpm, NOT npm: these are pnpm projects (pnpm-lock.yaml) and an npm install
+REM resolves fresh from package.json instead of the locked tree — the versions
+REM that were tested are not the versions that end up installed.
+REM
+REM At boot this may run as another account whose PATH is the MACHINE path
+REM only. A per-user install (npm -g, corepack, the standalone installer) is
+REM invisible there, which is the usual reason autostart works when clicked but
+REM not after a restart — so look in the usual places by hand as well.
+set "PNPM="
+for /f "delims=" %%i in ('where pnpm.cmd 2^>nul') do if not defined PNPM set "PNPM=%%i"
+if not defined PNPM if exist "%APPDATA%\npm\pnpm.cmd" set "PNPM=%APPDATA%\npm\pnpm.cmd"
+if not defined PNPM if exist "%ProgramFiles%\nodejs\pnpm.cmd" set "PNPM=%ProgramFiles%\nodejs\pnpm.cmd"
+if not defined PNPM if exist "%ProgramFiles(x86)%\nodejs\pnpm.cmd" set "PNPM=%ProgramFiles(x86)%\nodejs\pnpm.cmd"
+if not defined PNPM if exist "%LOCALAPPDATA%\pnpm\pnpm.exe" set "PNPM=%LOCALAPPDATA%\pnpm\pnpm.exe"
+if not defined PNPM if exist "%LOCALAPPDATA%\Programs\nodejs\pnpm.cmd" set "PNPM=%LOCALAPPDATA%\Programs\nodejs\pnpm.cmd"
 
-if not defined NPM (
-    call :log "FATAL: npm not found. Node is probably installed for your user"
-    call :log "       only, so the SYSTEM account cannot see it. Reinstall Node"
-    call :log "       for ALL USERS from https://nodejs.org, then re-run"
-    call :log "       scripts\install-startup-windows.bat"
+if not defined PNPM (
+    call :log "FATAL: pnpm not found. Install it for ALL USERS:"
+    call :log "         npm install -g pnpm"
+    call :log "       then re-run scripts\install-startup-windows.bat"
     exit /b 9009
 )
-call :log "using npm: !NPM!"
+call :log "using pnpm: !PNPM!"
+
+REM No TTY here: pnpm ABORTS instead of assuming yes when it wants to confirm
+REM something (e.g. purging a node_modules an npm install left behind).
+set "CI=true"
 
 REM ALWAYS install, not just when node_modules is missing — a pull that adds a
 REM dependency otherwise leaves the tree incomplete and the build fails.
 call :log "installing dependencies..."
-call "!NPM!" install >> "%LOG%" 2>&1
-if !errorlevel! neq 0 call :log "WARNING: npm install exited !errorlevel!"
+call "!PNPM!" install >> "%LOG%" 2>&1
+if !errorlevel! neq 0 call :log "WARNING: pnpm install exited !errorlevel!"
 
 REM Serve the app built at install/update time. Building here would add half a
 REM minute to every boot; this only fires as a safety net if dist is missing.
 if not exist "dist\index.html" (
     call :log "no build found — building once..."
-    call "!NPM!" run build >> "%LOG%" 2>&1
+    call "!PNPM!" run build >> "%LOG%" 2>&1
     if !errorlevel! neq 0 (
         call :log "WARNING: build exited !errorlevel!"
     ) else (
@@ -63,7 +72,7 @@ if not exist "dist\index.html" (
 )
 
 call :log "starting frontend..."
-call "!NPM!" run start >> "%LOG%" 2>&1
+call "!PNPM!" run start >> "%LOG%" 2>&1
 set "CODE=!errorlevel!"
 call :log "frontend exited with code !CODE!"
 

@@ -11,6 +11,9 @@ REM ============================================================
 
 setlocal enabledelayedexpansion
 
+REM pnpm has no TTY here and ABORTS on any confirmation prompt.
+set "CI=true"
+
 cd /d "%~dp0.."
 
 REM Windows git refuses a repo owned by another account ("dubious
@@ -31,12 +34,12 @@ if "!BEFORE!"=="!AFTER!" (
 )
 
 echo [self-update] New version pulled (!BEFORE:~0,7! -^> !AFTER:~0,7!).
-echo [self-update] Reinstalling dependencies...
-call npm install
+echo [self-update] Reinstalling dependencies (pnpm)...
+call pnpm install
 
 REM Rebuild here rather than at boot — the task only serves dist\.
 echo [self-update] Rebuilding...
-call npm run build
+call pnpm run build
 if !errorlevel! neq 0 (
     echo [self-update] WARNING: build failed, serving the OLD build.
 ) else (
