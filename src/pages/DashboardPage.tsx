@@ -73,6 +73,8 @@ interface DashTxn {
   amount: number;
   type: string;
   flagStatus: string;
+  counterpartyName: string | null;
+  counterpartyAccount: string | null;
 }
 
 interface CaseData {
@@ -506,9 +508,19 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   ].filter((c) => c.value !== 0);
 
 
+  // Эзэмшигч → харьцаа → мөнгө → огноо ХАМГИЙН АРД. A row answers "whose
+  // account, with whom, how much" before it answers "when"; the date led the
+  // table and the two parties were nowhere in it.
   const txnCols: Column<DashTxn>[] = [
-    {header: "Огноо", render: (t) => formatDateTime(t.timestamp),
-      sortValue: (t) => t.timestamp},
+    {header: "Данс эзэмшигч", render: (t) => {
+      const p = d.acctParty(t.bankAccountId);
+      return <PartyCell name={p.name} account={p.account} />;
+    }},
+    {header: "Харьцаа", sortValue: (t) => t.counterpartyName ?? "",
+      render: (t) => (
+        <PartyCell name={t.counterpartyName?.trim() || "—"}
+          account={t.counterpartyAccount} />
+      )},
     {header: "Дүн", align: "right", sortValue: (t) => t.amount,
       render: (t) => (
         <span style={{fontFamily: "var(--font-mono)"}}>
@@ -518,14 +530,12 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     {header: "Төрөл", render: (t) => t.type === "credit"
       ? <span style={{color: "var(--accent-green)"}}>Орлого</span>
       : <span style={{color: "var(--accent-red)"}}>Зарлага</span>},
-    {header: "Данс", render: (t) => {
-      const p = d.acctParty(t.bankAccountId);
-      return <PartyCell name={p.name} account={p.account} />;
-    }},
     {header: "", render: (t) => t.flagStatus === "FLAGGED"
       ? <Badge text="Тэмдэглэсэн" kind="critical" />
       : t.flagStatus === "SUSPICIOUS"
         ? <Badge text="Сэжигтэй" kind="medium" /> : null},
+    {header: "Огноо", render: (t) => formatDateTime(t.timestamp),
+      sortValue: (t) => t.timestamp},
   ];
 
   const money = (v: number) => (
@@ -712,11 +722,12 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
 
   if (hasTxns) {
     sections.push(
-      <Card key="toptxns" title="Хамгийн том гүйлгээнүүд" fill noPadding>
+      <Card key="toptxns" title="Хамгийн том гүйлгээнүүд"
+        style={{gridColumn: "1 / -1"}} fill noPadding>
         <DataTable columns={txnCols} rows={d.topTxns} scroll={SCROLL}
           rowKey={(t) => t.id}
           empty="Гүйлгээ алга"
-          defaultSort={{col: 1, dir: "desc"}}
+          defaultSort={{col: 2, dir: "desc"}}
           onRowClick={(t) => nav(`/transactions?acct=${t.bankAccountId}`)} />
       </Card>
     );

@@ -30,7 +30,10 @@ export const DASHBOARD_CASE_QUERY = gql`
     }
     suspects { id suspectId fullName riskLevel occupation initials }
     bankAccounts { id bankName accountNumber suspectId }
-    transactions { id bankAccountId timestamp amount type flagStatus }
+    transactions {
+      id bankAccountId timestamp amount type flagStatus
+      counterpartyName counterpartyAccount
+    }
     callRecords { id startTime }
     suspectLinks { id }
   }
