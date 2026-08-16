@@ -193,17 +193,18 @@ export default function AccountAnalysis() {
   const transfers = (transfersQ.data?.directTransfers ?? []).filter((t) =>
     t.fromAccountId === a.accountId || t.toAccountId === a.accountId);
 
+  // Нэр дээрээ, данс доороо — one cell, the way the dashboard reads. Two
+  // columns for one party made the eye jump back and forth to pair them.
   const cpCols: Column<Rated>[] = [
     {header: "Харилцагч", sortValue: (r) => r.name, render: (r) => (
-      <span style={{color: r.mutual
-        ? "var(--accent-amber)" : "var(--text-primary)"}}>
-        {r.name}
-      </span>
-    )},
-    {header: "Харьцсан данс", render: (r) => (
-      <span style={{fontFamily: "var(--font-mono)", fontSize: 11}}>
-        {r.account ?? "—"}
-      </span>
+      <div style={{lineHeight: 1.3, minWidth: 0}}>
+        <div style={{color: r.mutual
+          ? "var(--accent-amber)" : "var(--text-primary)"}}>{r.name}</div>
+        {r.account && (
+          <div style={{fontSize: 11, color: "var(--text-muted)",
+            fontFamily: "var(--font-mono)"}}>{r.account}</div>
+        )}
+      </div>
     )},
     {header: "Гүйлгээ", align: "right", sortValue: (r) => r.txnCount,
       render: (r) => formatNum(r.txnCount)},

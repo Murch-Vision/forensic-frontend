@@ -51,7 +51,7 @@ export const CASE_RELATIONS_QUERY = gql`
         accountIds mutual subjectMatch
       }
       byAccount {
-        accountId label txnCount relationCount mutualCount
+        accountId label ownerName accountNumber txnCount relationCount mutualCount
         creditCount debitCount creditTotal debitTotal netTotal
         relations {
           key name account txnCount creditCount debitCount

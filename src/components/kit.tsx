@@ -156,6 +156,11 @@ export function DataTable<T>(props: {
   defaultSort?: {col: number; dir: "asc" | "desc"};
   // Paginate when set: only this many rows render at once, with page controls.
   pageSize?: number;
+  // Scroll the ROWS inside this style box, keeping the pager below it. Given
+  // to the table rather than wrapped around it on purpose: wrapped, the pager
+  // scrolled away with the rows and had to be hunted for at the bottom of a
+  // hundred-row list.
+  scroll?: React.CSSProperties;
 }) {
   const [sort, setSort] = useState<{col: number; dir: "asc" | "desc"} | null>(
     props.defaultSort ?? null);
@@ -194,8 +199,7 @@ export function DataTable<T>(props: {
   const pageRows = size
     ? rows.slice(curPage * size, curPage * size + size) : rows;
 
-  return (
-    <>
+  const table = (
     <table className="data-grid" style={{width: "100%"}}>
       <thead>
         <tr>
@@ -238,6 +242,11 @@ export function DataTable<T>(props: {
         ))}
       </tbody>
     </table>
+  );
+
+  return (
+    <>
+    {props.scroll ? <div style={props.scroll}>{table}</div> : table}
     {size && pageCount > 1 && (
       <div style={{display: "flex", alignItems: "center",
         justifyContent: "flex-end", gap: 12, padding: "10px 16px",

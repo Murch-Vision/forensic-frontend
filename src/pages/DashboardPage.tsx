@@ -104,6 +104,8 @@ interface Relation {
 interface AccountRelations {
   accountId     : number;
   label         : string;
+  ownerName     : string | null;
+  accountNumber : string;
   txnCount      : number;
   relationCount : number;
   mutualCount   : number;
@@ -144,6 +146,21 @@ function relColor(r: {mutual: boolean}): string {
   return r.mutual ? "var(--accent-amber)" : "var(--text-primary)";
 }
 
+// Нэр дээрээ, данс доороо — HIS format, and the only one used from here on:
+// a name and a seventeen-digit number on one line is read as neither.
+function PartyCell({name, account}: {name: string; account?: string | null}) {
+  return (
+    <div style={{lineHeight: 1.3, minWidth: 0}}>
+      <div style={{overflow: "hidden", textOverflow: "ellipsis",
+        whiteSpace: "nowrap"}}>{name}</div>
+      {account && (
+        <div style={{fontSize: 11, color: "var(--text-muted)",
+          fontFamily: "var(--font-mono)"}}>{account}</div>
+      )}
+    </div>
+  );
+}
+
 // One statement account as a COLUMN: the account and its transaction total on
 // top, then whom it dealt with and how many times — the client's own layout.
 function AcctColumn({g, nav, link}: {
@@ -163,8 +180,8 @@ function AcctColumn({g, nav, link}: {
           color: "var(--accent-cyan)", background: "var(--bg-input)",
           borderTop: "1px solid var(--border-primary)",
           borderBottom: "1px solid var(--border-primary)"}}>
-        <div style={{overflow: "hidden", textOverflow: "ellipsis",
-          whiteSpace: "nowrap"}}>{g.label}</div>
+        <PartyCell name={g.ownerName ?? g.accountNumber}
+          account={g.ownerName ? g.accountNumber : null} />
         <div style={{color: "var(--text-secondary)", fontWeight: 400,
           marginTop: 2}}>
           {formatNum(g.txnCount)} гүйлгээ · {formatNum(g.relationCount)} харьцаа
@@ -284,7 +301,8 @@ interface Derived {
   credit: number[];
   debit: number[];
   topTxns: DashTxn[];
-  acctLabel: (id: number | null) => string;
+  // Нэр дээрээ, данс доороо — the pieces, not a joined string.
+  acctParty: (id: number | null) => {name: string; account: string | null};
 }
 
 function range(min: string | null, max: string | null): string {
@@ -319,13 +337,16 @@ function derive(data: CaseData): Derived {
 
   const acctById = new Map(accounts.map((a) => [a.id, a]));
   const suspectById = new Map(suspects.map((s) => [s.id, s]));
-  const acctLabel = (id: number | null) => {
-    if (id == null) return "";
+  const acctParty = (id: number | null) => {
+    if (id == null) return {name: "—", account: null};
     const a = acctById.get(id);
-    if (!a) return `Данс #${id}`;
+    if (!a) return {name: `Данс #${id}`, account: null};
     const owner = a.suspectId != null
       ? suspectById.get(a.suspectId)?.fullName : null;
-    return [a.bankName, a.accountNumber, owner].filter(Boolean).join(" · ");
+    const who = owner && !/^-+$/.test(owner.trim()) ? owner : a.bankName;
+    return who
+      ? {name: who, account: a.accountNumber}
+      : {name: a.accountNumber, account: null};
   };
 
   const topTxns = [...txns].sort((a, b) => b.amount - a.amount).slice(0, 10);
@@ -337,7 +358,7 @@ function derive(data: CaseData): Derived {
     months,
     credit: months.map((k) => monthMap.get(k)!.credit),
     debit: months.map((k) => monthMap.get(k)!.debit),
-    topTxns, acctLabel,
+    topTxns, acctParty,
   };
 }
 
@@ -497,9 +518,10 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     {header: "Төрөл", render: (t) => t.type === "credit"
       ? <span style={{color: "var(--accent-green)"}}>Орлого</span>
       : <span style={{color: "var(--accent-red)"}}>Зарлага</span>},
-    {header: "Данс", render: (t) => (
-      <span style={{fontSize: 11}}>{d.acctLabel(t.bankAccountId)}</span>
-    )},
+    {header: "Данс", render: (t) => {
+      const p = d.acctParty(t.bankAccountId);
+      return <PartyCell name={p.name} account={p.account} />;
+    }},
     {header: "", render: (t) => t.flagStatus === "FLAGGED"
       ? <Badge text="Тэмдэглэсэн" kind="critical" />
       : t.flagStatus === "SUSPICIOUS"
@@ -540,6 +562,7 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   // is the pair's whole transaction count, not one direction's.
   interface FlowRow {
     key: string; accountId: number; account: string;
+    owner: string; ownerAccount: string | null;
     name: string; cpAccount: string | null;
     count: number; creditN: number; debitN: number;
     credit: number; debit: number; net: number; turnover: number;
@@ -549,6 +572,8 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
       key: `${grp.accountId}:${r.key}`,
       accountId: grp.accountId,
       account: grp.label,
+      owner: grp.ownerName ?? grp.accountNumber,
+      ownerAccount: grp.ownerName ? grp.accountNumber : null,
       name: r.name,
       cpAccount: r.account,
       count: r.txnCount,
@@ -571,24 +596,11 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     </div>
   );
 
-  const partyCell = (main: string, sub: string | null) => (
-    <div style={{lineHeight: 1.3, minWidth: 0}}>
-      <div style={{overflow: "hidden", textOverflow: "ellipsis",
-        whiteSpace: "nowrap"}}>{main}</div>
-      {sub && (
-        <div style={{fontSize: 11, color: "var(--text-muted)",
-          fontFamily: "var(--font-mono)"}}>{sub}</div>
-      )}
-    </div>
-  );
-
   const flowCols: Column<FlowRow>[] = [
     {header: "Данс", sortValue: (f) => f.account,
-      render: (f) => (
-        <span title={f.account}>{partyCell(f.account, null)}</span>
-      )},
+      render: (f) => <PartyCell name={f.owner} account={f.ownerAccount} />},
     {header: "Харьцаа", sortValue: (f) => f.name,
-      render: (f) => partyCell(f.name, f.cpAccount)},
+      render: (f) => <PartyCell name={f.name} account={f.cpAccount} />},
     {header: "Давтамж", align: "right", sortValue: (f) => f.count,
       title: "Энэ хос хооронд хийгдсэн нийт гүйлгээ",
       render: (f) => `${formatNum(f.count)} удаа`},
@@ -631,20 +643,27 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   // ⛔ Not shown for a single selected account: "дундын" is a statement ABOUT
   // two accounts, so on one account the list answers a question nobody asked.
   const mutual = relations.filter((r) => r.mutual);
-  if (mutual.length > 0 && acctSel.length !== 1) {
+  // ⚠️ The card is ALWAYS here, even when it has nothing to say. Dropping it
+  // for a single selected account left a hole beside the columns and the page
+  // read as broken; an empty box that states its own condition does not.
+  const oneAccount = acctSel.length === 1;
+  if (rel) {
     sections.push(
-      <Card key="mutual" title={`Дундын харилцааны жагсаалт (${mutual.length})`}
+      <Card key="mutual"
+        title={`Дундын харилцааны жагсаалт (${oneAccount ? 0 : mutual.length})`}
         fill noPadding>
-        {/* Both panels use the SAME rule — grow to the row's height, cap at
-            62vh — so neither ends before the other. A fixed pixel height on
-            one of them is what kept leaving a hand of empty box in the
-            other. */}
-        <div style={SCROLL}>
-          <DataTable columns={relCols} rows={mutual}
+        {oneAccount ? (
+          <div style={{...SCROLL, display: "flex", alignItems: "center",
+            justifyContent: "center", color: "var(--text-muted)",
+            fontSize: 13, textAlign: "center", padding: 24}}>
+            Дундын харьцаа хоёр данснаас эхэлнэ — дээрээс өөр данс нэмнэ үү
+          </div>
+        ) : (
+          <DataTable columns={relCols} rows={mutual} scroll={SCROLL}
             rowKey={(r) => r.key} empty="Дундын харьцаа алга"
             pageSize={50}
             onRowClick={(r) => nav(relLink(r))} />
-        </div>
+        )}
       </Card>
     );
   }
@@ -678,8 +697,8 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
       // the whole width instead of cutting the money off the right edge.
       <Card key="topflows" title={`Данс ↔ харьцаа (${flowRows.length})`}
         style={{gridColumn: "1 / -1"}} fill noPadding>
-        <div style={{...SCROLL, overflowX: "auto"}}>
-          <DataTable columns={flowCols} rows={flowRows}
+        <DataTable columns={flowCols} rows={flowRows}
+            scroll={{...SCROLL, overflowX: "auto"}}
             rowKey={(f) => f.key} empty="Харьцаа алга"
             pageSize={50}
             defaultSort={{col: 2, dir: "desc"}}
@@ -687,22 +706,18 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
               f.name && f.name !== "—"
                 ? `cpname=${encodeURIComponent(f.name)}`
                 : `cp=${encodeURIComponent(f.cpAccount ?? "")}`}`)} />
-        </div>
       </Card>
     );
   }
 
   if (hasTxns) {
     sections.push(
-      <Card key="toptxns" title="Хамгийн том гүйлгээнүүд" noPadding>
-        <div style={{maxHeight: 360, overflowY: "auto"}}>
-          <DataTable columns={txnCols} rows={d.topTxns}
-            rowKey={(t) => t.id}
-            empty="Гүйлгээ алга"
-            defaultSort={{col: 1, dir: "desc"}}
-            onRowClick={(t) =>
-              nav(`/transactions?acct=${t.bankAccountId}`)} />
-        </div>
+      <Card key="toptxns" title="Хамгийн том гүйлгээнүүд" fill noPadding>
+        <DataTable columns={txnCols} rows={d.topTxns} scroll={SCROLL}
+          rowKey={(t) => t.id}
+          empty="Гүйлгээ алга"
+          defaultSort={{col: 1, dir: "desc"}}
+          onRowClick={(t) => nav(`/transactions?acct=${t.bankAccountId}`)} />
       </Card>
     );
   }
