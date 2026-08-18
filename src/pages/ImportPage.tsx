@@ -9,6 +9,8 @@
 import {useRef, useState} from "react";
 import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {
+  ACCOUNT_RECORDS,
+  DELETE_BANK_ACCOUNT,
   EXCEL_SHEETS,
   IMPORT_DATA,
   IMPORT_SUSPECTS,
@@ -16,9 +18,10 @@ import {
   UPLOAD_APPEND,
   UPLOAD_START,
 } from "../graphql/queries";
-import {Badge, Card, Empty, PageHeader} from "../components/kit";
+import {Badge, Card, Empty, Loading, PageHeader} from "../components/kit";
 import {Select} from "../components/inputs";
 import CaseGate from "../components/CaseGate";
+import {formatDate, formatNum} from "../lib/format";
 
 type ImportKind = "BANK" | "CDR";
 
@@ -138,6 +141,121 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+interface AccountRecord {
+  id            : number;
+  accountNumber : string;
+  bankName      : string | null;
+  ownerName     : string | null;
+  txnCount      : number;
+  firstTxn      : string | null;
+  lastTxn       : string | null;
+  createdAt     : string;
+}
+
+interface Deletion {
+  accountNumber : string;
+  transactions  : number;
+  analyses      : number;
+  conclusions   : number;
+  evidence      : number;
+  links         : number;
+}
+
+// Буруу оруулсан хуулгыг дансаар нь буцааж авах. Нэг хүн олон данстай байж
+// болох тул сонголт нь хүнээр биш, ДАНСНЫ ДУГААРААР явна — устгах гэж буй
+// хуулга нь тэр дансных гэдэг нь эргэлзээгүй байх ёстой. Дансаа дахин
+// импортлоход шинээр үүсэх тул энэ нь буруу импортыг цэвэрлэх зам.
+function AccountPurge() {
+  const client = useApolloClient();
+  const {data, loading} =
+    useQuery<{accountRecords: AccountRecord[]}>(ACCOUNT_RECORDS);
+  const [accountId, setAccountId] = useState(0);
+  const [deleteAccount, delQ] =
+    useMutation<{deleteBankAccount: Deletion}>(DELETE_BANK_ACCOUNT);
+  const [done, setDone] = useState<Deletion | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const accounts = data?.accountRecords ?? [];
+  const picked = accounts.find((a) => a.id === accountId) ?? null;
+
+  async function run() {
+    if (!picked) return;
+    const ok = window.confirm(
+      `${picked.accountNumber} — ${formatNum(picked.txnCount)} гүйлгээ ` +
+      "бүрмөсөн устана. Устгах уу?");
+    if (!ok) return;
+    setErr(null);
+    setDone(null);
+    try {
+      const res = await deleteAccount({variables: {id: picked.id}});
+      setDone(res.data?.deleteBankAccount ?? null);
+      setAccountId(0);
+      // Every other screen holds this account in its cache — the dashboard,
+      // the transaction list, the analysis. Refetch what is open so nothing
+      // keeps showing rows that no longer exist.
+      await client.refetchQueries({include: "active"});
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Устгаж чадсангүй.");
+    }
+  }
+
+  return (
+    <Card title="Данс устгах">
+      {loading ? <Loading /> : accounts.length === 0 ? (
+        <Empty message="Данс алга" />
+      ) : (
+        <>
+          <div style={{display: "flex", gap: 12, alignItems: "flex-end",
+            flexWrap: "wrap"}}>
+            <div>
+              <label className="form-label">Дансны дугаар</label>
+              <Select value={accountId} searchable
+                onChange={(v) => { setAccountId(Number(v)); setDone(null); }}
+                style={{minWidth: 420}}
+                options={[
+                  {value: 0, label: "— данс сонгоно уу —"},
+                  ...accounts.map((a) => ({
+                    value: a.id,
+                    label: [a.accountNumber, a.ownerName ?? "эзэн тодорхойгүй",
+                      `${formatNum(a.txnCount)} гүйлгээ`].join(" · "),
+                  })),
+                ]} />
+            </div>
+            <button className="btn btn-danger" onClick={run}
+              disabled={!picked || delQ.loading}>
+              {delQ.loading ? "УСТГАЖ БАЙНА..." : "УСТГАХ"}
+            </button>
+          </div>
+          {picked && (
+            <div style={{marginTop: 12, fontSize: 12}}>
+              {picked.bankName ? `${picked.bankName} · ` : ""}
+              {formatNum(picked.txnCount)} гүйлгээ
+              {picked.firstTxn
+                ? ` · ${formatDate(picked.firstTxn)} — ${formatDate(picked.lastTxn)}`
+                : ""}
+            </div>
+          )}
+          {done && (
+            <div style={{marginTop: 12, fontSize: 12,
+              color: "var(--accent-green)"}}>
+              {done.accountNumber} устлаа · {formatNum(done.transactions)} гүйлгээ
+              {done.evidence > 0 ? ` · ${done.evidence} баримт` : ""}
+              {done.links > 0 ? ` · ${done.links} холбоос` : ""}
+            </div>
+          )}
+          {err && (
+            <div style={{marginTop: 12, padding: "8px 12px", fontSize: 12,
+              color: "var(--risk-high)",
+              border: "1px solid var(--risk-high)", borderRadius: 6}}>
+              {err}
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
 }
 
 export default function ImportPage() {
@@ -583,6 +701,10 @@ export default function ImportPage() {
           ))}
         </Card>
       )}
+
+      <div style={{marginTop: 16}}>
+        <AccountPurge />
+      </div>
       </CaseGate>
     </div>
   );

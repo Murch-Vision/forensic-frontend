@@ -540,6 +540,22 @@ export const IMPORT_DATA = gql`
   }
 `;
 
+export const ACCOUNT_RECORDS = gql`
+  query AccountRecords {
+    accountRecords {
+      id accountNumber bankName ownerName txnCount firstTxn lastTxn createdAt
+    }
+  }
+`;
+
+export const DELETE_BANK_ACCOUNT = gql`
+  mutation DeleteBankAccount($id: Int!) {
+    deleteBankAccount(id: $id) {
+      accountNumber transactions analyses conclusions evidence links
+    }
+  }
+`;
+
 export const REPORT_PDF = gql`
   query ReportPdf {
     reportPdf { filename mimeType base64 }
