@@ -8,14 +8,6 @@
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {gql} from "@apollo/client";
 
-// Dashboard, no active case: light launchpad data — global tallies + the
-// case list (row click activates a case).
-export const DASHBOARD_OVERVIEW_QUERY = gql`
-  query DashboardOverview {
-    caseFiles { id caseId caseName status priority leadInvestigator }
-  }
-`;
-
 // Dashboard, active case: the evidence queries are case-scoped server-side,
 // so these lists ARE the case. Counterparty figures come from caseRelations
 // below, not from counting these rows in the browser.

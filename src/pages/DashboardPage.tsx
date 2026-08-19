@@ -7,20 +7,19 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useMemo, useState} from "react";
-import {useApolloClient, useMutation, useQuery} from "@apollo/client";
+import {useQuery} from "@apollo/client";
 import {useNavigate} from "react-router-dom";
 import {
   ACTIVE_CASE_QUERY,
   CASE_RELATIONS_QUERY,
   DASHBOARD_CASE_QUERY,
-  DASHBOARD_OVERVIEW_QUERY,
   EVIDENCE_FOR_CASE,
-  SET_ACTIVE_CASE,
 } from "../graphql/queries";
 import {
   Badge,
   Card,
   DataTable,
+  Empty,
   Loading,
   PageHeader,
   StatCard,
@@ -30,9 +29,7 @@ import {MultiSelect} from "../components/inputs";
 import {
   formatDate, formatDateTime, formatMoney, formatNum,
 } from "../lib/format";
-import {
-  PRIORITY_BADGE, PRIORITY_LABELS, STATUS_BADGE, STATUS_LABELS,
-} from "../nav";
+import {STATUS_BADGE, STATUS_LABELS} from "../nav";
 import type {RiskLevel} from "../types";
 
 // Хэрэг-төвтэй самбар. ДҮРЭМ: зөвхөн БАЙГАА өгөгдлийг харуулна — хоосон
@@ -227,50 +224,13 @@ function Shell({subtitle, children}: {
 
 // === Хэрэг сонгоогүй =========================================================
 
-// ⛔ Хэрэг сонгоогүй үед НИЙТ дүн гэж юу ч харуулахгүй: энэ дэлгэц бол
-// хэрэг сонгох жагсаалт, түүнээс өөр зорилгогүй. Бүх хэргийн нийлбэр тоо нь
-// хэний ч ажлын тоо биш.
-interface OverviewData {
-  caseFiles: CaseRef[];
-}
-
+// ⛔ Хэрэг сонгоогүй үед энэ дэлгэц ХООСОН. Нийт тоо ч, хэргийн жагсаалт ч
+// байхгүй: хэрэг сонгох газар нь толгой хэсгийн жагсаалт, хэрэг удирдах газар
+// нь «Хэргийн бүртгэл». Гурав дахь хувилбарыг энд гаргах нь давхардал.
 function Overview() {
-  const client = useApolloClient();
-  const {data, loading} = useQuery<OverviewData>(DASHBOARD_OVERVIEW_QUERY);
-  const [setActiveCase] = useMutation(SET_ACTIVE_CASE);
-
-  async function pick(id: number) {
-    await setActiveCase({variables: {caseFileId: id}});
-    await client.resetStore();
-  }
-
-  if (loading || !data) {
-    return <Shell subtitle="ХЭРЭГ СОНГООГҮЙ"><Loading /></Shell>;
-  }
-
-  const cols: Column<CaseRef>[] = [
-    {header: "Хэрэг", render: (c) => <b>{c.caseId}</b>,
-      sortValue: (c) => c.caseId},
-    {header: "Нэр", render: (c) => c.caseName},
-    {header: "Төлөв", render: (c) => (
-      <Badge text={STATUS_LABELS[c.status] ?? c.status}
-        kind={STATUS_BADGE[c.status] ?? "unknown"} />
-    )},
-    {header: "Зэрэглэл", render: (c) => (
-      <Badge text={PRIORITY_LABELS[c.priority] ?? c.priority}
-        kind={PRIORITY_BADGE[c.priority] ?? "unknown"} />
-    )},
-    {header: "Мөрдөгч", render: (c) => c.leadInvestigator ?? "—"},
-  ];
-
   return (
     <Shell subtitle="ХЭРЭГ СОНГООГҮЙ">
-      <Card title="Хэрэг сонгох — мөр дээр дарж идэвхжүүлнэ" noPadding>
-        <DataTable columns={cols} rows={data.caseFiles}
-          rowKey={(c) => c.id}
-          empty="Хэрэг алга"
-          onRowClick={(c) => void pick(c.id)} />
-      </Card>
+      <Empty message="Толгой хэсгээс хэрэг сонгоно уу" />
     </Shell>
   );
 }
