@@ -33,7 +33,7 @@ import {
 import {
   PRIORITY_BADGE, PRIORITY_LABELS, STATUS_BADGE, STATUS_LABELS,
 } from "../nav";
-import type {DashboardStats, RiskLevel} from "../types";
+import type {RiskLevel} from "../types";
 
 // Хэрэг-төвтэй самбар. ДҮРЭМ: зөвхөн БАЙГАА өгөгдлийг харуулна — хоосон
 // section, тэг карт, цэс давхардуулсан товч огт байхгүй. Тоо бүр нь өөрийн
@@ -227,8 +227,10 @@ function Shell({subtitle, children}: {
 
 // === Хэрэг сонгоогүй =========================================================
 
+// ⛔ Хэрэг сонгоогүй үед НИЙТ дүн гэж юу ч харуулахгүй: энэ дэлгэц бол
+// хэрэг сонгох жагсаалт, түүнээс өөр зорилгогүй. Бүх хэргийн нийлбэр тоо нь
+// хэний ч ажлын тоо биш.
 interface OverviewData {
-  dashboardStats: DashboardStats;
   caseFiles: CaseRef[];
 }
 
@@ -245,17 +247,6 @@ function Overview() {
   if (loading || !data) {
     return <Shell subtitle="ХЭРЭГ СОНГООГҮЙ"><Loading /></Shell>;
   }
-
-  const s = data.dashboardStats;
-  const stats: {label: string; value: React.ReactNode; color?: string}[] = [
-    {label: "Нээлттэй хэрэг", value: s.openCases},
-    {label: "Нийт сэжигтэн", value: s.totalSuspects},
-    {label: "Нийт гүйлгээ", value: formatNum(s.totalTransactions)},
-    {label: "Нийт дуудлага", value: formatNum(s.totalCallRecords)},
-    {label: "Өндөр эрсдэл", value: s.highRiskSuspects, color: "red"},
-    {label: "Нийт дүн", value: formatMoney(s.totalTransactionVolume),
-      color: "green"},
-  ].filter((c) => c.value !== 0 && c.value !== "0");
 
   const cols: Column<CaseRef>[] = [
     {header: "Хэрэг", render: (c) => <b>{c.caseId}</b>,
@@ -274,14 +265,6 @@ function Overview() {
 
   return (
     <Shell subtitle="ХЭРЭГ СОНГООГҮЙ">
-      {stats.length > 0 && (
-        <div className="metrics-grid">
-          {stats.map((c) => (
-            <StatCard key={c.label} label={c.label} value={c.value}
-              color={c.color} />
-          ))}
-        </div>
-      )}
       <Card title="Хэрэг сонгох — мөр дээр дарж идэвхжүүлнэ" noPadding>
         <DataTable columns={cols} rows={data.caseFiles}
           rowKey={(c) => c.id}

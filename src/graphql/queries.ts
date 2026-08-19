@@ -12,10 +12,6 @@ import {gql} from "@apollo/client";
 // case list (row click activates a case).
 export const DASHBOARD_OVERVIEW_QUERY = gql`
   query DashboardOverview {
-    dashboardStats {
-      totalSuspects totalTransactions totalCallRecords openCases
-      highRiskSuspects totalTransactionVolume
-    }
     caseFiles { id caseId caseName status priority leadInvestigator }
   }
 `;
