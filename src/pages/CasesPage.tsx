@@ -11,7 +11,9 @@ import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {
   ACTIVE_CASE_QUERY,
   CASE_FILES_QUERY,
+  CASE_PURGE_PREVIEW,
   CREATE_CASE_FILE,
+  DELETE_CASE_FILE,
   MERGE_CASES,
   SET_ACTIVE_CASE,
   SET_CASE_STATUS,
@@ -22,7 +24,8 @@ import {
 } from "../nav";
 import {Card, Loading, MetricsGrid, PageHeader, StatCard} from "../components/kit";
 import {Select} from "../components/inputs";
-import {formatDate} from "../lib/format";
+import {formatDate, formatNum} from "../lib/format";
+import {useAuth} from "../lib/auth";
 
 // Case management root: every other page works INSIDE the case picked in
 // the header — this page is where cases themselves are created, merged and
@@ -40,8 +43,21 @@ interface CaseRow {
   closedAt: string | null;
 }
 
+// Устгахад юу алга болох нь. Тоог сервер тоолно — цонх нь зөвхөн харуулна.
+interface CasePurge {
+  caseId       : string;
+  caseName     : string;
+  suspects     : number;
+  accounts     : number;
+  transactions : number;
+  calls        : number;
+  phones       : number;
+  evidence     : number;
+}
+
 export default function CasesPage() {
   const client = useApolloClient();
+  const {isAdmin} = useAuth();
   const casesQ = useQuery<{caseFiles: CaseRow[]}>(CASE_FILES_QUERY);
   const activeQ = useQuery<{activeCase: {id: number} | null}>(ACTIVE_CASE_QUERY);
 
@@ -55,6 +71,32 @@ export default function CasesPage() {
   const [updateCaseFile] = useMutation(UPDATE_CASE_FILE,
     {refetchQueries: refetchAll});
   const [mergeCases] = useMutation(MERGE_CASES, {refetchQueries: refetchAll});
+  const [deleteCaseFile, deleteQ] =
+    useMutation<{deleteCaseFile: CasePurge}>(DELETE_CASE_FILE);
+
+  // Устгах гэж буй хэрэг. Сонгомогц юу алга болохыг сервероос тоолуулж авна.
+  const [purgeCase, setPurgeCase] = useState<CaseRow | null>(null);
+  const [purgeError, setPurgeError] = useState<string | null>(null);
+  const purgeQ = useQuery<{casePurgePreview: CasePurge}>(CASE_PURGE_PREVIEW, {
+    variables: {caseFileId: purgeCase?.id ?? 0},
+    skip: !purgeCase,
+    fetchPolicy: "network-only",
+  });
+  const purge = purgeQ.data?.casePurgePreview ?? null;
+
+  async function confirmPurge() {
+    if (!purgeCase) return;
+    setPurgeError(null);
+    try {
+      await deleteCaseFile({variables: {caseFileId: purgeCase.id}});
+      setPurgeCase(null);
+      // Устсан хэрэг хэн нэгний нээлттэй хэрэг байсан байж болно — бүх дэлгэц
+      // шинээр уншина.
+      await client.resetStore();
+    } catch (e) {
+      setPurgeError(e instanceof Error ? e.message : "Устгаж чадсангүй.");
+    }
+  }
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({caseId: "", caseName: ""});
@@ -260,6 +302,17 @@ export default function CasesPage() {
                       onClick={() => openEdit(c)}>
                       ЗАСАХ
                     </button>
+                    {isAdmin && (
+                      <button className="btn btn-sm btn-danger"
+                        style={{marginLeft: 6}}
+                        title="Хэргийг бүх мэдээллийнх нь хамт устгах"
+                        onClick={() => {
+                          setPurgeError(null);
+                          setPurgeCase(c);
+                        }}>
+                        УСТГАХ
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -272,6 +325,71 @@ export default function CasesPage() {
           </div>
         )}
       </Card>
+
+      {purgeCase && (
+        <div className="modal-overlay"
+          onClick={() => !deleteQ.loading && setPurgeCase(null)}>
+          <div className="card" onClick={(e) => e.stopPropagation()}
+            style={{width: 460, maxWidth: "90vw", marginBottom: 0}}>
+            <div className="card-header">
+              <span className="card-title" style={{color: "var(--risk-high)"}}>
+                ХЭРЭГ УСТГАХ
+              </span>
+            </div>
+            <div className="card-body">
+              {purgeError && <div className="form-error-box">{purgeError}</div>}
+              <div style={{fontSize: 13, marginBottom: 12}}>
+                <strong>{purgeCase.caseId}</strong> · {purgeCase.caseName}
+              </div>
+              {purgeQ.loading || !purge ? (
+                <Loading />
+              ) : (
+                <>
+                  <table className="data-grid" style={{width: "100%"}}>
+                    <tbody>
+                      {([
+                        ["Сэжигтэн", purge.suspects],
+                        ["Данс", purge.accounts],
+                        ["Гүйлгээ", purge.transactions],
+                        ["Дуудлага", purge.calls],
+                        ["Утас", purge.phones],
+                        ["Баримт", purge.evidence],
+                      ] as [string, number][]).map(([label, n]) => (
+                        <tr key={label}>
+                          <td>{label}</td>
+                          <td style={{textAlign: "right",
+                            fontFamily: "var(--font-mono)"}}>
+                            {formatNum(n)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{fontSize: 12, margin: "12px 0 4px"}}>
+                    Дээрх бүх мэдээлэл бүрмөсөн устана. Буцаах боломжгүй.
+                    Итгэлтэй байна уу?
+                  </div>
+                  <div style={{fontSize: 11, color: "var(--text-muted)"}}>
+                    Өөр хэрэгт бас хамаарах хүн, данс үлдэнэ.
+                  </div>
+                </>
+              )}
+              <div style={{display: "flex", gap: 8, justifyContent: "flex-end",
+                marginTop: 16}}>
+                <button className="btn" disabled={deleteQ.loading}
+                  onClick={() => setPurgeCase(null)}>
+                  БОЛИХ
+                </button>
+                <button className="btn btn-danger"
+                  disabled={deleteQ.loading || purgeQ.loading || !purge}
+                  onClick={confirmPurge}>
+                  {deleteQ.loading ? "УСТГАЖ БАЙНА..." : "УСТГАХ"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showMerge && (
         <div className="modal-overlay" onClick={() => setShowMerge(false)}>

@@ -678,6 +678,22 @@ export const SET_ACTIVE_CASE = gql`
   }
 `;
 
+const CASE_PURGE_FIELDS =
+  "caseId caseName suspects accounts transactions calls phones evidence";
+
+// Устгахаас өмнө юу алга болохыг тоолж авчирна — баталгаажуулах цонхны тоо.
+export const CASE_PURGE_PREVIEW = gql`
+  query CasePurgePreview($caseFileId: Int!) {
+    casePurgePreview(caseFileId: $caseFileId) { ${CASE_PURGE_FIELDS} }
+  }
+`;
+
+export const DELETE_CASE_FILE = gql`
+  mutation DeleteCaseFile($caseFileId: Int!) {
+    deleteCaseFile(caseFileId: $caseFileId) { ${CASE_PURGE_FIELDS} }
+  }
+`;
+
 export const MERGE_CASES = gql`
   mutation MergeCases($sourceCaseFileIds: [Int!]!, $targetCaseFileId: Int!) {
     mergeCases(
