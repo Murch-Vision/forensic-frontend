@@ -14,12 +14,17 @@ export interface NavMeta {
   path: string;
   label: string;
   icon: string;
+  // ⛔ Хэлтсийн даргад л. Мөрдөгчид зөвхөн ӨӨРИЙН хэргээ хардаг тул хэрэг
+  // дамнасан нэгдсэн жагсаалт тэдэнд харагдах ёсгүй — цэснээс нь ч, замаас
+  // нь ч (App.tsx энэ жагсаалтаас route-оо бүтээдэг).
+  adminOnly?: boolean;
 }
 
 export const NAV_META: NavMeta[] = [
   {path: "/dashboard", label: "Хяналтын самбар", icon: "\u{1F4CA}"},
   {path: "/cases", label: "Хэргийн бүртгэл", icon: "\u{1F4C1}"},
-  {path: "/people", label: "Субьектийн жагсаалт", icon: "\u{1F465}"},
+  {path: "/people", label: "Субьектийн жагсаалт", icon: "\u{1F465}",
+    adminOnly: true},
   {path: "/import", label: "Өгөгдөл импорт", icon: "\u{1F4E5}"},
   {path: "/transactions", label: "Дансны дүн шинжилгээ", icon: "\u{1F4B0}"},
   {path: "/calls", label: "Дуудлагын бүртгэл", icon: "\u{1F4DE}"},

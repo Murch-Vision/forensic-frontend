@@ -62,7 +62,8 @@ export default function App() {
   if (!user) return <LoginPage />;
 
   const nav = user.role === "ADMIN"
-    ? [...NAV_META, ADMIN_NAV] : NAV_META;
+    ? [...NAV_META, ADMIN_NAV]
+    : NAV_META.filter((n) => !n.adminOnly);
   const NAV = nav.map((n) => ({...n, el: PAGE_ELEMENTS[n.path]}));
 
   return (
