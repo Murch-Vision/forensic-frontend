@@ -535,7 +535,8 @@ export const IMPORT_DATA = gql`
       startRow: $startRow
       endRow: $endRow
     ) {
-      totalRows importedRows skippedRows errors messages detectedProfile domain
+      totalRows importedRows skippedRows duplicateRows errors messages
+      detectedProfile domain
     }
   }
 `;

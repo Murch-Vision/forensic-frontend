@@ -104,6 +104,7 @@ interface Summary {
   totalRows: number;
   importedRows: number;
   skippedRows: number;
+  duplicateRows: number;
   errors: string[];
   messages: string[];
   detectedProfile: string | null;
@@ -693,7 +694,16 @@ export default function ImportPage() {
             <span style={{color: "var(--text-muted)"}}>
               Алгассан: <strong>{summary.skippedRows}</strong>
             </span>
+            <span style={{color: "var(--accent-amber, #FFB300)"}}>
+              Давхардсан: <strong>{summary.duplicateRows}</strong>
+            </span>
           </div>
+          {summary.duplicateRows > 0 && (
+            <div style={{fontSize: 12, marginBottom: 12}}>
+              {summary.duplicateRows} мөр санд аль хэдийн байсан тул дахин
+              ороогүй.
+            </div>
+          )}
           {summary.errors.map((e, i) => (
             <div key={i} style={{fontSize: 11, color: "var(--risk-high)"}}>
               {e}
