@@ -181,7 +181,6 @@ export default function TransactionsPage() {
   const [topN, setTopN] = useState(10);
   const [pairTopN, setPairTopN] = useState(20);
   const [corrMin, setCorrMin] = useState(30);
-  const [selectedActivityDay, setSelectedActivityDay] = useState<string | null>(null);
   const [selectedTxn, setSelectedTxn] = useState<BankTransaction | null>(null);
   const ignoredPairs = useIgnoredPairs();
   const ignoredTxns = useIgnoredTxns();
@@ -505,41 +504,34 @@ export default function TransactionsPage() {
     return cum;
   });
 
-  // First rank the busiest days, then show a clean 24-hour breakdown for the
-  // selected day. This answers "which day, then which hour" in two steps.
-  const txnsByDay = new Map<string, BankTransaction[]>();
+  // Day × hour density: one square represents one exact hour of one day.
+  const hours = Array.from({length: 24}, (_, hour) => hour);
+  const heatDays: string[] = [];
+  if (dayKeys.length > 0) {
+    const cursor = new Date(`${dayKeys[0]}T00:00:00Z`);
+    const last = dayKeys[dayKeys.length - 1];
+    while (cursor.toISOString().slice(0, 10) <= last) {
+      heatDays.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
   const txnsByDayHour = new Map<string, BankTransaction[]>();
   for (const t of filtered) {
     const day = t.timestamp.slice(0, 10);
     const hour = Number(t.timestamp.slice(11, 13)) || 0;
     const key = `${day}|${hour}`;
-    txnsByDay.set(day, [...(txnsByDay.get(day) ?? []), t]);
     txnsByDayHour.set(key, [...(txnsByDayHour.get(key) ?? []), t]);
   }
-  const busiestDays = [...txnsByDay.entries()]
-    .map(([day, txns]) => ({day, txns}))
-    .sort((a, b) => b.txns.length - a.txns.length
-      || a.day.localeCompare(b.day))
-    .slice(0, 7)
-    .reverse();
-  const defaultActivityDay = busiestDays[busiestDays.length - 1]?.day ?? null;
-  const activityDay = selectedActivityDay != null
-    && txnsByDay.has(selectedActivityDay)
-    ? selectedActivityDay : defaultActivityDay;
-  const activityHours = Array.from({length: 24}, (_, hour) => {
-    const txns = activityDay == null
-      ? [] : txnsByDayHour.get(`${activityDay}|${hour}`) ?? [];
-    const income = txns.filter((t) => t.type === "credit");
-    const expense = txns.filter((t) => t.type === "debit");
-    return {
-      hour,
-      txns,
-      incomeCount: income.length,
-      expenseCount: expense.length,
-      incomeAmount: income.reduce((sum, t) => sum + t.amount, 0),
-      expenseAmount: expense.reduce((sum, t) => sum + t.amount, 0),
-    };
-  });
+  const heatCounts = hours.map((hour) => heatDays.map((day) =>
+    txnsByDayHour.get(`${day}|${hour}`)?.length ?? 0));
+  const heatDetails = hours.map((hour) => heatDays.map((day) => {
+    const cell = txnsByDayHour.get(`${day}|${hour}`) ?? [];
+    const income = cell.filter((t) => t.type === "credit");
+    const expense = cell.filter((t) => t.type === "debit");
+    return [income.length, expense.length,
+      formatMoney(income.reduce((sum, t) => sum + t.amount, 0)),
+      formatMoney(expense.reduce((sum, t) => sum + t.amount, 0))];
+  }));
 
   // "Who with whom" — follow the money. The case account and the counterparty,
   // each shown as a name + its account number.
@@ -860,68 +852,50 @@ export default function TransactionsPage() {
         </Card>
       </div>
 
-      <div style={ROW}>
-        <Card title="1. Хамгийн их гүйлгээтэй өдрөөс сонгоно уу">
-          <Plot
-            height={320}
-            data={[{
-              type: "bar", orientation: "h", name: "Нийт гүйлгээ",
-              x: busiestDays.map((d) => d.txns.length),
-              y: busiestDays.map((d) => d.day),
-              marker: {color: busiestDays.map((d) =>
-                d.day === activityDay ? "#FFB74D" : "#00BCD4")},
-              text: busiestDays.map((d) => d.txns.length),
-              textposition: "outside",
-              hovertemplate: "%{y}<br>%{x} гүйлгээ<extra></extra>",
-            }]}
-            layout={{
-              margin: {l: 92, r: 42, t: 12, b: 46},
-              showlegend: false,
-              xaxis: {title: "Гүйлгээний тоо", rangemode: "tozero"},
-              yaxis: {automargin: true, fixedrange: true},
-            }}
-            onClick={(e) => {
-              const day = String(e.points?.[0]?.y ?? "");
-              if (txnsByDay.has(day)) setSelectedActivityDay(day);
-            }}
-          />
-        </Card>
-
-        <Card title={`2. ${activityDay ?? "—"} өдрийн гүйлгээ хийсэн цаг`}>
-          <Plot
-            height={320}
-            data={[{
-              type: "bar", name: "Нийт гүйлгээ",
-              x: activityHours.map((h) =>
-                `${String(h.hour).padStart(2, "0")}:00`),
-              y: activityHours.map((h) => h.txns.length),
-              customdata: activityHours.map((h) =>
-                [h.incomeCount, h.expenseCount,
-                  formatMoney(h.incomeAmount), formatMoney(h.expenseAmount)]),
-              marker: {color: "#FFB74D"},
-              text: activityHours.map((h) => h.txns.length || ""),
-              textposition: "outside",
-              hovertemplate: "%{x} цаг · Нийт %{y} гүйлгээ"
-                + "<br>Орлого: %{customdata[0]} · %{customdata[2]}"
-                + "<br>Зарлага: %{customdata[1]} · %{customdata[3]}<extra></extra>",
-            }]}
-            layout={{
-              margin: {l: 48, r: 20, t: 12, b: 52},
-              showlegend: false,
-              xaxis: {title: "Цаг", tickangle: -45, fixedrange: true},
-              yaxis: {title: "Гүйлгээний тоо", rangemode: "tozero"},
-            }}
-            onClick={(e) => {
-              const idx = e.points?.[0]?.pointIndex
-                ?? e.points?.[0]?.pointNumber;
-              const hour = idx == null ? null : activityHours[idx];
-              const largest = [...(hour?.txns ?? [])]
-                .sort((a, b) => b.amount - a.amount)[0];
-              if (largest) openDrill(largest);
-            }}
-          />
-        </Card>
-      </div>
+      <Card
+        title="Өдөр, цагийн гүйлгээний давтамж — тод нүд нь олон гүйлгээ"
+        style={{marginBottom: 16}}
+      >
+        <Plot
+          height={500}
+          data={[{
+            type: "heatmap",
+            x: heatDays,
+            y: hours,
+            z: heatCounts,
+            customdata: heatDetails,
+            colorscale: [
+              [0, "#101225"], [0.12, "#15355A"], [0.35, "#087EA4"],
+              [0.65, "#00D4C7"], [1, "#FFE66D"],
+            ],
+            xgap: 1,
+            ygap: 1,
+            colorbar: {title: {text: "Гүйлгээ"}, thickness: 12},
+            hovertemplate: "%{x} · %{y}:00–%{y}:59<br>Нийт: %{z} гүйлгээ"
+              + "<br>Орлого: %{customdata[0]} · %{customdata[2]}"
+              + "<br>Зарлага: %{customdata[1]} · %{customdata[3]}<extra></extra>",
+          }]}
+          layout={{
+            margin: {l: 62, r: 70, t: 16, b: 54},
+            xaxis: {type: "date", title: "Огноо", tickformat: "%Y-%m-%d"},
+            yaxis: {
+              title: "Цаг",
+              tickmode: "array",
+              tickvals: hours,
+              ticktext: hours.map((h) => `${String(h).padStart(2, "0")}:00`),
+              fixedrange: true,
+            },
+          }}
+          onClick={(e) => {
+            const p = e.points?.[0];
+            const day = String(p?.x ?? "").slice(0, 10);
+            const hour = Number(p?.y);
+            const cell = txnsByDayHour.get(`${day}|${hour}`) ?? [];
+            const largest = [...cell].sort((a, b) => b.amount - a.amount)[0];
+            if (largest) openDrill(largest);
+          }}
+        />
+      </Card>
 
       <div style={ROW}>
         <Card title="Өдөр тутмын хэмжээ & гүйцэтгэлийн баланс">
