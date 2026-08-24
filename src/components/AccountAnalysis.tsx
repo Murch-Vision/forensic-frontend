@@ -85,7 +85,7 @@ function ActivityBlock({title, buckets}: {title: string; buckets: Bucket[]}) {
     <Card title={title} style={{marginBottom: 16}}>
       <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16,
         alignItems: "start"}}>
-        <BarChart color="#B388FF"
+        <BarChart color="#087EA4"
           data={buckets.map((b) => ({label: b.label, value: b.count}))} />
         <div style={{maxHeight: 260, overflowY: "auto"}}>
           <DataTable columns={cols} rows={shown} rowKey={(b) => b.key}
