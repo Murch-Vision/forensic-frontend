@@ -58,6 +58,11 @@ const RATING_COLOR: Record<string, string> = {
   "Их дүн": "var(--accent-amber)",
 };
 
+const COUNTERPARTY_LIMITS = [10, 30, 50, 100].map((value) => ({
+  value,
+  label: `Top ${value}`,
+}));
+
 // Chart on the left, the same buckets as numbers on the right. The deck asked
 // for "хажуудаа дэлгэрэнгүй жагсаалттай" — a bar shape alone can't be quoted in
 // a report.
@@ -172,8 +177,9 @@ function ConclusionBox({title, accountId, stored, onSaved}: {
 }
 
 export default function AccountAnalysis() {
+  const [topLimit, setTopLimit] = useState(30);
   const {data, loading} = useQuery<{accountAnalyses: Analysis[]}>(
-    ACCOUNT_ANALYSES_QUERY);
+    ACCOUNT_ANALYSES_QUERY, {variables: {topLimit}});
   const transfersQ = useQuery<{directTransfers: Transfer[]}>(
     DIRECT_TRANSFERS_QUERY);
   const [acctId, setAcctId] = useState<number | null>(null);
@@ -291,14 +297,14 @@ export default function AccountAnalysis() {
       <Card style={{marginBottom: 16}} noPadding
         title={`Их давтамжтай харилцагчид (${a.topCounterparties.length})`}
         actions={
-          <span style={{display: "inline-flex", gap: 12, fontSize: 11}}>
-            <span style={{color: "var(--accent-red)"}}>Регистр таарсан</span>
-            <span style={{color: "var(--accent-amber)"}}>Дундын</span>
-          </span>
+          <Select value={topLimit} onChange={(v) => setTopLimit(Number(v))}
+            options={COUNTERPARTY_LIMITS} style={{width: 110}} />
         }>
-        <DataTable columns={cpCols} rows={a.topCounterparties}
-          rowKey={(r) => r.key} empty="Харилцагч алга"
-          defaultSort={{col: 2, dir: "desc"}} />
+        <div className="top-counterparties-table">
+          <DataTable columns={cpCols} rows={a.topCounterparties}
+            rowKey={(r) => r.key} empty="Харилцагч алга"
+            defaultSort={{col: 2, dir: "desc"}} />
+        </div>
       </Card>
 
       <ConclusionBox title={`Дүгнэлт — данс ${a.accountNumber}`}
