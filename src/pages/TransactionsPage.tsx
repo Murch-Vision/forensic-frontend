@@ -62,6 +62,13 @@ const realName = (s: string | null | undefined): boolean => {
   return t !== "" && !/^-+$/.test(t);
 };
 
+// Plot a timestamp as minutes since midnight. Keeping the value numeric lets
+// Plotly draw a continuous 24-hour axis while the tick labels remain HH:MM.
+const minuteOfDay = (timestamp: string): number => {
+  const match = timestamp.match(/T(\d{2}):(\d{2})/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+};
+
 interface CorrCall {
   id            : number;
   callerNumber  : string;
@@ -480,6 +487,10 @@ export default function TransactionsPage() {
   const totalCount   = filtered.length;
   const credits = filtered.filter((t) => t.type === "credit");
   const debits = filtered.filter((t) => t.type === "debit");
+  const chartCredits = [...credits].sort((a, b) =>
+    a.timestamp.localeCompare(b.timestamp));
+  const chartDebits = [...debits].sort((a, b) =>
+    a.timestamp.localeCompare(b.timestamp));
   const totalCredits = credits.reduce((sum, t) => sum + t.amount, 0);
   const totalDebits = debits.reduce((sum, t) => sum + t.amount, 0);
 
@@ -824,24 +835,47 @@ export default function TransactionsPage() {
       </div>
 
       <div style={ROW}>
-        <Card title="Гүйлгээний дэлгэц (дүн vs хугацаа) — цэг дээр дарж нягтлах">
+        <Card title="Гүйлгээний дэлгэц (огноо vs цаг) — цэг дээр дарж нягтлах">
           <Plot
             height={280}
             data={[
-              {type: "scatter", mode: "markers", name: "Орлого",
-                x: credits.map((t) => t.timestamp.slice(0, 10)),
-                y: credits.map((t) => t.amount),
-                marker: {color: "#00E676", size: 7, opacity: 0.6}},
-              {type: "scatter", mode: "markers", name: "Зарлага",
-                x: debits.map((t) => t.timestamp.slice(0, 10)),
-                y: debits.map((t) => t.amount),
-                marker: {color: "#FF5252", size: 7, opacity: 0.6}},
+              {type: "scatter", mode: "lines+markers", name: "Орлого",
+                x: chartCredits.map((t) => t.timestamp.slice(0, 10)),
+                y: chartCredits.map((t) => minuteOfDay(t.timestamp)),
+                customdata: chartCredits.map((t) => [
+                  formatDateTime(t.timestamp), formatMoney(t.amount),
+                ]),
+                line: {color: "#42A5F5", width: 3},
+                marker: {color: "#42A5F5", size: 7},
+                hovertemplate: "%{customdata[0]}<br>Орлого: %{customdata[1]}<extra></extra>"},
+              {type: "scatter", mode: "lines+markers", name: "Зарлага",
+                x: chartDebits.map((t) => t.timestamp.slice(0, 10)),
+                y: chartDebits.map((t) => minuteOfDay(t.timestamp)),
+                customdata: chartDebits.map((t) => [
+                  formatDateTime(t.timestamp), formatMoney(t.amount),
+                ]),
+                line: {color: "#FF8A3D", width: 3},
+                marker: {color: "#FF8A3D", size: 7},
+                hovertemplate: "%{customdata[0]}<br>Зарлага: %{customdata[1]}<extra></extra>"},
             ]}
+            layout={{
+              xaxis: {type: "date", title: "Огноо", tickformat: "%Y-%m-%d"},
+              yaxis: {
+                title: "Цаг",
+                range: [0, 1440],
+                tickmode: "array",
+                tickvals: [0, 180, 360, 540, 720, 900, 1080, 1260, 1440],
+                ticktext: ["00:00", "03:00", "06:00", "09:00", "12:00",
+                  "15:00", "18:00", "21:00", "24:00"],
+              },
+              hovermode: "closest",
+            }}
             onClick={(e) => {
               const p = e.points?.[0];
               if (!p) return;
               const idx = p.pointIndex ?? p.pointNumber;
-              const t = p.curveNumber === 0 ? credits[idx] : debits[idx];
+              const t = p.curveNumber === 0
+                ? chartCredits[idx] : chartDebits[idx];
               if (t) openDrill(t);
             }}
           />
