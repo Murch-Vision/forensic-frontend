@@ -10,7 +10,7 @@
  *               chart + list side by side because a bar tells you the shape and
  *               only the list tells you the amount.
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import {useMutation, useQuery} from "@apollo/client";
 import {
   ACCOUNT_ANALYSES_QUERY, CASE_CONCLUSIONS_QUERY, SAVE_CASE_CONCLUSION,
@@ -55,6 +55,84 @@ const COUNTERPARTY_LIMITS = [10, 30, 50, 100].map((value) => ({
   value,
   label: `Top ${value}`,
 }));
+
+const WEEKDAYS = ["Ням", "Даваа", "Мягмар", "Лхагва", "Пүрэв", "Баасан",
+  "Бямба"];
+
+function busiest(buckets: Bucket[]): Bucket | null {
+  return buckets.reduce<Bucket | null>((best, bucket) =>
+    bucket.count > (best?.count ?? 0) ? bucket : best, null);
+}
+
+function share(count: number, total: number): string {
+  return total > 0 ? `${Math.round(count / total * 100)}%` : "0%";
+}
+
+function predictedMoment(a: Analysis, hour: Bucket | null,
+  weekday: Bucket | null): string | null {
+  if (!a.lastTxn || !hour || !weekday) return null;
+  const base = new Date(`${a.lastTxn.slice(0, 10)}T${a.lastTxn.slice(11, 19)}Z`);
+  const weekdayIndex = WEEKDAYS.indexOf(weekday.label);
+  const hourNumber = Number(hour.key);
+  if (Number.isNaN(base.getTime()) || weekdayIndex < 0
+    || !Number.isFinite(hourNumber)) return null;
+  const candidate = new Date(base);
+  candidate.setUTCDate(candidate.getUTCDate()
+    + (weekdayIndex - candidate.getUTCDay() + 7) % 7);
+  candidate.setUTCHours(hourNumber, 0, 0, 0);
+  if (candidate <= base) candidate.setUTCDate(candidate.getUTCDate() + 7);
+  return `${candidate.getUTCFullYear()} оны ${candidate.getUTCMonth() + 1} сарын `
+    + `${candidate.getUTCDate()}-ны ${WEEKDAYS[candidate.getUTCDay()]} гараг, `
+    + `${String(hourNumber).padStart(2, "0")}:00–`
+    + `${String(hourNumber).padStart(2, "0")}:59`;
+}
+
+function generateConclusion(a: Analysis): string {
+  const hour = a.hasTimeOfDay ? busiest(a.byHour) : null;
+  const weekday = busiest(a.byWeekday);
+  const month = busiest(a.byMonth);
+  const lines: string[] = [];
+
+  if (hour) {
+    lines.push(`Цагийн идэвхжил: ${hour.label} цагт хамгийн олон буюу `
+      + `${formatNum(hour.count)} гүйлгээ хийгдсэн. Энэ нь нийт гүйлгээний `
+      + `${share(hour.count, a.txnCount)} байна.`);
+  } else {
+    lines.push("Цагийн идэвхжил: хуулганд цагийн мэдээлэл байхгүй тул цагийн "
+      + "давтамж болон дараагийн идэвхтэй цагийг тооцоолох боломжгүй.");
+  }
+  if (weekday) {
+    lines.push(`Өдрийн идэвхжил: ${weekday.label} гарагт хамгийн идэвхтэй, `
+      + `${formatNum(weekday.count)} гүйлгээтэй буюу нийт гүйлгээний `
+      + `${share(weekday.count, a.txnCount)} байна.`);
+  }
+  if (month) {
+    const months = a.byMonth.filter((b) => b.count > 0);
+    const recent = months.slice(-3);
+    const previous = months.slice(-6, -3);
+    const recentAvg = recent.reduce((sum, b) => sum + b.count, 0)
+      / Math.max(recent.length, 1);
+    const previousAvg = previous.reduce((sum, b) => sum + b.count, 0)
+      / Math.max(previous.length, 1);
+    const direction = previous.length === 0 ? "тогтвортой эсэхийг дүгнэхэд "
+      + "өмнөх сарын мэдээлэл хүрэлцэхгүй"
+      : recentAvg > previousAvg * 1.1 ? "сүүлийн саруудад өсөх хандлагатай"
+      : recentAvg < previousAvg * 0.9 ? "сүүлийн саруудад буурах хандлагатай"
+      : "сүүлийн саруудад ерөнхийдөө тогтвортой";
+    lines.push(`Сарын идэвхжил: ${month.label} сард хамгийн олон буюу `
+      + `${formatNum(month.count)} гүйлгээ бүртгэгдсэн. Идэвхжил ${direction}. `
+      + `Сүүлийн ${recent.length} сарын дунджаар дараагийн сард ойролцоогоор `
+      + `${formatNum(Math.round(recentAvg))} гүйлгээ гарах төлөвтэй.`);
+  }
+  const next = predictedMoment(a, hour, weekday);
+  if (next) {
+    lines.push(`Таамагласан дараагийн идэвхтэй хугацаа: өмнөх давтамж ижил `
+      + `хэвээр үргэлжилбэл ${next}-д гүйлгээ идэвхжих магадлал хамгийн өндөр.`);
+  }
+  lines.push("Энэ нь өнгөрсөн гүйлгээний давтамжид үндэслэсэн статистик таамаг "
+    + "бөгөөд бодит гүйлгээ заавал гарахыг батлахгүй.");
+  return lines.join("\n\n");
+}
 
 // Chart on the left, the same buckets as numbers on the right. The deck asked
 // for "хажуудаа дэлгэрэнгүй жагсаалттай" — a bar shape alone can't be quoted in
@@ -111,26 +189,25 @@ function acctOption(x: Analysis): string {
     + ` — ${formatNum(x.txnCount)} гүйлгээ`;
 }
 
-function ConclusionBox({title, accountId, stored, onSaved}: {
+function ConclusionBox({title, accountId, stored, generated = "", onSaved}: {
   title: string;
   accountId: number | null;
   stored: string;
+  generated?: string;
   onSaved: () => void;
 }) {
   const [saveMut] = useMutation(SAVE_CASE_CONCLUSION);
-  const [text, setText] = useState(stored);
+  const [text, setText] = useState(stored || generated);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState("");
-  // Selecting another account means this box now edits THAT account's
-  // conclusion, so the draft is replaced rather than carried across.
-  const [editing, setEditing] = useState(accountId);
-  if (editing !== accountId) {
-    setEditing(accountId);
-    setText(stored);
+  // Selecting another account or receiving its saved text replaces the draft.
+  // Ordinary typing does not retrigger this effect.
+  useEffect(() => {
+    setText(stored || generated);
     setDone(false);
     setErr("");
-  }
+  }, [accountId, stored, generated]);
 
   async function save() {
     setBusy(true); setErr(""); setDone(false);
@@ -147,7 +224,7 @@ function ConclusionBox({title, accountId, stored, onSaved}: {
 
   return (
     <Card title={title} style={{marginBottom: 16}}>
-      <textarea className="form-input" rows={5}
+      <textarea className="form-input" rows={12}
         style={{width: "100%", resize: "vertical"}}
         value={text} onChange={(e) => {setText(e.target.value); setDone(false);}}
         placeholder="Дүн шинжилгээгээр илэрсэн нөхцөл байдлыг бичнэ үү" />
@@ -156,6 +233,12 @@ function ConclusionBox({title, accountId, stored, onSaved}: {
         <button className="btn btn-primary" onClick={save} disabled={busy}>
           {busy ? "Хадгалж байна…" : "Хадгалах"}
         </button>
+        {generated && (
+          <button className="btn btn-sm" type="button"
+            onClick={() => {setText(generated); setDone(false);}}>
+            Автоматаар шинэчлэх
+          </button>
+        )}
         {done && (
           <span style={{color: "var(--accent-green)", fontSize: 12}}>
             Хадгалагдлаа
@@ -283,6 +366,7 @@ export default function AccountAnalysis() {
 
       <ConclusionBox title={`Дүгнэлт — данс ${a.accountNumber}`}
         accountId={a.accountId} stored={conclusionFor(a.accountId)}
+        generated={generateConclusion(a)}
         onSaved={() => void conclusionsQ.refetch()} />
     </>
   );
