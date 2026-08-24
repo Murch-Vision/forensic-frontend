@@ -81,7 +81,7 @@ const BANK_FIELDS: {key: string; label: string}[] = [
   {key: "amount", label: "Дүн (нэг багана)"},
   {key: "credit", label: "Орлого"},
   {key: "debit", label: "Зарлага"},
-  {key: "currency", label: "Валют (хоосон бол MNT)"},
+  {key: "currency", label: "Дансны валют (хоосон бол MNT)"},
   {key: "description", label: "Тайлбар"},
   {key: "reference", label: "Гүйлгээний дугаар"},
   {key: "counterpartyName", label: "Харьцсан харилцагчийн нэр"},
