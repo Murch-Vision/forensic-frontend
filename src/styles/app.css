@@ -592,6 +592,11 @@ body {
     top: 0;
     z-index: 10;
 }
+.analysis-activity-table .data-grid thead th {
+    background: #12324A;
+    border-bottom-color: #236887;
+    color: #D8EAF4;
+}
 .data-grid tbody tr {
     border-bottom: 1px solid var(--border-primary);
     transition: var(--transition);

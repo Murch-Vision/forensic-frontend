@@ -87,7 +87,8 @@ function ActivityBlock({title, buckets}: {title: string; buckets: Bucket[]}) {
         alignItems: "start"}}>
         <BarChart color="#087EA4"
           data={buckets.map((b) => ({label: b.label, value: b.count}))} />
-        <div style={{maxHeight: 260, overflowY: "auto"}}>
+        <div className="analysis-activity-table"
+          style={{maxHeight: 260, overflowY: "auto"}}>
           <DataTable columns={cols} rows={shown} rowKey={(b) => b.key}
             empty="—" />
         </div>
