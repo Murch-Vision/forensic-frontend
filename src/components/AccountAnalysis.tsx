@@ -94,15 +94,15 @@ function generateConclusion(a: Analysis): string {
   const lines: string[] = [];
 
   if (hour) {
-    lines.push(`Цагийн идэвхжил: ${hour.label} цагт хамгийн олон буюу `
+    lines.push(`ЦАГИЙН ИДЭВХЖИЛ\n• ${hour.label} цагт хамгийн олон буюу `
       + `${formatNum(hour.count)} гүйлгээ хийгдсэн. Энэ нь нийт гүйлгээний `
       + `${share(hour.count, a.txnCount)} байна.`);
   } else {
-    lines.push("Цагийн идэвхжил: хуулганд цагийн мэдээлэл байхгүй тул цагийн "
+    lines.push("ЦАГИЙН ИДЭВХЖИЛ\n• Хуулганд цагийн мэдээлэл байхгүй тул цагийн "
       + "давтамж болон дараагийн идэвхтэй цагийг тооцоолох боломжгүй.");
   }
   if (weekday) {
-    lines.push(`Өдрийн идэвхжил: ${weekday.label} гарагт хамгийн идэвхтэй, `
+    lines.push(`ӨДРИЙН ИДЭВХЖИЛ\n• ${weekday.label} гарагт хамгийн идэвхтэй, `
       + `${formatNum(weekday.count)} гүйлгээтэй буюу нийт гүйлгээний `
       + `${share(weekday.count, a.txnCount)} байна.`);
   }
@@ -119,18 +119,19 @@ function generateConclusion(a: Analysis): string {
       : recentAvg > previousAvg * 1.1 ? "сүүлийн саруудад өсөх хандлагатай"
       : recentAvg < previousAvg * 0.9 ? "сүүлийн саруудад буурах хандлагатай"
       : "сүүлийн саруудад ерөнхийдөө тогтвортой";
-    lines.push(`Сарын идэвхжил: ${month.label} сард хамгийн олон буюу `
-      + `${formatNum(month.count)} гүйлгээ бүртгэгдсэн. Идэвхжил ${direction}. `
-      + `Сүүлийн ${recent.length} сарын дунджаар дараагийн сард ойролцоогоор `
+    lines.push(`САРЫН ИДЭВХЖИЛ\n• ${month.label} сард хамгийн олон буюу `
+      + `${formatNum(month.count)} гүйлгээ бүртгэгдсэн.\n• Идэвхжил `
+      + `${direction}.\n• Сүүлийн ${recent.length} сарын дунджаар дараагийн `
+      + `сард ойролцоогоор `
       + `${formatNum(Math.round(recentAvg))} гүйлгээ гарах төлөвтэй.`);
   }
   const next = predictedMoment(a, hour, weekday);
   if (next) {
-    lines.push(`Таамагласан дараагийн идэвхтэй хугацаа: өмнөх давтамж ижил `
+    lines.push(`ДАРААГИЙН ИДЭВХТЭЙ ХУГАЦААНЫ ТААМАГ\n• Өмнөх давтамж ижил `
       + `хэвээр үргэлжилбэл ${next}-д гүйлгээ идэвхжих магадлал хамгийн өндөр.`);
   }
-  lines.push("Энэ нь өнгөрсөн гүйлгээний давтамжид үндэслэсэн статистик таамаг "
-    + "бөгөөд бодит гүйлгээ заавал гарахыг батлахгүй.");
+  lines.push("АНХААРАХ НЬ\n• Энэ нь өнгөрсөн гүйлгээний давтамжид үндэслэсэн "
+    + "статистик таамаг бөгөөд бодит гүйлгээ заавал гарахыг батлахгүй.");
   return lines.join("\n\n");
 }
 
@@ -224,12 +225,13 @@ function ConclusionBox({title, accountId, stored, generated = "", onSaved}: {
 
   return (
     <Card title={title} style={{marginBottom: 16}}>
-      <textarea className="form-input" rows={12}
-        style={{width: "100%", resize: "vertical"}}
-        value={text} onChange={(e) => {setText(e.target.value); setDone(false);}}
-        placeholder="Дүн шинжилгээгээр илэрсэн нөхцөл байдлыг бичнэ үү" />
-      <div style={{display: "flex", gap: 10, alignItems: "center",
-        marginTop: 10}}>
+      <div className="analysis-conclusion-editor">
+        <textarea className="form-input analysis-conclusion-text" rows={18}
+          value={text}
+          onChange={(e) => {setText(e.target.value); setDone(false);}}
+          placeholder="Дүн шинжилгээгээр илэрсэн нөхцөл байдлыг бичнэ үү" />
+      </div>
+      <div className="analysis-conclusion-actions">
         <button className="btn btn-primary" onClick={save} disabled={busy}>
           {busy ? "Хадгалж байна…" : "Хадгалах"}
         </button>

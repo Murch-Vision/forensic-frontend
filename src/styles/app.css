@@ -602,6 +602,25 @@ body {
     max-height: 360px;
     overflow-y: auto;
 }
+.analysis-conclusion-editor {
+    max-width: 1100px;
+}
+.analysis-conclusion-text {
+    width: 100%;
+    resize: vertical;
+    padding: 18px 20px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.75;
+    letter-spacing: 0.05px;
+}
+.analysis-conclusion-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 12px;
+}
 .data-grid tbody tr {
     border-bottom: 1px solid var(--border-primary);
     transition: var(--transition);
