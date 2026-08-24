@@ -13,8 +13,7 @@
 import {useState} from "react";
 import {useMutation, useQuery} from "@apollo/client";
 import {
-  ACCOUNT_ANALYSES_QUERY, CASE_CONCLUSIONS_QUERY, DIRECT_TRANSFERS_QUERY,
-  SAVE_CASE_CONCLUSION,
+  ACCOUNT_ANALYSES_QUERY, CASE_CONCLUSIONS_QUERY, SAVE_CASE_CONCLUSION,
 } from "../graphql/queries";
 import {BarChart, Card, DataTable, Empty, Loading, StatCard} from "./kit";
 import type {Column} from "./kit";
@@ -44,12 +43,6 @@ interface Analysis {
   byHour: Bucket[]; byWeekday: Bucket[]; byMonth: Bucket[];
   peakHour: string | null; peakWeekday: string | null; peakMonth: string | null;
   topCounterparties: Rated[];
-}
-
-interface Transfer {
-  fromAccountId: number; toAccountId: number;
-  fromLabel: string; toLabel: string;
-  txnCount: number; total: number; byMonth: Bucket[];
 }
 
 const RATING_COLOR: Record<string, string> = {
@@ -180,8 +173,6 @@ export default function AccountAnalysis() {
   const [topLimit, setTopLimit] = useState(30);
   const {data, loading} = useQuery<{accountAnalyses: Analysis[]}>(
     ACCOUNT_ANALYSES_QUERY, {variables: {topLimit}});
-  const transfersQ = useQuery<{directTransfers: Transfer[]}>(
-    DIRECT_TRANSFERS_QUERY);
   const [acctId, setAcctId] = useState<number | null>(null);
   const conclusionsQ = useQuery<{caseConclusions: Conclusion[]}>(
     CASE_CONCLUSIONS_QUERY);
@@ -197,9 +188,6 @@ export default function AccountAnalysis() {
 
   // Busiest account by default — the one the analyst almost always wants.
   const a = list.find((x) => x.accountId === acctId) ?? list[0];
-  const transfers = (transfersQ.data?.directTransfers ?? []).filter((t) =>
-    t.fromAccountId === a.accountId || t.toAccountId === a.accountId);
-
   // Нэр дээрээ, данс доороо — one cell, the way the dashboard reads. Two
   // columns for one party made the eye jump back and forth to pair them.
   const cpCols: Column<Rated>[] = [
@@ -238,20 +226,6 @@ export default function AccountAnalysis() {
       <span style={{color: RATING_COLOR[r.rating ?? ""]
         ?? "var(--text-secondary)"}}>{r.rating ?? "—"}</span>
     )},
-  ];
-
-  const transferCols: Column<Transfer>[] = [
-    {header: "Хаанаас", render: (t) => t.fromLabel},
-    {header: "Хаана", render: (t) => t.toLabel},
-    {header: "Гүйлгээ", align: "right", sortValue: (t) => t.txnCount,
-      render: (t) => formatNum(t.txnCount)},
-    {header: "Дүн", align: "right", sortValue: (t) => t.total,
-      render: (t) => (
-        <span style={{fontFamily: "var(--font-mono)"}}>
-          {formatMoney(t.total)}
-        </span>
-      )},
-    {header: "Сар", align: "right", render: (t) => formatNum(t.byMonth.length)},
   ];
 
   return (
@@ -309,18 +283,6 @@ export default function AccountAnalysis() {
 
       <ConclusionBox title={`Дүгнэлт — данс ${a.accountNumber}`}
         accountId={a.accountId} stored={conclusionFor(a.accountId)}
-        onSaved={() => void conclusionsQ.refetch()} />
-
-      {transfers.length > 0 && (
-        <Card noPadding style={{marginBottom: 16}}
-          title={`Хоорондоо харилцсан шууд гүйлгээ (${transfers.length})`}>
-          <DataTable columns={transferCols} rows={transfers}
-            rowKey={(t) => `${t.fromAccountId}-${t.toAccountId}`}
-            empty="Шууд гүйлгээ алга" />
-        </Card>
-      )}
-      <ConclusionBox title="Холбоосын дүгнэлт" accountId={null}
-        stored={conclusionFor(null)}
         onSaved={() => void conclusionsQ.refetch()} />
     </>
   );
