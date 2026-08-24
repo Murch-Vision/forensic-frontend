@@ -528,6 +528,9 @@ export default function TransactionsPage() {
   }
   const heatCounts = hours.map((hour) => heatDays.map((day) =>
     txnsByDayHour.get(`${day}|${hour}`)?.length ?? 0));
+  const heatMax = Math.max(1, ...heatCounts.flat());
+  const heatScaleTicks = Array.from({length: 5}, (_v, i) =>
+    Math.round(heatMax * (4 - i) / 4));
   const heatDetails = hours.map((hour) => heatDays.map((day) => {
     const cell = txnsByDayHour.get(`${day}|${hour}`) ?? [];
     const income = cell.filter((t) => t.type === "credit");
@@ -875,11 +878,24 @@ export default function TransactionsPage() {
         title="Өдөр, цагийн гүйлгээний давтамж — тод нүд нь олон гүйлгээ"
         style={{marginBottom: 16}}
       >
-        <div style={{overflowX: "auto", paddingBottom: 4}}>
-          <div style={{minWidth: heatDays.length * 14 + 150}}>
-            <Plot
-              height={500}
-              data={[{
+        <div style={{display: "grid", gridTemplateColumns: "58px minmax(0, 1fr) 54px",
+          alignItems: "start"}}>
+          <div aria-label="Цагийн тэнхлэг" style={{height: 500,
+            padding: "16px 6px 54px 0", boxSizing: "border-box",
+            display: "grid", gridTemplateRows: "repeat(24, 1fr)",
+            color: "var(--text-muted)", fontSize: 10, textAlign: "right"}}>
+            {[...hours].reverse().map((hour) => (
+              <span key={hour} style={{alignSelf: "center"}}>
+                {String(hour).padStart(2, "0")}:00
+              </span>
+            ))}
+          </div>
+
+          <div style={{overflowX: "auto", paddingBottom: 4}}>
+            <div style={{minWidth: heatDays.length * 14 + 8}}>
+              <Plot
+                height={500}
+                data={[{
                 type: "heatmap",
                 x: heatDays,
                 y: hours,
@@ -891,27 +907,25 @@ export default function TransactionsPage() {
                 ],
                 xgap: 1,
                 ygap: 1,
-                colorbar: {title: {text: "Гүйлгээ"}, thickness: 12},
+                showscale: false,
                 hovertemplate:
                   "%{customdata[0]} · %{customdata[1]} цагийн хооронд"
                   + "<br>Нийт: %{z} гүйлгээ"
                   + "<br>Орлого: %{customdata[3]} · %{customdata[5]}"
                   + "<br>Зарлага: %{customdata[4]} · %{customdata[6]}"
                   + "<extra></extra>",
-              }]}
-              layout={{
-                margin: {l: 62, r: 70, t: 16, b: 54},
+                }]}
+                layout={{
+                margin: {l: 4, r: 4, t: 16, b: 54},
                 xaxis: {type: "date", title: "Огноо", tickformat: "%Y-%m-%d"},
                 yaxis: {
-                  title: "Цаг",
                   tickmode: "array",
                   tickvals: hours,
-                  ticktext: hours.map((h) =>
-                    `${String(h).padStart(2, "0")}:00`),
+                  showticklabels: false,
                   fixedrange: true,
                 },
-              }}
-              onClick={(e) => {
+                }}
+                onClick={(e) => {
                 const p = e.points?.[0];
                 const detail = p?.customdata;
                 const day = String(detail?.[0] ?? "");
@@ -920,8 +934,25 @@ export default function TransactionsPage() {
                 const largest = [...cell]
                   .sort((a, b) => b.amount - a.amount)[0];
                 if (largest) openDrill(largest);
-              }}
-            />
+                }}
+              />
+            </div>
+          </div>
+
+          <div aria-label="Гүйлгээний давтамжийн хэмжүүр" style={{height: 500,
+            padding: "16px 0 54px 8px", boxSizing: "border-box",
+            color: "var(--text-muted)", fontSize: 10}}>
+            <div style={{height: 18, marginBottom: 6}}>Гүйлгээ</div>
+            <div style={{height: "calc(100% - 24px)", display: "grid",
+              gridTemplateColumns: "12px 1fr", gap: 5}}>
+              <div style={{background: "linear-gradient(to top, #101225 0%, "
+                + "#15355A 12%, #087EA4 35%, #00D4C7 65%, #FFE66D 100%)",
+                border: "1px solid var(--border-primary)"}} />
+              <div style={{display: "flex", flexDirection: "column",
+                justifyContent: "space-between"}}>
+                {heatScaleTicks.map((tick, i) => <span key={i}>{tick}</span>)}
+              </div>
+            </div>
           </div>
         </div>
       </Card>
