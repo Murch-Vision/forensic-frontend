@@ -1668,40 +1668,21 @@ export default function LinkChartPage() {
         )}
       </Card>
 
-      {/* The client's ask: conclusions in words, readable by someone seeing
-          the tool for the first time. Sentences describe the CURRENT picture
-          (all filters applied); clicking one jumps to the person it names. */}
+      {/* Conclusions describe the CURRENT picture (all filters applied). They
+          are deliberately read-only: reading a finding must never move, zoom,
+          or replace the analyst's graph arrangement. */}
       <Card title="Дүгнэлт" style={{marginBottom: 16}}>
         {verdict.length > 0 ? (
           <div className="graph-verdict-grid">
-            {verdict.map((v, i) => {
-              const node = v.focusId
-                ? network.nodes.find((n) => n.id === v.focusId) : undefined;
-              return (
-                <div key={i} className={`graph-verdict-item ${v.tone}`}
-                  onClick={node ? () => focusSearchResult(node) : undefined}
-                  onKeyDown={node ? (event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      focusSearchResult(node);
-                    }
-                  } : undefined}
-                  role={node ? "button" : undefined}
-                  tabIndex={node ? 0 : undefined}
-                  title={node ? "Зураг дээр очиж харах" : undefined}>
+            {verdict.map((v, i) => (
+                <div key={i} className={`graph-verdict-item ${v.tone}`}>
                   <div className="graph-verdict-heading">
                     <span className="graph-verdict-dot" />
                     {v.title}
                   </div>
                   <div className="graph-verdict-text">{v.text}</div>
-                  {node && (
-                    <div className="graph-verdict-action">
-                      ЗУРАГ ДЭЭР ХАРАХ →
-                    </div>
-                  )}
                 </div>
-              );
-            })}
+              ))}
           </div>
         ) : (
           <Empty message="Дүгнэлт гаргах нотлох баримт алга" />

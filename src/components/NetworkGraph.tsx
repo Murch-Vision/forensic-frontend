@@ -385,6 +385,7 @@ function NetworkGraph(props, ref) {
         radius += slot;
         ring++;
       }
+      fitAllNodes();
       ensureRunning();
       emitLayout(currentPositions());
     },
@@ -1004,6 +1005,43 @@ function NetworkGraph(props, ref) {
     zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, factor);
   }
 
+  // Fit the ACTUAL node bounds after a deterministic layout. resetView() only
+  // frames the fixed 1280×720 simulation area; auto-cluster can deliberately
+  // place large hub rings outside that area, which made the result appear at a
+  // random edge of the canvas. This derives pan + zoom from the arrangement.
+  function fitAllNodes() {
+    const canvas = canvasRef.current;
+    const nodes = nodesRef.current;
+    if (!canvas || !nodes.length) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of nodes) {
+      const r = radiusOf(n) + 18;
+      minX = Math.min(minX, n.x - r);
+      maxX = Math.max(maxX, n.x + r);
+      minY = Math.min(minY, n.y - r);
+      maxY = Math.max(maxY, n.y + r);
+    }
+    const width = Math.max(1, maxX - minX);
+    const height = Math.max(1, maxY - minY);
+    const padding = 56;
+    const cssW = canvas.clientWidth;
+    const cssH = canvas.clientHeight;
+    const {fit, offX, offY} = fitRef.current;
+    const screenScale = Math.min(
+      Math.max(1, cssW - padding * 2) / width,
+      Math.max(1, cssH - padding * 2) / height,
+    );
+    const k = clamp(screenScale / fit, 0.08, 5);
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    viewRef.current = {
+      k,
+      tx: cssW / 2 - offX - cx * fit * k,
+      ty: cssH / 2 - offY - cy * fit * k,
+    };
+    focusRef.current = null;
+  }
+
   // One click untangles the hairball — what the analyst used to do by hand
   // (drag the two hub people apart, right-click "бөөгнүүлэх" on each, and
   // still be left with a mess in the middle):
@@ -1222,9 +1260,9 @@ function NetworkGraph(props, ref) {
       });
     }
 
-    // Frame the new arrangement and persist it like a manual drag would be.
-    viewRef.current = {k: 1, tx: 0, ty: 0};
-    focusRef.current = null;
+    // Frame every resulting ring inside the visible canvas. The arrangement
+    // can be much larger than the nominal simulation area for dense cases.
+    fitAllNodes();
     ensureRunning();
     emitLayout(currentPositions());
   }

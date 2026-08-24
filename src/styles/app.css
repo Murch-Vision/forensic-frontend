@@ -547,20 +547,6 @@ body {
 .graph-verdict-item.network { --verdict-color: #a78bfa; }
 .graph-verdict-item.manual { --verdict-color: var(--text-muted); }
 
-.graph-verdict-item[role="button"] {
-  cursor: pointer;
-  transition: border-color .15s ease, background .15s ease,
-    transform .15s ease;
-}
-
-.graph-verdict-item[role="button"]:hover,
-.graph-verdict-item[role="button"]:focus-visible {
-  border-color: color-mix(in srgb, var(--verdict-color) 55%, var(--border));
-  background: color-mix(in srgb, var(--verdict-color) 9%, var(--bg-card));
-  transform: translateY(-1px);
-  outline: none;
-}
-
 .graph-verdict-heading {
   display: flex;
   align-items: center;
@@ -587,15 +573,8 @@ body {
   font-size: 13px;
   font-weight: 550;
   line-height: 1.55;
+  white-space: pre-line;
   overflow-wrap: anywhere;
-}
-
-.graph-verdict-action {
-  margin-top: 9px;
-  color: var(--verdict-color);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .06em;
 }
 
 @media (max-width: 900px) {

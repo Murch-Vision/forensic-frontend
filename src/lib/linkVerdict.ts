@@ -196,7 +196,7 @@ export function graphVerdict(
   }
   const asPerson = (id: string) => byId.get(id)?.type === "PERSON"
     ? id : owner.get(id);
-  type PairFacts = {kinds: Set<string>; money: number; calls: number};
+  type PairFacts = {money: number; calls: number};
   const pairFacts = new Map<string, PairFacts>();
   const adjacency = new Map(persons.map((p) => [p.id, new Set<string>()]));
   for (const l of links) {
@@ -207,32 +207,13 @@ export function graphVerdict(
     adjacency.get(a)?.add(b);
     adjacency.get(b)?.add(a);
     const key = a < b ? `${a}|${b}` : `${b}|${a}`;
-    const facts = pairFacts.get(key)
-      ?? {kinds: new Set<string>(), money: 0, calls: 0};
-    facts.kinds.add(l.kind);
+    const facts = pairFacts.get(key) ?? {money: 0, calls: 0};
     facts.money += l.facts?.txnTotal ?? 0;
     facts.calls += l.facts?.callCount ?? 0;
     pairFacts.set(key, facts);
   }
 
   const relationshipCount = (id: string) => adjacency.get(id)?.size ?? 0;
-  const mostConnected = [...persons]
-    .sort((a, b) => relationshipCount(b.id) - relationshipCount(a.id)
-      || a.label.localeCompare(b.label))[0];
-  if (mostConnected && relationshipCount(mostConnected.id) > 0) {
-    const neighbors = [...(adjacency.get(mostConnected.id) ?? [])]
-      .map((id) => byId.get(id)?.label).filter(Boolean) as string[];
-    out.push({
-      title: "Хамгийн олон харилцаатай хүн",
-      tone: "network",
-      text: `${mostConnected.label} нь ${formatNum(neighbors.length)} өөр `
-        + `хүнтэй шууд холбоотой — ${neighbors.slice(0, 3).join(", ")}`
-        + (neighbors.length > 3 ? ` болон өөр ${formatNum(neighbors.length - 3)} хүн` : "")
-        + ". Энэ тоонд нэг хүнтэй хийсэн олон гүйлгээ, дуудлагыг давхардуулж тооцоогүй.",
-      focusId: mostConnected.id,
-    });
-  }
-
   // Brandes betweenness centrality: highlights people who sit on shortest
   // paths between other people — the actual intermediaries in the network.
   const between = new Map(persons.map((p) => [p.id, 0]));
@@ -279,10 +260,8 @@ export function graphVerdict(
     .sort((a, b) => b.score - a.score || b.degree - a.degree)
     .slice(0, 3);
   if (intermediaries.length) {
-    const descriptions = intermediaries.map(({p, degree}) => {
+    const descriptions = intermediaries.map(({p}) => {
       const neighborIds = [...(adjacency.get(p.id) ?? [])];
-      const nbrs = neighborIds
-        .map((id) => byId.get(id)?.label).filter(Boolean) as string[];
       let money = 0;
       let calls = 0;
       for (const id of neighborIds) {
@@ -291,21 +270,18 @@ export function graphVerdict(
         money += facts?.money ?? 0;
         calls += facts?.calls ?? 0;
       }
-      const evidence = [
-        money > 0 ? `${formatMoney(money)}-ийн урсгал` : "",
-        calls > 0 ? `${formatNum(calls)} дуудлага` : "",
-      ].filter(Boolean).join(", ");
-      return `${p.label} (${formatNum(degree)} хүн: ${nbrs.slice(0, 2).join(", ")}`
-        + (nbrs.length > 2 ? ` зэрэг` : "")
-        + (evidence ? `; ${evidence}` : "") + ")";
+      const reason = money > 0
+        ? `${formatMoney(money)}-ийн дундын урсгал`
+        : calls > 0 ? `${formatNum(calls)} дундын дуудлага`
+          : "хэд хэдэн бүлгийг холбосон зам";
+      return `${p.label} — ${reason}`;
     });
     out.push({
-      title: "Дундын харилцагчид",
+      title: "Түрүүлж шалгах этгээдүүд",
       tone: "attention",
-      text: `${descriptions.join("; ")} нь бусад хүмүүсийн хоорондын хамгийн `
-        + "богино холбоосын замд олон давтагдаж байна. Эдгээр хүний гүйлгээ, "
-        + "дуудлагын чиглэл болон хугацааг түрүүлж нягтлах шаардлагатай.",
-      focusId: intermediaries[0].p.id,
+      text: `${descriptions.join(".\n")}\nДундын замд давтагдсан тул `
+        + "гүйлгээний чиглэл, огноог нягтална. Энэ нь сэжигтнээр тогтоосон "
+        + "шийдвэр биш.",
     });
   }
 
@@ -325,7 +301,7 @@ export function graphVerdict(
     }
     let score = 0;
     for (const d of dist.values()) if (d > 0) score += 1 / d;
-    return {p, score, reachable: dist.size - 1};
+    return {p, score};
   }).filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score
       || relationshipCount(b.p.id) - relationshipCount(a.p.id));
@@ -333,12 +309,10 @@ export function graphVerdict(
     const best = central[0].score;
     const centers = central.filter((x) => x.score >= best * 0.9).slice(0, 3);
     out.push({
-      title: "Center node болсон хүмүүс",
+      title: "Сүлжээний дундын төвүүд",
       tone: "network",
-      text: `${centers.map(({p, reachable}) => `${p.label} (`
-        + `${formatNum(reachable)} хүнд дам хүрнэ)`).join(", ")} нь сүлжээний `
-        + "бусад хүмүүст хамгийн цөөн дамжлагаар хүрч байгаа бүтцийн төвүүд байна.",
-      focusId: centers[0].p.id,
+      text: `${centers.map(({p}) => p.label).join(", ")} — тусдаа бүлгүүдэд `
+        + "хамгийн богино замаар хүрч буй center node-ууд.",
     });
   }
 
