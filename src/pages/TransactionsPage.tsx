@@ -62,13 +62,6 @@ const realName = (s: string | null | undefined): boolean => {
   return t !== "" && !/^-+$/.test(t);
 };
 
-// Plot a timestamp as minutes since midnight. Keeping the value numeric lets
-// Plotly draw a continuous 24-hour axis while the tick labels remain HH:MM.
-const minuteOfDay = (timestamp: string): number => {
-  const match = timestamp.match(/T(\d{2}):(\d{2})/);
-  return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
-};
-
 interface CorrCall {
   id            : number;
   callerNumber  : string;
@@ -487,10 +480,6 @@ export default function TransactionsPage() {
   const totalCount   = filtered.length;
   const credits = filtered.filter((t) => t.type === "credit");
   const debits = filtered.filter((t) => t.type === "debit");
-  const chartCredits = [...credits].sort((a, b) =>
-    a.timestamp.localeCompare(b.timestamp));
-  const chartDebits = [...debits].sort((a, b) =>
-    a.timestamp.localeCompare(b.timestamp));
   const totalCredits = credits.reduce((sum, t) => sum + t.amount, 0);
   const totalDebits = debits.reduce((sum, t) => sum + t.amount, 0);
 
@@ -514,6 +503,35 @@ export default function TransactionsPage() {
     cum += dCred[i] - dDeb[i];
     return cum;
   });
+
+  // Day × hour density reveals when transactions cluster. Each cell retains
+  // its transactions so clicking it can still open a useful drill-down.
+  const hours = Array.from({length: 24}, (_, hour) => hour);
+  const heatDays: string[] = [];
+  if (dayKeys.length > 0) {
+    const cursor = new Date(`${dayKeys[0]}T00:00:00Z`);
+    const last = dayKeys[dayKeys.length - 1];
+    while (cursor.toISOString().slice(0, 10) <= last) {
+      heatDays.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
+  const txnsByDayHour = new Map<string, BankTransaction[]>();
+  for (const t of filtered) {
+    const hour = Number(t.timestamp.slice(11, 13)) || 0;
+    const key = `${t.timestamp.slice(0, 10)}|${hour}`;
+    txnsByDayHour.set(key, [...(txnsByDayHour.get(key) ?? []), t]);
+  }
+  const heatCounts = hours.map((hour) => heatDays.map((day) =>
+    txnsByDayHour.get(`${day}|${hour}`)?.length ?? 0));
+  const heatDetails = hours.map((hour) => heatDays.map((day) => {
+    const cell = txnsByDayHour.get(`${day}|${hour}`) ?? [];
+    const income = cell.filter((t) => t.type === "credit");
+    const expense = cell.filter((t) => t.type === "debit");
+    return [income.length, expense.length,
+      formatMoney(income.reduce((sum, t) => sum + t.amount, 0)),
+      formatMoney(expense.reduce((sum, t) => sum + t.amount, 0))];
+  }));
 
   // "Who with whom" — follow the money. The case account and the counterparty,
   // each shown as a name + its account number.
@@ -834,52 +852,52 @@ export default function TransactionsPage() {
         </Card>
       </div>
 
+      <Card
+        title="Гүйлгээ хамгийн их хийгдсэн өдөр, цаг — тод өнгө нь олон гүйлгээ"
+        style={{marginBottom: 16}}
+      >
+        <Plot
+          height={500}
+          data={[{
+            type: "heatmap",
+            x: heatDays,
+            y: hours,
+            z: heatCounts,
+            customdata: heatDetails,
+            colorscale: [
+              [0, "#101225"], [0.12, "#15355A"], [0.35, "#087EA4"],
+              [0.65, "#00D4C7"], [1, "#FFE66D"],
+            ],
+            xgap: 1,
+            ygap: 1,
+            colorbar: {title: {text: "Гүйлгээ"}, thickness: 12},
+            hovertemplate: "%{x} · %{y}:00–%{y}:59<br>Нийт: %{z} гүйлгээ"
+              + "<br>Орлого: %{customdata[0]} · %{customdata[2]}"
+              + "<br>Зарлага: %{customdata[1]} · %{customdata[3]}<extra></extra>",
+          }]}
+          layout={{
+            margin: {l: 62, r: 70, t: 16, b: 54},
+            xaxis: {type: "date", title: "Огноо", tickformat: "%Y-%m-%d"},
+            yaxis: {
+              title: "Цаг",
+              tickmode: "array",
+              tickvals: hours,
+              ticktext: hours.map((h) => `${String(h).padStart(2, "0")}:00`),
+              fixedrange: true,
+            },
+          }}
+          onClick={(e) => {
+            const p = e.points?.[0];
+            const day = String(p?.x ?? "").slice(0, 10);
+            const hour = Number(p?.y);
+            const cell = txnsByDayHour.get(`${day}|${hour}`) ?? [];
+            const largest = [...cell].sort((a, b) => b.amount - a.amount)[0];
+            if (largest) openDrill(largest);
+          }}
+        />
+      </Card>
+
       <div style={ROW}>
-        <Card title="Гүйлгээний дэлгэц (огноо vs цаг) — цэг дээр дарж нягтлах">
-          <Plot
-            height={280}
-            data={[
-              {type: "scatter", mode: "lines+markers", name: "Орлого",
-                x: chartCredits.map((t) => t.timestamp.slice(0, 10)),
-                y: chartCredits.map((t) => minuteOfDay(t.timestamp)),
-                customdata: chartCredits.map((t) => [
-                  formatDateTime(t.timestamp), formatMoney(t.amount),
-                ]),
-                line: {color: "#42A5F5", width: 3},
-                marker: {color: "#42A5F5", size: 7},
-                hovertemplate: "%{customdata[0]}<br>Орлого: %{customdata[1]}<extra></extra>"},
-              {type: "scatter", mode: "lines+markers", name: "Зарлага",
-                x: chartDebits.map((t) => t.timestamp.slice(0, 10)),
-                y: chartDebits.map((t) => minuteOfDay(t.timestamp)),
-                customdata: chartDebits.map((t) => [
-                  formatDateTime(t.timestamp), formatMoney(t.amount),
-                ]),
-                line: {color: "#FF8A3D", width: 3},
-                marker: {color: "#FF8A3D", size: 7},
-                hovertemplate: "%{customdata[0]}<br>Зарлага: %{customdata[1]}<extra></extra>"},
-            ]}
-            layout={{
-              xaxis: {type: "date", title: "Огноо", tickformat: "%Y-%m-%d"},
-              yaxis: {
-                title: "Цаг",
-                range: [0, 1440],
-                tickmode: "array",
-                tickvals: [0, 180, 360, 540, 720, 900, 1080, 1260, 1440],
-                ticktext: ["00:00", "03:00", "06:00", "09:00", "12:00",
-                  "15:00", "18:00", "21:00", "24:00"],
-              },
-              hovermode: "closest",
-            }}
-            onClick={(e) => {
-              const p = e.points?.[0];
-              if (!p) return;
-              const idx = p.pointIndex ?? p.pointNumber;
-              const t = p.curveNumber === 0
-                ? chartCredits[idx] : chartDebits[idx];
-              if (t) openDrill(t);
-            }}
-          />
-        </Card>
         <Card title="Өдөр тутмын хэмжээ & гүйцэтгэлийн баланс">
           <Plot
             height={280}
