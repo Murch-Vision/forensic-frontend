@@ -1675,12 +1675,36 @@ export default function LinkChartPage() {
         {verdict.length > 0 ? (
           <div className="graph-verdict-grid">
             {verdict.map((v, i) => (
-                <div key={i} className={`graph-verdict-item ${v.tone}`}>
+                <div key={i} className={`graph-verdict-item ${v.tone}`
+                  + (v.rows ? " graph-verdict-item-wide" : "")}>
                   <div className="graph-verdict-heading">
                     <span className="graph-verdict-dot" />
                     {v.title}
                   </div>
                   <div className="graph-verdict-text">{v.text}</div>
+                  {v.rows && (
+                    <div className="graph-verdict-list">
+                      <div className="graph-verdict-list-head">
+                        <span>Төрөл</span><span>Данс / харилцагч</span>
+                        <span>Холбосон үндсэн хүмүүс</span><span>Баримт</span>
+                      </div>
+                      {v.rows.map((row, rowIndex) => (
+                        <div className="graph-verdict-list-row" key={rowIndex}>
+                          <span className="graph-verdict-kind">{row.kind}</span>
+                          <strong>{row.identity}</strong>
+                          <span>{row.connects}</span>
+                          <span className="graph-verdict-evidence">
+                            {row.evidence}
+                          </span>
+                        </div>
+                      ))}
+                      {(v.rowTotal ?? v.rows.length) > v.rows.length && (
+                        <div className="graph-verdict-list-more">
+                          Дээр хамгийн ач холбогдолтой {v.rows.length}-ыг харуулав.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
           </div>

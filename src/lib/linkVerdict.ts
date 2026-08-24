@@ -103,6 +103,14 @@ export interface GraphVerdictItem {
   text: string;
   // Node to focus when the sentence is clicked (the hub person etc.).
   focusId?: string;
+  // Structured findings render as one compact list instead of many cards.
+  rows?: Array<{
+    kind: string;
+    identity: string;
+    connects: string;
+    evidence: string;
+  }>;
+  rowTotal?: number;
 }
 
 /**
@@ -259,7 +267,7 @@ export function graphVerdict(
   }).sort((a, b) => b.roots.length - a.roots.length
     || b.money - a.money || b.txns - a.txns || b.calls - a.calls);
 
-  for (const item of shared.slice(0, 6)) {
+  const sharedRows = shared.slice(0, 10).map((item) => {
     const identity = item.node.type === "ACCOUNT"
       ? item.node.sub || item.node.label : item.node.label;
     const evidence = item.txns > 0
@@ -268,19 +276,21 @@ export function graphVerdict(
     const bridge = item.distance === 1
       ? "Хоёр талтай шууд холбогдсон"
       : "Хоёр талаас 2 дамжлагын зайд";
+    return {
+      kind: item.node.type === "ACCOUNT" ? "Данс"
+        : item.node.type === "PHONE" ? "Утас" : "Харилцагч",
+      identity,
+      connects: item.roots.map((r) => r.label).join(" ↔ "),
+      evidence: `${bridge} · ${evidence}`,
+    };
+  });
+  if (sharedRows.length) {
     out.push({
-      title: item.node.type === "ACCOUNT" ? "Дундын банкны данс"
-        : item.node.type === "PHONE" ? "Дундын утас" : "Дундын харилцагч",
+      title: `Дундын холбоосууд · ${formatNum(shared.length)}`,
       tone: "attention",
-      text: `${identity}\n${item.roots.map((r) => r.label).join(" ↔ ")}\n`
-        + `${bridge} · ${evidence}`,
-    });
-  }
-  if (shared.length > 6) {
-    out.push({
-      title: "Бусад дундын холбоос",
-      tone: "network",
-      text: `Нэмэлт ${formatNum(shared.length - 6)} дундын данс/харилцагч илэрсэн.`,
+      text: "Хоёр ба түүнээс олон үндсэн хүнийг холбосон данс, харилцагчид.",
+      rows: sharedRows,
+      rowTotal: shared.length,
     });
   }
 
@@ -292,7 +302,6 @@ export function graphVerdict(
   const priority = (title: string) =>
     title === "Шалгаж буй үндсэн хүмүүс" ? 0
     : title.startsWith("Дундын") ? 1
-    : title === "Бусад дундын холбоос" ? 2
     : title === "Хамгийн өндөр дүнтэй холбоос" ? 3
     : title === "Нийт мөнгөн урсгал" ? 4
     : title === "Сүлжээний хамрах хүрээ" ? 5 : 6;

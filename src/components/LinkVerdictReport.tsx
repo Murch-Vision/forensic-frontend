@@ -74,7 +74,20 @@ export default function LinkVerdictReport(props: {
         <h2>Ерөнхий дүгнэлт</h2>
         {props.verdict.length ? (
           <ol>
-            {props.verdict.map((v, i) => <li key={i}>{v.text}</li>)}
+            {props.verdict.map((v, i) => (
+              <li key={i}>
+                {v.text}
+                {v.rows && (
+                  <ul>
+                    {v.rows.map((row, rowIndex) => (
+                      <li key={rowIndex}>
+                        <b>{row.kind}: {row.identity}</b> — {row.connects}; {row.evidence}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
           </ol>
         ) : (
           <div>Дүгнэлт гаргах нотлох баримт бүртгэгдээгүй байна.</div>
