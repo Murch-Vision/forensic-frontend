@@ -504,34 +504,33 @@ export default function TransactionsPage() {
     return cum;
   });
 
-  // Day × hour density reveals when transactions cluster. Each cell retains
-  // its transactions so clicking it can still open a useful drill-down.
-  const hours = Array.from({length: 24}, (_, hour) => hour);
-  const heatDays: string[] = [];
-  if (dayKeys.length > 0) {
-    const cursor = new Date(`${dayKeys[0]}T00:00:00Z`);
-    const last = dayKeys[dayKeys.length - 1];
-    while (cursor.toISOString().slice(0, 10) <= last) {
-      heatDays.push(cursor.toISOString().slice(0, 10));
-      cursor.setUTCDate(cursor.getUTCDate() + 1);
-    }
-  }
+  // Rank exact day/hour windows by activity. A short, sorted list is easier to
+  // read than compressing every hour across several months into one chart.
   const txnsByDayHour = new Map<string, BankTransaction[]>();
   for (const t of filtered) {
     const hour = Number(t.timestamp.slice(11, 13)) || 0;
     const key = `${t.timestamp.slice(0, 10)}|${hour}`;
     txnsByDayHour.set(key, [...(txnsByDayHour.get(key) ?? []), t]);
   }
-  const heatCounts = hours.map((hour) => heatDays.map((day) =>
-    txnsByDayHour.get(`${day}|${hour}`)?.length ?? 0));
-  const heatDetails = hours.map((hour) => heatDays.map((day) => {
-    const cell = txnsByDayHour.get(`${day}|${hour}`) ?? [];
-    const income = cell.filter((t) => t.type === "credit");
-    const expense = cell.filter((t) => t.type === "debit");
-    return [income.length, expense.length,
-      formatMoney(income.reduce((sum, t) => sum + t.amount, 0)),
-      formatMoney(expense.reduce((sum, t) => sum + t.amount, 0))];
-  }));
+  const busiestSlots = [...txnsByDayHour.entries()]
+    .map(([key, txns]) => {
+      const [day, hourText] = key.split("|");
+      const income = txns.filter((t) => t.type === "credit");
+      const expense = txns.filter((t) => t.type === "debit");
+      return {
+        key,
+        label: `${day}  ${String(Number(hourText)).padStart(2, "0")}:00`,
+        txns,
+        incomeCount: income.length,
+        expenseCount: expense.length,
+        incomeAmount: income.reduce((sum, t) => sum + t.amount, 0),
+        expenseAmount: expense.reduce((sum, t) => sum + t.amount, 0),
+      };
+    })
+    .sort((a, b) => b.txns.length - a.txns.length
+      || a.key.localeCompare(b.key))
+    .slice(0, 20)
+    .reverse();
 
   // "Who with whom" — follow the money. The case account and the counterparty,
   // each shown as a name + its account number.
@@ -853,45 +852,51 @@ export default function TransactionsPage() {
       </div>
 
       <Card
-        title="Гүйлгээ хамгийн их хийгдсэн өдөр, цаг — тод өнгө нь олон гүйлгээ"
+        title="Хамгийн их гүйлгээ хийгдсэн 20 өдөр, цаг"
         style={{marginBottom: 16}}
       >
         <Plot
-          height={500}
-          data={[{
-            type: "heatmap",
-            x: heatDays,
-            y: hours,
-            z: heatCounts,
-            customdata: heatDetails,
-            colorscale: [
-              [0, "#101225"], [0.12, "#15355A"], [0.35, "#087EA4"],
-              [0.65, "#00D4C7"], [1, "#FFE66D"],
-            ],
-            xgap: 1,
-            ygap: 1,
-            colorbar: {title: {text: "Гүйлгээ"}, thickness: 12},
-            hovertemplate: "%{x} · %{y}:00–%{y}:59<br>Нийт: %{z} гүйлгээ"
-              + "<br>Орлого: %{customdata[0]} · %{customdata[2]}"
-              + "<br>Зарлага: %{customdata[1]} · %{customdata[3]}<extra></extra>",
-          }]}
-          layout={{
-            margin: {l: 62, r: 70, t: 16, b: 54},
-            xaxis: {type: "date", title: "Огноо", tickformat: "%Y-%m-%d"},
-            yaxis: {
-              title: "Цаг",
-              tickmode: "array",
-              tickvals: hours,
-              ticktext: hours.map((h) => `${String(h).padStart(2, "0")}:00`),
-              fixedrange: true,
+          height={540}
+          data={[
+            {
+              type: "bar", orientation: "h", name: "Орлого",
+              x: busiestSlots.map((s) => s.incomeCount),
+              y: busiestSlots.map((s) => s.label),
+              customdata: busiestSlots.map((s) =>
+                [formatMoney(s.incomeAmount), s.txns.length]),
+              marker: {color: "#42A5F5"},
+              text: busiestSlots.map((s) => s.incomeCount || ""),
+              textposition: "inside",
+              hovertemplate: "%{y}<br>Орлого: %{x} гүйлгээ · %{customdata[0]}"
+                + "<br>Нийт: %{customdata[1]} гүйлгээ<extra></extra>",
             },
+            {
+              type: "bar", orientation: "h", name: "Зарлага",
+              x: busiestSlots.map((s) => s.expenseCount),
+              y: busiestSlots.map((s) => s.label),
+              customdata: busiestSlots.map((s) =>
+                [formatMoney(s.expenseAmount), s.txns.length]),
+              marker: {color: "#FF8A3D"},
+              text: busiestSlots.map((s) => s.expenseCount || ""),
+              textposition: "inside",
+              hovertemplate: "%{y}<br>Зарлага: %{x} гүйлгээ · %{customdata[0]}"
+                + "<br>Нийт: %{customdata[1]} гүйлгээ<extra></extra>",
+            },
+          ]}
+          layout={{
+            barmode: "stack",
+            bargap: 0.24,
+            margin: {l: 132, r: 42, t: 16, b: 58},
+            xaxis: {title: "Гүйлгээний тоо", dtick: 1, rangemode: "tozero"},
+            yaxis: {title: "Өдөр · цаг", automargin: true, fixedrange: true},
+            legend: {orientation: "h", x: 0, y: -0.14},
           }}
           onClick={(e) => {
             const p = e.points?.[0];
-            const day = String(p?.x ?? "").slice(0, 10);
-            const hour = Number(p?.y);
-            const cell = txnsByDayHour.get(`${day}|${hour}`) ?? [];
-            const largest = [...cell].sort((a, b) => b.amount - a.amount)[0];
+            const idx = p?.pointIndex ?? p?.pointNumber;
+            const slot = idx == null ? null : busiestSlots[idx];
+            const largest = [...(slot?.txns ?? [])]
+              .sort((a, b) => b.amount - a.amount)[0];
             if (largest) openDrill(largest);
           }}
         />
