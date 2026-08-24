@@ -602,24 +602,29 @@ body {
     max-height: 360px;
     overflow-y: auto;
 }
-.analysis-conclusion-editor {
+.analysis-conclusion {
     max-width: 1100px;
+    display: grid;
+    gap: 14px;
 }
-.analysis-conclusion-text {
-    width: 100%;
-    resize: vertical;
-    padding: 18px 20px;
-    font-family: var(--font-sans);
+.analysis-conclusion-section {
+    padding: 14px 16px;
+    background: rgba(8, 126, 164, 0.07);
+    border-left: 3px solid #087EA4;
+    border-radius: 0 6px 6px 0;
+}
+.analysis-conclusion-section h4 {
+    margin: 0 0 7px;
+    color: #8ED9EE;
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+.analysis-conclusion-section p {
+    margin: 3px 0;
+    color: var(--text-primary);
     font-size: 14px;
     font-weight: 500;
-    line-height: 1.75;
-    letter-spacing: 0.05px;
-}
-.analysis-conclusion-actions {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    margin-top: 12px;
+    line-height: 1.65;
 }
 .data-grid tbody tr {
     border-bottom: 1px solid var(--border-primary);
