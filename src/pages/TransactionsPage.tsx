@@ -673,8 +673,21 @@ export default function TransactionsPage() {
       {view === "txns" && <>
       <div className="metrics-grid">
         <StatCard label="Нийт гүйлгээ (харагдаж буй / бүгд)"
-          value={<>{totalCount}<span style={{color: "var(--text-muted)",
-            fontWeight: 400}}> / {allTxns.length}</span></>} />
+          value={
+            <div>
+              <div>{totalCount}<span style={{color: "var(--text-muted)",
+                fontWeight: 400}}> / {allTxns.length}</span></div>
+              <div style={{display: "flex", gap: 16, marginTop: 10,
+                fontSize: 12, fontWeight: 700}}>
+                <span style={{color: "var(--accent-green)"}}>
+                  Орлого: {credits.length}
+                </span>
+                <span style={{color: "var(--accent-red)"}}>
+                  Зарлага: {debits.length}
+                </span>
+              </div>
+            </div>
+          } />
         <StatCard label="Орлогын гүйлгээ" value={formatMoney(totalCredits)}
           color="green" />
         <StatCard label="Зарлагын гүйлгээ" value={formatMoney(totalDebits)}
