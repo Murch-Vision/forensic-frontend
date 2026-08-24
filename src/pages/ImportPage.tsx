@@ -72,6 +72,9 @@ function RowNumberInput({label, value, onCommit}: {
 // Editable bank column mapping — mirrors the C# ImportView mapping card.
 const BANK_FIELDS: {key: string; label: string}[] = [
   {key: "date", label: "Огноо *"},
+  // Statements come both ways: one datetime column, or a date column plus a
+  // separate clock column. Mapping this is only needed for the second shape.
+  {key: "time", label: "Цаг (тусдаа багана бол)"},
   {key: "account", label: "Өөрийн данс"},
   {key: "ownerName", label: "Данс эзэмшигчийн нэр"},
   {key: "nationalId", label: "Регистрийн дугаар"},
@@ -97,6 +100,7 @@ const CDR_FIELDS: {key: string; label: string}[] = [
   {key: "frequency", label: "Давтамж"},
   {key: "caller", label: "Дуудсан дугаар (хоосон бол сэжигтэн)"},
   {key: "datetime", label: "Огноо / цаг"},
+  {key: "time", label: "Цаг (тусдаа багана бол)"},
   {key: "duration", label: "Үргэлжлэх хугацаа"},
 ];
 
