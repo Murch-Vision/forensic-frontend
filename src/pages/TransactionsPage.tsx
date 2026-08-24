@@ -181,6 +181,7 @@ export default function TransactionsPage() {
   const [topN, setTopN] = useState(10);
   const [pairTopN, setPairTopN] = useState(20);
   const [corrMin, setCorrMin] = useState(30);
+  const [selectedActivityDay, setSelectedActivityDay] = useState<string | null>(null);
   const [selectedTxn, setSelectedTxn] = useState<BankTransaction | null>(null);
   const ignoredPairs = useIgnoredPairs();
   const ignoredTxns = useIgnoredTxns();
@@ -504,33 +505,41 @@ export default function TransactionsPage() {
     return cum;
   });
 
-  // Rank exact day/hour windows by activity. A short, sorted list is easier to
-  // read than compressing every hour across several months into one chart.
+  // First rank the busiest days, then show a clean 24-hour breakdown for the
+  // selected day. This answers "which day, then which hour" in two steps.
+  const txnsByDay = new Map<string, BankTransaction[]>();
   const txnsByDayHour = new Map<string, BankTransaction[]>();
   for (const t of filtered) {
+    const day = t.timestamp.slice(0, 10);
     const hour = Number(t.timestamp.slice(11, 13)) || 0;
-    const key = `${t.timestamp.slice(0, 10)}|${hour}`;
+    const key = `${day}|${hour}`;
+    txnsByDay.set(day, [...(txnsByDay.get(day) ?? []), t]);
     txnsByDayHour.set(key, [...(txnsByDayHour.get(key) ?? []), t]);
   }
-  const busiestSlots = [...txnsByDayHour.entries()]
-    .map(([key, txns]) => {
-      const [day, hourText] = key.split("|");
-      const income = txns.filter((t) => t.type === "credit");
-      const expense = txns.filter((t) => t.type === "debit");
-      return {
-        key,
-        label: `${day}  ${String(Number(hourText)).padStart(2, "0")}:00`,
-        txns,
-        incomeCount: income.length,
-        expenseCount: expense.length,
-        incomeAmount: income.reduce((sum, t) => sum + t.amount, 0),
-        expenseAmount: expense.reduce((sum, t) => sum + t.amount, 0),
-      };
-    })
+  const busiestDays = [...txnsByDay.entries()]
+    .map(([day, txns]) => ({day, txns}))
     .sort((a, b) => b.txns.length - a.txns.length
-      || a.key.localeCompare(b.key))
-    .slice(0, 20)
+      || a.day.localeCompare(b.day))
+    .slice(0, 7)
     .reverse();
+  const defaultActivityDay = busiestDays[busiestDays.length - 1]?.day ?? null;
+  const activityDay = selectedActivityDay != null
+    && txnsByDay.has(selectedActivityDay)
+    ? selectedActivityDay : defaultActivityDay;
+  const activityHours = Array.from({length: 24}, (_, hour) => {
+    const txns = activityDay == null
+      ? [] : txnsByDayHour.get(`${activityDay}|${hour}`) ?? [];
+    const income = txns.filter((t) => t.type === "credit");
+    const expense = txns.filter((t) => t.type === "debit");
+    return {
+      hour,
+      txns,
+      incomeCount: income.length,
+      expenseCount: expense.length,
+      incomeAmount: income.reduce((sum, t) => sum + t.amount, 0),
+      expenseAmount: expense.reduce((sum, t) => sum + t.amount, 0),
+    };
+  });
 
   // "Who with whom" — follow the money. The case account and the counterparty,
   // each shown as a name + its account number.
@@ -851,56 +860,68 @@ export default function TransactionsPage() {
         </Card>
       </div>
 
-      <Card
-        title="Хамгийн их гүйлгээ хийгдсэн 20 өдөр, цаг"
-        style={{marginBottom: 16}}
-      >
-        <Plot
-          height={540}
-          data={[
-            {
-              type: "bar", orientation: "h", name: "Орлого",
-              x: busiestSlots.map((s) => s.incomeCount),
-              y: busiestSlots.map((s) => s.label),
-              customdata: busiestSlots.map((s) =>
-                [formatMoney(s.incomeAmount), s.txns.length]),
-              marker: {color: "#42A5F5"},
-              text: busiestSlots.map((s) => s.incomeCount || ""),
-              textposition: "inside",
-              hovertemplate: "%{y}<br>Орлого: %{x} гүйлгээ · %{customdata[0]}"
-                + "<br>Нийт: %{customdata[1]} гүйлгээ<extra></extra>",
-            },
-            {
-              type: "bar", orientation: "h", name: "Зарлага",
-              x: busiestSlots.map((s) => s.expenseCount),
-              y: busiestSlots.map((s) => s.label),
-              customdata: busiestSlots.map((s) =>
-                [formatMoney(s.expenseAmount), s.txns.length]),
-              marker: {color: "#FF8A3D"},
-              text: busiestSlots.map((s) => s.expenseCount || ""),
-              textposition: "inside",
-              hovertemplate: "%{y}<br>Зарлага: %{x} гүйлгээ · %{customdata[0]}"
-                + "<br>Нийт: %{customdata[1]} гүйлгээ<extra></extra>",
-            },
-          ]}
-          layout={{
-            barmode: "stack",
-            bargap: 0.24,
-            margin: {l: 132, r: 42, t: 16, b: 58},
-            xaxis: {title: "Гүйлгээний тоо", dtick: 1, rangemode: "tozero"},
-            yaxis: {title: "Өдөр · цаг", automargin: true, fixedrange: true},
-            legend: {orientation: "h", x: 0, y: -0.14},
-          }}
-          onClick={(e) => {
-            const p = e.points?.[0];
-            const idx = p?.pointIndex ?? p?.pointNumber;
-            const slot = idx == null ? null : busiestSlots[idx];
-            const largest = [...(slot?.txns ?? [])]
-              .sort((a, b) => b.amount - a.amount)[0];
-            if (largest) openDrill(largest);
-          }}
-        />
-      </Card>
+      <div style={ROW}>
+        <Card title="1. Хамгийн их гүйлгээтэй өдрөөс сонгоно уу">
+          <Plot
+            height={320}
+            data={[{
+              type: "bar", orientation: "h", name: "Нийт гүйлгээ",
+              x: busiestDays.map((d) => d.txns.length),
+              y: busiestDays.map((d) => d.day),
+              marker: {color: busiestDays.map((d) =>
+                d.day === activityDay ? "#FFB74D" : "#00BCD4")},
+              text: busiestDays.map((d) => d.txns.length),
+              textposition: "outside",
+              hovertemplate: "%{y}<br>%{x} гүйлгээ<extra></extra>",
+            }]}
+            layout={{
+              margin: {l: 92, r: 42, t: 12, b: 46},
+              showlegend: false,
+              xaxis: {title: "Гүйлгээний тоо", rangemode: "tozero"},
+              yaxis: {automargin: true, fixedrange: true},
+            }}
+            onClick={(e) => {
+              const day = String(e.points?.[0]?.y ?? "");
+              if (txnsByDay.has(day)) setSelectedActivityDay(day);
+            }}
+          />
+        </Card>
+
+        <Card title={`2. ${activityDay ?? "—"} өдрийн гүйлгээ хийсэн цаг`}>
+          <Plot
+            height={320}
+            data={[{
+              type: "bar", name: "Нийт гүйлгээ",
+              x: activityHours.map((h) =>
+                `${String(h.hour).padStart(2, "0")}:00`),
+              y: activityHours.map((h) => h.txns.length),
+              customdata: activityHours.map((h) =>
+                [h.incomeCount, h.expenseCount,
+                  formatMoney(h.incomeAmount), formatMoney(h.expenseAmount)]),
+              marker: {color: "#FFB74D"},
+              text: activityHours.map((h) => h.txns.length || ""),
+              textposition: "outside",
+              hovertemplate: "%{x} цаг · Нийт %{y} гүйлгээ"
+                + "<br>Орлого: %{customdata[0]} · %{customdata[2]}"
+                + "<br>Зарлага: %{customdata[1]} · %{customdata[3]}<extra></extra>",
+            }]}
+            layout={{
+              margin: {l: 48, r: 20, t: 12, b: 52},
+              showlegend: false,
+              xaxis: {title: "Цаг", tickangle: -45, fixedrange: true},
+              yaxis: {title: "Гүйлгээний тоо", rangemode: "tozero"},
+            }}
+            onClick={(e) => {
+              const idx = e.points?.[0]?.pointIndex
+                ?? e.points?.[0]?.pointNumber;
+              const hour = idx == null ? null : activityHours[idx];
+              const largest = [...(hour?.txns ?? [])]
+                .sort((a, b) => b.amount - a.amount)[0];
+              if (largest) openDrill(largest);
+            }}
+          />
+        </Card>
+      </div>
 
       <div style={ROW}>
         <Card title="Өдөр тутмын хэмжээ & гүйцэтгэлийн баланс">
