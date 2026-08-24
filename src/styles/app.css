@@ -524,6 +524,84 @@ body {
 .card-body { padding: 18px; }
 .card-body.no-padding { padding: 0; }
 
+/* Link-chart conclusions: short visual summaries are easier to scan than a
+   dense paragraph list, especially when names and account numbers are long. */
+.graph-verdict-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.graph-verdict-item {
+  --verdict-color: var(--accent-cyan);
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--verdict-color) 24%, var(--border));
+  border-left: 3px solid var(--verdict-color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--verdict-color) 5%, var(--bg-card));
+}
+
+.graph-verdict-item.money { --verdict-color: var(--accent-green); }
+.graph-verdict-item.attention { --verdict-color: var(--accent-amber); }
+.graph-verdict-item.network { --verdict-color: #a78bfa; }
+.graph-verdict-item.manual { --verdict-color: var(--text-muted); }
+
+.graph-verdict-item[role="button"] {
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease,
+    transform .15s ease;
+}
+
+.graph-verdict-item[role="button"]:hover,
+.graph-verdict-item[role="button"]:focus-visible {
+  border-color: color-mix(in srgb, var(--verdict-color) 55%, var(--border));
+  background: color-mix(in srgb, var(--verdict-color) 9%, var(--bg-card));
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.graph-verdict-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  color: var(--verdict-color);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.graph-verdict-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--verdict-color);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--verdict-color) 65%, transparent);
+}
+
+.graph-verdict-text {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.graph-verdict-action {
+  margin-top: 9px;
+  color: var(--verdict-color);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+
+@media (max-width: 900px) {
+  .graph-verdict-grid { grid-template-columns: 1fr; }
+}
+
 /* Charts */
 .chart-container {
     position: relative;

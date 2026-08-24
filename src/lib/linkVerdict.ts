@@ -98,6 +98,8 @@ export function linkVerdict(
 }
 
 export interface GraphVerdictItem {
+  title: string;
+  tone: "info" | "money" | "attention" | "network" | "manual";
   text: string;
   // Node to focus when the sentence is clicked (the hub person etc.).
   focusId?: string;
@@ -130,14 +132,16 @@ export function graphVerdict(
   const edgeParts: string[] = [];
   if (txn.length) edgeParts.push(`${formatNum(txn.length)} мөнгөн`);
   if (call.length) edgeParts.push(`${formatNum(call.length)} дуудлагын`);
-  out.push({text: `Зурагт ${parts.join(", ")} байна`
+  out.push({title: "Сүлжээний хамрах хүрээ", tone: "info",
+    text: `Зурагт ${parts.join(", ")} байна`
     + (edgeParts.length
       ? `, хоорондоо ${edgeParts.join(", ")} холбоосоор холбогдсон.` : ".")});
 
   // Total money on screen.
   const totalMoney = txn.reduce((s, l) => s + (l.facts?.txnTotal ?? 0), 0);
   if (totalMoney > 0) {
-    out.push({text: `Харагдаж буй мөнгөн гүйлгээний нийт дүн `
+    out.push({title: "Нийт мөнгөн урсгал", tone: "money",
+      text: `Харагдаж буй мөнгөн гүйлгээний нийт дүн `
       + `${formatMoney(totalMoney)}.`});
   }
 
@@ -159,7 +163,9 @@ export function graphVerdict(
         const [from, to] = ab >= ba ? [s.label, t.label] : [t.label, s.label];
         text += ` Гол чиглэл: ${from} → ${to}.`;
       }
-      out.push({text, focusId: s.type === "PERSON" ? s.id : t.id});
+      out.push({title: "Хамгийн өндөр дүнтэй холбоос",
+        tone: "attention", text,
+        focusId: s.type === "PERSON" ? s.id : t.id});
     }
   }
 
@@ -172,7 +178,8 @@ export function graphVerdict(
     const t = byId.get(topCall.target);
     const f = topCall.facts ?? {};
     if (s && t) {
-      out.push({text: `Хамгийн их ярьсан хос: ${s.label} ба ${t.label} — `
+      out.push({title: "Хамгийн идэвхтэй дуудлага", tone: "attention",
+        text: `Хамгийн их ярьсан хос: ${s.label} ба ${t.label} — `
         + `${formatNum(f.callCount ?? 0)} дуудлага, `
         + `${formatNum(mins(f.callSeconds ?? 0))} минут.`});
     }
@@ -196,6 +203,8 @@ export function graphVerdict(
     .sort((a, b) => b.d - a.d)[0];
   if (hub && hub.d >= 3 && persons.length >= 3) {
     out.push({
+      title: "Сүлжээний гол төв",
+      tone: "network",
       text: `${hub.p.label} хамгийн олон холбоостой `
         + `(${formatNum(hub.d)}) — сүлжээний төв байх магадлалтай.`,
       focusId: hub.p.id,
@@ -203,7 +212,8 @@ export function graphVerdict(
   }
 
   if (manual.length) {
-    out.push({text: `Мөрдөгч ${formatNum(manual.length)} холбоосыг гараар `
+    out.push({title: "Гар тэмдэглэгээ", tone: "manual",
+      text: `Мөрдөгч ${formatNum(manual.length)} холбоосыг гараар `
       + `тэмдэглэсэн.`});
   }
   return out;

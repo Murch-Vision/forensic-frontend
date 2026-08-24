@@ -1673,17 +1673,32 @@ export default function LinkChartPage() {
           (all filters applied); clicking one jumps to the person it names. */}
       <Card title="Дүгнэлт" style={{marginBottom: 16}}>
         {verdict.length > 0 ? (
-          <div style={{fontSize: 13, lineHeight: 1.9,
-            color: "var(--text-primary)"}}>
+          <div className="graph-verdict-grid">
             {verdict.map((v, i) => {
               const node = v.focusId
                 ? network.nodes.find((n) => n.id === v.focusId) : undefined;
               return (
-                <div key={i}
+                <div key={i} className={`graph-verdict-item ${v.tone}`}
                   onClick={node ? () => focusSearchResult(node) : undefined}
-                  style={node ? {cursor: "pointer"} : undefined}
+                  onKeyDown={node ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      focusSearchResult(node);
+                    }
+                  } : undefined}
+                  role={node ? "button" : undefined}
+                  tabIndex={node ? 0 : undefined}
                   title={node ? "Зураг дээр очиж харах" : undefined}>
-                  •&nbsp;{v.text}
+                  <div className="graph-verdict-heading">
+                    <span className="graph-verdict-dot" />
+                    {v.title}
+                  </div>
+                  <div className="graph-verdict-text">{v.text}</div>
+                  {node && (
+                    <div className="graph-verdict-action">
+                      ЗУРАГ ДЭЭР ХАРАХ →
+                    </div>
+                  )}
                 </div>
               );
             })}
