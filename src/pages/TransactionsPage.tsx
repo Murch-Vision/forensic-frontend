@@ -483,7 +483,7 @@ export default function TransactionsPage() {
   const totalCredits = credits.reduce((sum, t) => sum + t.amount, 0);
   const totalDebits = debits.reduce((sum, t) => sum + t.amount, 0);
 
-  // Daily volume (credit/debit bars) + recomputed running balance line.
+  // Income/outgoing totals grouped by calendar day.
   const dayKeys = [...new Set(filtered.map((t) => t.timestamp.slice(0, 10)))]
     .sort();
   const dayCredit = new Map<string, number>();
@@ -498,14 +498,18 @@ export default function TransactionsPage() {
   }
   const dCred = dayKeys.map((d) => dayCredit.get(d) ?? 0);
   const dDeb = dayKeys.map((d) => dayDebit.get(d) ?? 0);
-  let cum = 0;
-  const runningBal = dayKeys.map((_d, i) => {
-    cum += dCred[i] - dDeb[i];
-    return cum;
-  });
 
   // Day × hour density: one square represents one exact hour of one day.
   const hours = Array.from({length: 24}, (_, hour) => hour);
+  const hourCredit = Array<number>(24).fill(0);
+  const hourDebit = Array<number>(24).fill(0);
+  for (const t of filtered) {
+    const hour = Number(t.timestamp.slice(11, 13)) || 0;
+    if (t.type === "credit") hourCredit[hour] += t.amount;
+    else if (t.type === "debit") hourDebit[hour] += t.amount;
+  }
+  const hourLabels = hours.map((hour) =>
+    `${String(hour).padStart(2, "0")}:00`);
   const heatDays: string[] = [];
   if (dayKeys.length > 0) {
     const cursor = new Date(`${dayKeys[0]}T00:00:00Z`);
@@ -902,19 +906,52 @@ export default function TransactionsPage() {
       </Card>
 
       <div style={ROW}>
-        <Card title="Өдөр тутмын хэмжээ & гүйцэтгэлийн баланс">
+        <Card title="Орлого, зарлагын график — он, сар, өдрөөр">
           <Plot
-            height={280}
+            height={300}
             data={[
-              {type: "bar", name: "Орлого", x: dayKeys, y: dCred,
-                marker: {color: "#00E676"}},
-              {type: "bar", name: "Зарлага", x: dayKeys, y: dDeb,
-                marker: {color: "#FF5252"}},
-              {type: "scatter", mode: "lines", name: "Баланс", x: dayKeys,
-                y: runningBal, yaxis: "y2", line: {color: "#00E5FF", width: 2}},
+              {type: "scatter", mode: "lines", name: "Орлого",
+                x: dayKeys, y: dCred,
+                customdata: dCred.map((amount) => formatMoney(amount)),
+                line: {color: "#42A5F5", width: 2.5},
+                hovertemplate: "%{x}<br>Орлого: %{customdata}<extra></extra>"},
+              {type: "scatter", mode: "lines", name: "Зарлага",
+                x: dayKeys, y: dDeb,
+                customdata: dDeb.map((amount) => formatMoney(amount)),
+                line: {color: "#FF8A3D", width: 2.5},
+                hovertemplate: "%{x}<br>Зарлага: %{customdata}<extra></extra>"},
             ]}
-            layout={{barmode: "group",
-              yaxis2: {overlaying: "y", side: "right", gridcolor: "#1A1A3E"}}}
+            layout={{
+              xaxis: {type: "date", title: "Он, сар, өдөр",
+                tickformat: "%Y-%m-%d"},
+              yaxis: {title: "Дүн"},
+              hovermode: "x unified",
+            }}
+          />
+        </Card>
+
+        <Card title="Орлого, зарлагын график — цагаар">
+          <Plot
+            height={300}
+            data={[
+              {type: "scatter", mode: "lines+markers", name: "Орлого",
+                x: hourLabels, y: hourCredit,
+                customdata: hourCredit.map((amount) => formatMoney(amount)),
+                line: {color: "#42A5F5", width: 2.5},
+                marker: {color: "#42A5F5", size: 5},
+                hovertemplate: "%{x}<br>Орлого: %{customdata}<extra></extra>"},
+              {type: "scatter", mode: "lines+markers", name: "Зарлага",
+                x: hourLabels, y: hourDebit,
+                customdata: hourDebit.map((amount) => formatMoney(amount)),
+                line: {color: "#FF8A3D", width: 2.5},
+                marker: {color: "#FF8A3D", size: 5},
+                hovertemplate: "%{x}<br>Зарлага: %{customdata}<extra></extra>"},
+            ]}
+            layout={{
+              xaxis: {title: "Цаг", tickangle: -45, fixedrange: true},
+              yaxis: {title: "Дүн"},
+              hovermode: "x unified",
+            }}
           />
         </Card>
       </div>
