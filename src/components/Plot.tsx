@@ -62,7 +62,8 @@ function mergeLayout(
 
 export interface PlotClickEvent {
   points: Array<{curveNumber: number; pointNumber: number; pointIndex?: number;
-    x?: string | number; y?: string | number}>;
+    x?: string | number; y?: string | number;
+    customdata?: Array<string | number>}>;
 }
 
 export interface PlotProps {

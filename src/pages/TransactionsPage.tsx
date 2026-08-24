@@ -528,7 +528,9 @@ export default function TransactionsPage() {
     const cell = txnsByDayHour.get(`${day}|${hour}`) ?? [];
     const income = cell.filter((t) => t.type === "credit");
     const expense = cell.filter((t) => t.type === "debit");
-    return [income.length, expense.length,
+    const hourLabel = `${String(hour).padStart(2, "0")}:00–${
+      String(hour).padStart(2, "0")}:59`;
+    return [day, hourLabel, hour, income.length, expense.length,
       formatMoney(income.reduce((sum, t) => sum + t.amount, 0)),
       formatMoney(expense.reduce((sum, t) => sum + t.amount, 0))];
   }));
@@ -871,9 +873,10 @@ export default function TransactionsPage() {
             xgap: 1,
             ygap: 1,
             colorbar: {title: {text: "Гүйлгээ"}, thickness: 12},
-            hovertemplate: "%{x} · %{y}:00–%{y}:59<br>Нийт: %{z} гүйлгээ"
-              + "<br>Орлого: %{customdata[0]} · %{customdata[2]}"
-              + "<br>Зарлага: %{customdata[1]} · %{customdata[3]}<extra></extra>",
+            hovertemplate: "%{customdata[0]} · %{customdata[1]} цагийн хооронд"
+              + "<br>Нийт: %{z} гүйлгээ"
+              + "<br>Орлого: %{customdata[3]} · %{customdata[5]}"
+              + "<br>Зарлага: %{customdata[4]} · %{customdata[6]}<extra></extra>",
           }]}
           layout={{
             margin: {l: 62, r: 70, t: 16, b: 54},
@@ -888,8 +891,9 @@ export default function TransactionsPage() {
           }}
           onClick={(e) => {
             const p = e.points?.[0];
-            const day = String(p?.x ?? "").slice(0, 10);
-            const hour = Number(p?.y);
+            const detail = p?.customdata;
+            const day = String(detail?.[0] ?? "");
+            const hour = Number(detail?.[2]);
             const cell = txnsByDayHour.get(`${day}|${hour}`) ?? [];
             const largest = [...cell].sort((a, b) => b.amount - a.amount)[0];
             if (largest) openDrill(largest);
