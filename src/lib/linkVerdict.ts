@@ -185,134 +185,102 @@ export function graphVerdict(
     }
   }
 
-  // Project the visible evidence graph onto PEOPLE. A call travels through a
-  // person's phone node, but that must count as one relationship with the
-  // other person — not dozens of phone/account edges attributed to the owner.
-  const owner = new Map<string, string>();
-  for (const l of links) {
-    if (l.kind === "owns" && byId.get(l.source)?.type === "PERSON") {
-      owner.set(l.target, l.source);
-    }
+  // "Primary people" are the people whose OWN statements are loaded: the
+  // builder adds a Гүйлгээ summary only to an endpoint that owns imported
+  // statement rows. They are the investigation centers, never intermediaries.
+  const primary = persons.filter((p) =>
+    p.stats.some(([label]) => label === "Гүйлгээ"));
+  const primaryIds = new Set(primary.map((p) => p.id));
+  if (primary.length) {
+    out.push({
+      title: "Шалгаж буй үндсэн хүмүүс",
+      tone: "info",
+      text: primary.slice(0, 5).map((p) => p.label).join(", ")
+        + (primary.length > 5 ? ` болон өөр ${formatNum(primary.length - 5)} хүн` : "")
+        + ". Эдгээрийн дансны хуулгыг сүлжээний төв болгон харьцуулсан.",
+    });
   }
-  const asPerson = (id: string) => byId.get(id)?.type === "PERSON"
-    ? id : owner.get(id);
-  type PairFacts = {money: number; calls: number};
-  const pairFacts = new Map<string, PairFacts>();
-  const adjacency = new Map(persons.map((p) => [p.id, new Set<string>()]));
+
+  // A real intermediary is a NON-primary node sitting equally close (within
+  // two hops) to two or more primary people. Keep account nodes intact: one
+  // unknown bank account
+  // used by several investigated people is exactly the signal this page must
+  // surface, not project away as generic person centrality.
+  const incident = new Map<string, NetworkLink[]>();
+  const adjacency = new Map(nodes.map((n) => [n.id, new Set<string>()]));
+  const addIncident = (id: string, link: NetworkLink) => {
+    const list = incident.get(id) ?? [];
+    list.push(link);
+    incident.set(id, list);
+  };
   for (const l of links) {
     if (l.kind === "owns") continue;
-    const a = asPerson(l.source);
-    const b = asPerson(l.target);
-    if (!a || !b || a === b) continue;
-    adjacency.get(a)?.add(b);
-    adjacency.get(b)?.add(a);
-    const key = a < b ? `${a}|${b}` : `${b}|${a}`;
-    const facts = pairFacts.get(key) ?? {money: 0, calls: 0};
-    facts.money += l.facts?.txnTotal ?? 0;
-    facts.calls += l.facts?.callCount ?? 0;
-    pairFacts.set(key, facts);
+    addIncident(l.source, l);
+    addIncident(l.target, l);
+    adjacency.get(l.source)?.add(l.target);
+    adjacency.get(l.target)?.add(l.source);
   }
-
-  const relationshipCount = (id: string) => adjacency.get(id)?.size ?? 0;
-  // Brandes betweenness centrality: highlights people who sit on shortest
-  // paths between other people — the actual intermediaries in the network.
-  const between = new Map(persons.map((p) => [p.id, 0]));
-  for (const source of persons.map((p) => p.id)) {
-    const stack: string[] = [];
-    const pred = new Map(persons.map((p) => [p.id, [] as string[]]));
-    const paths = new Map(persons.map((p) => [p.id, 0]));
-    const dist = new Map(persons.map((p) => [p.id, -1]));
-    paths.set(source, 1);
-    dist.set(source, 0);
-    const queue = [source];
-    for (let qi = 0; qi < queue.length; qi += 1) {
-      const v = queue[qi];
-      stack.push(v);
-      for (const w of adjacency.get(v) ?? []) {
-        if ((dist.get(w) ?? -1) < 0) {
-          queue.push(w);
-          dist.set(w, (dist.get(v) ?? 0) + 1);
-        }
-        if (dist.get(w) === (dist.get(v) ?? 0) + 1) {
-          paths.set(w, (paths.get(w) ?? 0) + (paths.get(v) ?? 0));
-          pred.get(w)?.push(v);
-        }
+  const distances = new Map<string, Map<string, number>>();
+  for (const root of primary) {
+    const dist = new Map([[root.id, 0]]);
+    const queue = [root.id];
+    for (let i = 0; i < queue.length; i += 1) {
+      const current = queue[i];
+      for (const next of adjacency.get(current) ?? []) {
+        if (dist.has(next)) continue;
+        dist.set(next, (dist.get(current) ?? 0) + 1);
+        queue.push(next);
       }
     }
-    const dependency = new Map(persons.map((p) => [p.id, 0]));
-    while (stack.length) {
-      const w = stack.pop()!;
-      for (const v of pred.get(w) ?? []) {
-        const wPaths = paths.get(w) ?? 0;
-        if (wPaths > 0) {
-          dependency.set(v, (dependency.get(v) ?? 0)
-            + ((paths.get(v) ?? 0) / wPaths) * (1 + (dependency.get(w) ?? 0)));
-        }
-      }
-      if (w !== source) between.set(w,
-        (between.get(w) ?? 0) + (dependency.get(w) ?? 0));
-    }
+    distances.set(root.id, dist);
   }
-  const intermediaries = persons
-    .map((p) => ({p, score: (between.get(p.id) ?? 0) / 2,
-      degree: relationshipCount(p.id)}))
-    .filter((x) => x.score > 0 && x.degree >= 2)
-    .sort((a, b) => b.score - a.score || b.degree - a.degree)
-    .slice(0, 3);
-  if (intermediaries.length) {
-    const descriptions = intermediaries.map(({p}) => {
-      const neighborIds = [...(adjacency.get(p.id) ?? [])];
-      let money = 0;
-      let calls = 0;
-      for (const id of neighborIds) {
-        const key = p.id < id ? `${p.id}|${id}` : `${id}|${p.id}`;
-        const facts = pairFacts.get(key);
-        money += facts?.money ?? 0;
-        calls += facts?.calls ?? 0;
-      }
-      const reason = money > 0
-        ? `${formatMoney(money)}-ийн дундын урсгал`
-        : calls > 0 ? `${formatNum(calls)} дундын дуудлага`
-          : "хэд хэдэн бүлгийг холбосон зам";
-      return `${p.label} — ${reason}`;
+  const shared = nodes.flatMap((node) => {
+    if (primaryIds.has(node.id)) return [];
+    const edges = incident.get(node.id) ?? [];
+    const reached = primary.flatMap((root) => {
+      const distance = distances.get(root.id)?.get(node.id);
+      return distance == null ? [] : [{root, distance}];
     });
+    const minDistance = Math.min(...reached.map((x) => x.distance));
+    const roots = reached.filter((x) => x.distance === minDistance)
+      .map((x) => x.root);
+    // One or two hops catches the visible bridge band without declaring every
+    // distant boundary in a large component an intermediary.
+    if (roots.length < 2 || minDistance > 2) return [];
+    let money = 0;
+    let txns = 0;
+    let calls = 0;
+    for (const l of edges) {
+      money += l.facts?.txnTotal ?? 0;
+      txns += l.facts?.txnCount ?? 0;
+      calls += l.facts?.callCount ?? 0;
+    }
+    return [{node, roots, distance: minDistance, money, txns, calls}];
+  }).sort((a, b) => b.roots.length - a.roots.length
+    || b.money - a.money || b.txns - a.txns || b.calls - a.calls);
+
+  for (const item of shared.slice(0, 6)) {
+    const identity = item.node.type === "ACCOUNT"
+      ? item.node.sub || item.node.label : item.node.label;
+    const evidence = item.txns > 0
+      ? `${formatNum(item.txns)} гүйлгээ · ${formatMoney(item.money)}`
+      : item.calls > 0 ? `${formatNum(item.calls)} дуудлага` : "шууд холбоос";
+    const bridge = item.distance === 1
+      ? "Хоёр талтай шууд холбогдсон"
+      : "Хоёр талаас 2 дамжлагын зайд";
     out.push({
-      title: "Түрүүлж шалгах этгээдүүд",
+      title: item.node.type === "ACCOUNT" ? "Дундын банкны данс"
+        : item.node.type === "PHONE" ? "Дундын утас" : "Дундын харилцагч",
       tone: "attention",
-      text: `${descriptions.join(".\n")}\nДундын замд давтагдсан тул `
-        + "гүйлгээний чиглэл, огноог нягтална. Энэ нь сэжигтнээр тогтоосон "
-        + "шийдвэр биш.",
+      text: `${identity}\n${item.roots.map((r) => r.label).join(" ↔ ")}\n`
+        + `${bridge} · ${evidence}`,
     });
   }
-
-  // Harmonic centrality remains meaningful when the graph has disconnected
-  // components. These are structural center nodes: they can reach the largest
-  // share of people through the fewest hand-offs, which differs from raw degree.
-  const central = persons.map((p) => {
-    const dist = new Map([[p.id, 0]]);
-    const queue = [p.id];
-    for (let qi = 0; qi < queue.length; qi += 1) {
-      const v = queue[qi];
-      for (const w of adjacency.get(v) ?? []) {
-        if (dist.has(w)) continue;
-        dist.set(w, (dist.get(v) ?? 0) + 1);
-        queue.push(w);
-      }
-    }
-    let score = 0;
-    for (const d of dist.values()) if (d > 0) score += 1 / d;
-    return {p, score};
-  }).filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score
-      || relationshipCount(b.p.id) - relationshipCount(a.p.id));
-  if (central.length) {
-    const best = central[0].score;
-    const centers = central.filter((x) => x.score >= best * 0.9).slice(0, 3);
+  if (shared.length > 6) {
     out.push({
-      title: "Сүлжээний дундын төвүүд",
+      title: "Бусад дундын холбоос",
       tone: "network",
-      text: `${centers.map(({p}) => p.label).join(", ")} — тусдаа бүлгүүдэд `
-        + "хамгийн богино замаар хүрч буй center node-ууд.",
+      text: `Нэмэлт ${formatNum(shared.length - 6)} дундын данс/харилцагч илэрсэн.`,
     });
   }
 
@@ -321,5 +289,13 @@ export function graphVerdict(
       text: `Мөрдөгч ${formatNum(manual.length)} холбоосыг гараар `
       + `тэмдэглэсэн.`});
   }
+  const priority = (title: string) =>
+    title === "Шалгаж буй үндсэн хүмүүс" ? 0
+    : title.startsWith("Дундын") ? 1
+    : title === "Бусад дундын холбоос" ? 2
+    : title === "Хамгийн өндөр дүнтэй холбоос" ? 3
+    : title === "Нийт мөнгөн урсгал" ? 4
+    : title === "Сүлжээний хамрах хүрээ" ? 5 : 6;
+  out.sort((a, b) => priority(a.title) - priority(b.title));
   return out;
 }
