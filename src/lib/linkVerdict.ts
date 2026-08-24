@@ -185,29 +185,160 @@ export function graphVerdict(
     }
   }
 
-  // The hub: the person with the most evidence connections. A phone's call
-  // edges count for its owner, so heavy phone traffic lands on the person.
-  const deg = new Map<string, number>();
+  // Project the visible evidence graph onto PEOPLE. A call travels through a
+  // person's phone node, but that must count as one relationship with the
+  // other person — not dozens of phone/account edges attributed to the owner.
+  const owner = new Map<string, string>();
+  for (const l of links) {
+    if (l.kind === "owns" && byId.get(l.source)?.type === "PERSON") {
+      owner.set(l.target, l.source);
+    }
+  }
+  const asPerson = (id: string) => byId.get(id)?.type === "PERSON"
+    ? id : owner.get(id);
+  type PairFacts = {kinds: Set<string>; money: number; calls: number};
+  const pairFacts = new Map<string, PairFacts>();
+  const adjacency = new Map(persons.map((p) => [p.id, new Set<string>()]));
   for (const l of links) {
     if (l.kind === "owns") continue;
-    deg.set(l.source, (deg.get(l.source) ?? 0) + 1);
-    deg.set(l.target, (deg.get(l.target) ?? 0) + 1);
+    const a = asPerson(l.source);
+    const b = asPerson(l.target);
+    if (!a || !b || a === b) continue;
+    adjacency.get(a)?.add(b);
+    adjacency.get(b)?.add(a);
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+    const facts = pairFacts.get(key)
+      ?? {kinds: new Set<string>(), money: 0, calls: 0};
+    facts.kinds.add(l.kind);
+    facts.money += l.facts?.txnTotal ?? 0;
+    facts.calls += l.facts?.callCount ?? 0;
+    pairFacts.set(key, facts);
   }
-  for (const l of links) {
-    if (l.kind !== "owns") continue;
-    const carried = deg.get(l.target) ?? 0;
-    if (carried) deg.set(l.source, (deg.get(l.source) ?? 0) + carried);
-  }
-  const hub = persons
-    .map((p) => ({p, d: deg.get(p.id) ?? 0}))
-    .sort((a, b) => b.d - a.d)[0];
-  if (hub && hub.d >= 3 && persons.length >= 3) {
+
+  const relationshipCount = (id: string) => adjacency.get(id)?.size ?? 0;
+  const mostConnected = [...persons]
+    .sort((a, b) => relationshipCount(b.id) - relationshipCount(a.id)
+      || a.label.localeCompare(b.label))[0];
+  if (mostConnected && relationshipCount(mostConnected.id) > 0) {
+    const neighbors = [...(adjacency.get(mostConnected.id) ?? [])]
+      .map((id) => byId.get(id)?.label).filter(Boolean) as string[];
     out.push({
-      title: "Сүлжээний гол төв",
+      title: "Хамгийн олон харилцаатай хүн",
       tone: "network",
-      text: `${hub.p.label} хамгийн олон холбоостой `
-        + `(${formatNum(hub.d)}) — сүлжээний төв байх магадлалтай.`,
-      focusId: hub.p.id,
+      text: `${mostConnected.label} нь ${formatNum(neighbors.length)} өөр `
+        + `хүнтэй шууд холбоотой — ${neighbors.slice(0, 3).join(", ")}`
+        + (neighbors.length > 3 ? ` болон өөр ${formatNum(neighbors.length - 3)} хүн` : "")
+        + ". Энэ тоонд нэг хүнтэй хийсэн олон гүйлгээ, дуудлагыг давхардуулж тооцоогүй.",
+      focusId: mostConnected.id,
+    });
+  }
+
+  // Brandes betweenness centrality: highlights people who sit on shortest
+  // paths between other people — the actual intermediaries in the network.
+  const between = new Map(persons.map((p) => [p.id, 0]));
+  for (const source of persons.map((p) => p.id)) {
+    const stack: string[] = [];
+    const pred = new Map(persons.map((p) => [p.id, [] as string[]]));
+    const paths = new Map(persons.map((p) => [p.id, 0]));
+    const dist = new Map(persons.map((p) => [p.id, -1]));
+    paths.set(source, 1);
+    dist.set(source, 0);
+    const queue = [source];
+    for (let qi = 0; qi < queue.length; qi += 1) {
+      const v = queue[qi];
+      stack.push(v);
+      for (const w of adjacency.get(v) ?? []) {
+        if ((dist.get(w) ?? -1) < 0) {
+          queue.push(w);
+          dist.set(w, (dist.get(v) ?? 0) + 1);
+        }
+        if (dist.get(w) === (dist.get(v) ?? 0) + 1) {
+          paths.set(w, (paths.get(w) ?? 0) + (paths.get(v) ?? 0));
+          pred.get(w)?.push(v);
+        }
+      }
+    }
+    const dependency = new Map(persons.map((p) => [p.id, 0]));
+    while (stack.length) {
+      const w = stack.pop()!;
+      for (const v of pred.get(w) ?? []) {
+        const wPaths = paths.get(w) ?? 0;
+        if (wPaths > 0) {
+          dependency.set(v, (dependency.get(v) ?? 0)
+            + ((paths.get(v) ?? 0) / wPaths) * (1 + (dependency.get(w) ?? 0)));
+        }
+      }
+      if (w !== source) between.set(w,
+        (between.get(w) ?? 0) + (dependency.get(w) ?? 0));
+    }
+  }
+  const intermediaries = persons
+    .map((p) => ({p, score: (between.get(p.id) ?? 0) / 2,
+      degree: relationshipCount(p.id)}))
+    .filter((x) => x.score > 0 && x.degree >= 2)
+    .sort((a, b) => b.score - a.score || b.degree - a.degree)
+    .slice(0, 3);
+  if (intermediaries.length) {
+    const descriptions = intermediaries.map(({p, degree}) => {
+      const neighborIds = [...(adjacency.get(p.id) ?? [])];
+      const nbrs = neighborIds
+        .map((id) => byId.get(id)?.label).filter(Boolean) as string[];
+      let money = 0;
+      let calls = 0;
+      for (const id of neighborIds) {
+        const key = p.id < id ? `${p.id}|${id}` : `${id}|${p.id}`;
+        const facts = pairFacts.get(key);
+        money += facts?.money ?? 0;
+        calls += facts?.calls ?? 0;
+      }
+      const evidence = [
+        money > 0 ? `${formatMoney(money)}-ийн урсгал` : "",
+        calls > 0 ? `${formatNum(calls)} дуудлага` : "",
+      ].filter(Boolean).join(", ");
+      return `${p.label} (${formatNum(degree)} хүн: ${nbrs.slice(0, 2).join(", ")}`
+        + (nbrs.length > 2 ? ` зэрэг` : "")
+        + (evidence ? `; ${evidence}` : "") + ")";
+    });
+    out.push({
+      title: "Дундын харилцагчид",
+      tone: "attention",
+      text: `${descriptions.join("; ")} нь бусад хүмүүсийн хоорондын хамгийн `
+        + "богино холбоосын замд олон давтагдаж байна. Эдгээр хүний гүйлгээ, "
+        + "дуудлагын чиглэл болон хугацааг түрүүлж нягтлах шаардлагатай.",
+      focusId: intermediaries[0].p.id,
+    });
+  }
+
+  // Harmonic centrality remains meaningful when the graph has disconnected
+  // components. These are structural center nodes: they can reach the largest
+  // share of people through the fewest hand-offs, which differs from raw degree.
+  const central = persons.map((p) => {
+    const dist = new Map([[p.id, 0]]);
+    const queue = [p.id];
+    for (let qi = 0; qi < queue.length; qi += 1) {
+      const v = queue[qi];
+      for (const w of adjacency.get(v) ?? []) {
+        if (dist.has(w)) continue;
+        dist.set(w, (dist.get(v) ?? 0) + 1);
+        queue.push(w);
+      }
+    }
+    let score = 0;
+    for (const d of dist.values()) if (d > 0) score += 1 / d;
+    return {p, score, reachable: dist.size - 1};
+  }).filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score
+      || relationshipCount(b.p.id) - relationshipCount(a.p.id));
+  if (central.length) {
+    const best = central[0].score;
+    const centers = central.filter((x) => x.score >= best * 0.9).slice(0, 3);
+    out.push({
+      title: "Center node болсон хүмүүс",
+      tone: "network",
+      text: `${centers.map(({p, reachable}) => `${p.label} (`
+        + `${formatNum(reachable)} хүнд дам хүрнэ)`).join(", ")} нь сүлжээний `
+        + "бусад хүмүүст хамгийн цөөн дамжлагаар хүрч байгаа бүтцийн төвүүд байна.",
+      focusId: centers[0].p.id,
     });
   }
 
