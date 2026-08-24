@@ -875,47 +875,55 @@ export default function TransactionsPage() {
         title="Өдөр, цагийн гүйлгээний давтамж — тод нүд нь олон гүйлгээ"
         style={{marginBottom: 16}}
       >
-        <Plot
-          height={500}
-          data={[{
-            type: "heatmap",
-            x: heatDays,
-            y: hours,
-            z: heatCounts,
-            customdata: heatDetails,
-            colorscale: [
-              [0, "#101225"], [0.12, "#15355A"], [0.35, "#087EA4"],
-              [0.65, "#00D4C7"], [1, "#FFE66D"],
-            ],
-            xgap: 1,
-            ygap: 1,
-            colorbar: {title: {text: "Гүйлгээ"}, thickness: 12},
-            hovertemplate: "%{customdata[0]} · %{customdata[1]} цагийн хооронд"
-              + "<br>Нийт: %{z} гүйлгээ"
-              + "<br>Орлого: %{customdata[3]} · %{customdata[5]}"
-              + "<br>Зарлага: %{customdata[4]} · %{customdata[6]}<extra></extra>",
-          }]}
-          layout={{
-            margin: {l: 62, r: 70, t: 16, b: 54},
-            xaxis: {type: "date", title: "Огноо", tickformat: "%Y-%m-%d"},
-            yaxis: {
-              title: "Цаг",
-              tickmode: "array",
-              tickvals: hours,
-              ticktext: hours.map((h) => `${String(h).padStart(2, "0")}:00`),
-              fixedrange: true,
-            },
-          }}
-          onClick={(e) => {
-            const p = e.points?.[0];
-            const detail = p?.customdata;
-            const day = String(detail?.[0] ?? "");
-            const hour = Number(detail?.[2]);
-            const cell = txnsByDayHour.get(`${day}|${hour}`) ?? [];
-            const largest = [...cell].sort((a, b) => b.amount - a.amount)[0];
-            if (largest) openDrill(largest);
-          }}
-        />
+        <div style={{overflowX: "auto", paddingBottom: 4}}>
+          <div style={{minWidth: heatDays.length * 14 + 150}}>
+            <Plot
+              height={500}
+              data={[{
+                type: "heatmap",
+                x: heatDays,
+                y: hours,
+                z: heatCounts,
+                customdata: heatDetails,
+                colorscale: [
+                  [0, "#101225"], [0.12, "#15355A"], [0.35, "#087EA4"],
+                  [0.65, "#00D4C7"], [1, "#FFE66D"],
+                ],
+                xgap: 1,
+                ygap: 1,
+                colorbar: {title: {text: "Гүйлгээ"}, thickness: 12},
+                hovertemplate:
+                  "%{customdata[0]} · %{customdata[1]} цагийн хооронд"
+                  + "<br>Нийт: %{z} гүйлгээ"
+                  + "<br>Орлого: %{customdata[3]} · %{customdata[5]}"
+                  + "<br>Зарлага: %{customdata[4]} · %{customdata[6]}"
+                  + "<extra></extra>",
+              }]}
+              layout={{
+                margin: {l: 62, r: 70, t: 16, b: 54},
+                xaxis: {type: "date", title: "Огноо", tickformat: "%Y-%m-%d"},
+                yaxis: {
+                  title: "Цаг",
+                  tickmode: "array",
+                  tickvals: hours,
+                  ticktext: hours.map((h) =>
+                    `${String(h).padStart(2, "0")}:00`),
+                  fixedrange: true,
+                },
+              }}
+              onClick={(e) => {
+                const p = e.points?.[0];
+                const detail = p?.customdata;
+                const day = String(detail?.[0] ?? "");
+                const hour = Number(detail?.[2]);
+                const cell = txnsByDayHour.get(`${day}|${hour}`) ?? [];
+                const largest = [...cell]
+                  .sort((a, b) => b.amount - a.amount)[0];
+                if (largest) openDrill(largest);
+              }}
+            />
+          </div>
+        </div>
       </Card>
 
       <div style={ROW}>
