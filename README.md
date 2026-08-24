@@ -50,7 +50,7 @@ no service, no administrator. Everything lives in [`scripts/`](scripts/):
 
 | Script | Purpose |
 | --- | --- |
-| `start-windows.bat` | Launcher — `npm install` (first run) then `npm run start`, which serves the built app. |
+| `start-windows.bat` | Background launcher — `pnpm install` then `pnpm run start`. The Startup installer runs it invisibly through `wscript.exe`; logs remain in `logs\startup.log`. |
 | `install-startup-windows.bat` | Builds the app, then adds the launcher to your Startup folder. |
 | `uninstall-startup-windows.bat` | Removes it. |
 | `self-update.bat` | `git pull` + `npm install` + rebuild + restart the launcher. |
