@@ -565,7 +565,10 @@ body {
 .graph-verdict-item.attention { --verdict-color: var(--accent-amber); }
 .graph-verdict-item.network { --verdict-color: #a78bfa; }
 .graph-verdict-item.manual { --verdict-color: var(--text-muted); }
-.graph-verdict-item-wide { grid-column: 1 / -1; }
+.graph-verdict-item-wide {
+  grid-column: 1 / -1;
+  background: var(--bg-card);
+}
 
 .graph-verdict-heading {
   display: flex;
@@ -615,8 +618,9 @@ body {
 }
 
 .graph-verdict-list-head {
-  background: color-mix(in srgb, var(--verdict-color) 10%, var(--bg-card));
-  color: var(--text-muted);
+  background: color-mix(in srgb, var(--accent-cyan) 12%, #090b17);
+  border-bottom: 1px solid rgba(0, 229, 255, 0.34);
+  color: var(--text-primary);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: .06em;
