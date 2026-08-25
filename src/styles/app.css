@@ -624,16 +624,15 @@ body {
 }
 
 .graph-verdict-list-row {
-  border-top: 1px solid color-mix(
-    in srgb, var(--verdict-color) 32%, var(--border)
-  );
+  border-top: 0;
+  border-bottom: 1px solid rgba(255, 171, 0, 0.42);
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.35;
 }
 
-.graph-verdict-list-row:nth-child(odd) {
-  background: color-mix(in srgb, var(--verdict-color) 2.5%, transparent);
+.graph-verdict-list-row:last-child {
+  border-bottom: 0;
 }
 
 .graph-verdict-list-row strong {
