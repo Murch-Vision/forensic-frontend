@@ -108,6 +108,7 @@ export interface GraphVerdictItem {
     kind: string;
     identity: string;
     connects: string;
+    bridge: string;
     evidence: string;
   }>;
 }
@@ -283,7 +284,8 @@ export function graphVerdict(
         : item.node.type === "PHONE" ? "Утас" : "Харилцагч",
       identity,
       connects: item.roots.map((r) => r.label).join(" ↔ "),
-      evidence: `${bridge} · ${evidence}`,
+      bridge,
+      evidence,
     };
   });
   if (sharedRows.length) {

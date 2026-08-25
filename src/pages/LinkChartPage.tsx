@@ -1697,7 +1697,8 @@ export default function LinkChartPage() {
                           <strong>{row.identity}</strong>
                           <span>{row.connects}</span>
                           <span className="graph-verdict-evidence">
-                            {row.evidence}
+                            <span>{row.bridge}</span>
+                            <span>{row.evidence}</span>
                           </span>
                         </div>
                       ))}

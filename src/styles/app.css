@@ -647,7 +647,17 @@ body {
   text-transform: uppercase;
 }
 
-.graph-verdict-evidence { color: var(--text-primary); }
+.graph-verdict-evidence {
+  display: flex;
+  flex-direction: column;
+  color: var(--text-primary);
+}
+
+.graph-verdict-evidence > span + span {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
 
 @media (max-width: 900px) {
   .graph-verdict-grid { grid-template-columns: 1fr; }
