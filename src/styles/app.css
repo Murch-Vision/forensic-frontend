@@ -625,7 +625,7 @@ body {
 
 .graph-verdict-list-row {
   border-top: 0;
-  border-bottom: 1px solid rgba(255, 171, 0, 0.42);
+  border-bottom: 1px solid rgba(0, 229, 255, 0.2);
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.35;
