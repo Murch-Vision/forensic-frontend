@@ -110,7 +110,6 @@ export interface GraphVerdictItem {
     connects: string;
     evidence: string;
   }>;
-  rowTotal?: number;
 }
 
 /**
@@ -267,7 +266,7 @@ export function graphVerdict(
   }).sort((a, b) => b.roots.length - a.roots.length
     || b.money - a.money || b.txns - a.txns || b.calls - a.calls);
 
-  const sharedRows = shared.slice(0, 10).map((item) => {
+  const sharedRows = shared.map((item) => {
     const identity = item.node.type === "ACCOUNT"
       ? item.node.sub || item.node.label : item.node.label;
     const evidence = item.txns > 0
@@ -290,7 +289,6 @@ export function graphVerdict(
       tone: "attention",
       text: "Хоёр ба түүнээс олон үндсэн хүнийг холбосон данс, харилцагчид.",
       rows: sharedRows,
-      rowTotal: shared.length,
     });
   }
 

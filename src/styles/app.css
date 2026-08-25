@@ -529,6 +529,7 @@ body {
 .graph-verdict-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: dense;
   gap: 10px;
 }
 
@@ -629,14 +630,6 @@ body {
 }
 
 .graph-verdict-evidence { color: var(--text-primary); }
-
-.graph-verdict-list-more {
-  padding: 7px 12px;
-  border-top: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 10px;
-  text-align: right;
-}
 
 @media (max-width: 900px) {
   .graph-verdict-grid { grid-template-columns: 1fr; }

@@ -1701,11 +1701,6 @@ export default function LinkChartPage() {
                           </span>
                         </div>
                       ))}
-                      {(v.rowTotal ?? v.rows.length) > v.rows.length && (
-                        <div className="graph-verdict-list-more">
-                          Дээр хамгийн ач холбогдолтой {v.rows.length}-ыг харуулав.
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
