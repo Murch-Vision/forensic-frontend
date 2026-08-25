@@ -291,7 +291,7 @@ export function graphVerdict(
   if (sharedRows.length) {
     out.push({
       title: `Дундын холбоосууд · ${formatNum(shared.length)}`,
-      tone: "attention",
+      tone: "info",
       text: "Хоёр ба түүнээс олон шалгаж буй хүнийг холбосон данс, харилцагчид.",
       rows: sharedRows,
     });
