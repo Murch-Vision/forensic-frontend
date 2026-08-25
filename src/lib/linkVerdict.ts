@@ -137,12 +137,14 @@ export function graphVerdict(
     parts.push(`эзэн нь тогтоогдоогүй ${formatNum(orphanAccounts.length)} данс`);
   }
   const edgeParts: string[] = [];
-  if (txn.length) edgeParts.push(`${formatNum(txn.length)} мөнгөн`);
-  if (call.length) edgeParts.push(`${formatNum(call.length)} дуудлагын`);
+  if (txn.length) {
+    edgeParts.push(`${formatNum(txn.length)} дансны гүйлгээгээр`);
+  }
+  if (call.length) edgeParts.push(`${formatNum(call.length)} утасны дуудлагаар`);
   out.push({title: "Сүлжээний хамрах хүрээ", tone: "info",
     text: `Зурагт ${parts.join(", ")} байна`
     + (edgeParts.length
-      ? `, хоорондоо ${edgeParts.join(", ")} холбоосоор холбогдсон.` : ".")});
+      ? `, хоорондоо ${edgeParts.join(", ")} холбогдсон.` : ".")});
 
   // Total money on screen.
   const totalMoney = txn.reduce((s, l) => s + (l.facts?.txnTotal ?? 0), 0);
@@ -200,7 +202,7 @@ export function graphVerdict(
   const primaryIds = new Set(primary.map((p) => p.id));
   if (primary.length) {
     out.push({
-      title: "Шалгаж буй үндсэн хүмүүс",
+      title: "Шалгаж буй хүмүүс",
       tone: "info",
       text: primary.slice(0, 5).map((p) => p.label).join(", ")
         + (primary.length > 5 ? ` болон өөр ${formatNum(primary.length - 5)} хүн` : "")
@@ -287,7 +289,7 @@ export function graphVerdict(
     out.push({
       title: `Дундын холбоосууд · ${formatNum(shared.length)}`,
       tone: "attention",
-      text: "Хоёр ба түүнээс олон үндсэн хүнийг холбосон данс, харилцагчид.",
+      text: "Хоёр ба түүнээс олон шалгаж буй хүнийг холбосон данс, харилцагчид.",
       rows: sharedRows,
     });
   }
@@ -298,7 +300,7 @@ export function graphVerdict(
       + `тэмдэглэсэн.`});
   }
   const priority = (title: string) =>
-    title === "Шалгаж буй үндсэн хүмүүс" ? 0
+    title === "Шалгаж буй хүмүүс" ? 0
     : title.startsWith("Дундын") ? 1
     : title === "Хамгийн өндөр дүнтэй холбоос" ? 3
     : title === "Нийт мөнгөн урсгал" ? 4

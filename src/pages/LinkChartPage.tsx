@@ -1689,7 +1689,7 @@ export default function LinkChartPage() {
                     <div className="graph-verdict-list">
                       <div className="graph-verdict-list-head">
                         <span>Төрөл</span><span>Данс / харилцагч</span>
-                        <span>Холбосон үндсэн хүмүүс</span><span>Баримт</span>
+                        <span>Холбосон шалгаж буй хүмүүс</span><span>Баримт</span>
                       </div>
                       {v.rows.map((row, rowIndex) => (
                         <div className="graph-verdict-list-row" key={rowIndex}>
