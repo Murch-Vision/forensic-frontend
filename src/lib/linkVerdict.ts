@@ -274,9 +274,10 @@ export function graphVerdict(
     const evidence = item.txns > 0
       ? `${formatNum(item.txns)} гүйлгээ · ${formatMoney(item.money)}`
       : item.calls > 0 ? `${formatNum(item.calls)} дуудлага` : "шууд холбоос";
+    const rootCount = formatNum(item.roots.length);
     const bridge = item.distance === 1
-      ? "Хоёр талтай шууд холбогдсон"
-      : "Хоёр талаас 2 дамжлагын зайд";
+      ? `${rootCount} шалгаж буй хүнтэй шууд холбогдсон`
+      : `${rootCount} шалгаж буй хүнээс 2 дамжлагын зайд`;
     return {
       kind: item.node.type === "ACCOUNT" ? "Данс"
         : item.node.type === "PHONE" ? "Утас" : "Харилцагч",
