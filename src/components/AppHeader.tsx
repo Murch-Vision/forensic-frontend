@@ -33,6 +33,7 @@ export default function AppHeader() {
     ACTIVE_CASE_QUERY
   );
   const [setActiveCase] = useMutation(SET_ACTIVE_CASE);
+  const [caseSwitching, setCaseSwitching] = useState(false);
 
   const activeCase = caseQ.data?.activeCase ?? null;
   const caseFiles = caseQ.data?.caseFiles ?? [];
@@ -62,10 +63,16 @@ export default function AppHeader() {
   }
 
   async function onSelectCase(id: number | null) {
-    await setActiveCase({variables: {caseFileId: id}});
-    // Every evidence query is case-scoped server-side — refetch them all so
-    // whatever page is open follows the new scope immediately.
-    await client.resetStore();
+    if (caseSwitching || id === (activeCase?.id ?? null)) return;
+    setCaseSwitching(true);
+    try {
+      await setActiveCase({variables: {caseFileId: id}});
+      // Every evidence query is case-scoped server-side — refetch them all so
+      // whatever page is open follows the new scope immediately.
+      await client.resetStore();
+    } finally {
+      setCaseSwitching(false);
+    }
   }
 
   return (
@@ -84,6 +91,7 @@ export default function AppHeader() {
           ]} />
         <Select
           className="app-header-select"
+          disabled={caseSwitching}
           value={activeCase?.id ?? ""}
           onChange={(v) => onSelectCase(v ? Number(v) : null)}
           title="Идэвхтэй хэрэг — бүх хуудсанд үйлчилнэ"
@@ -98,6 +106,13 @@ export default function AppHeader() {
                 STATUS_LABELS[c.status] ?? c.status})`})),
           ]} />
       </div>
+
+      {caseSwitching && (
+        <div className="case-switch-loader" role="status" aria-live="polite">
+          <div className="loading-spinner" />
+          <div className="loading-text">ШИНЭ ХЭРГИЙН ӨГӨГДЛИЙГ УНШИЖ БАЙНА…</div>
+        </div>
+      )}
 
       {/* Current account + sign-out, pinned to the right. */}
       <div style={{marginLeft: "auto", display: "flex", alignItems: "center",
