@@ -271,6 +271,10 @@ function NetworkGraph(props, ref) {
   const hoverRef = useRef<string | null>(null);
   const hoverLinkRef = useRef<SimLink | null>(null);
   const viewRef = useRef<View>({k: 1, tx: 0, ty: 0});
+  // A case/layout change replaces every node, but the camera lives in a ref
+  // and otherwise keeps the previous case's pan/zoom. Fit once on the first
+  // drawable frame of the new dataset so stale camera state can never crop it.
+  const autoFitPendingRef = useRef(false);
   // Graph→screen mapping captured at draw time, reused for hit testing.
   const fitRef = useRef({fit: 1, offX: 0, offY: 0});
   // Node currently ringed by search-to-focus (null = none).
@@ -311,7 +315,7 @@ function NetworkGraph(props, ref) {
       emitLayout(currentPositions());
     },
     resetView() {
-      viewRef.current = {k: 1, tx: 0, ty: 0};
+      fitAllNodes();
       focusRef.current = null;
       ensureRunning();
     },
@@ -633,6 +637,9 @@ function NetworkGraph(props, ref) {
           alphaRef.current);
         cont = true;
       }
+      if (autoFitPendingRef.current && fitAllNodes()) {
+        autoFitPendingRef.current = false;
+      }
       draw();
       if (dragRef.current || clusterDragRef.current || panRef.current) {
         cont = true;
@@ -736,6 +743,10 @@ function NetworkGraph(props, ref) {
     // preserved instead of being re-flung by a hot simulation. A fresh graph
     // starts hot (alpha 1) to lay itself out.
     alphaRef.current = restoredAny ? 0.02 : 1;
+    // Discard the old case's camera immediately. The actual bounds-fit runs in
+    // the first animation frame, after the canvas has a real CSS size.
+    viewRef.current = {k: 1, tx: 0, ty: 0};
+    autoFitPendingRef.current = true;
     ensureRunning();
     return () => {
       cancelAnimationFrame(rafRef.current);
@@ -1009,10 +1020,10 @@ function NetworkGraph(props, ref) {
   // frames the fixed 1280×720 simulation area; auto-cluster can deliberately
   // place large hub rings outside that area, which made the result appear at a
   // random edge of the canvas. This derives pan + zoom from the arrangement.
-  function fitAllNodes() {
+  function fitAllNodes(): boolean {
     const canvas = canvasRef.current;
     const nodes = nodesRef.current;
-    if (!canvas || !nodes.length) return;
+    if (!canvas || !nodes.length) return false;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const n of nodes) {
       const r = radiusOf(n) + 18;
@@ -1026,7 +1037,12 @@ function NetworkGraph(props, ref) {
     const padding = 56;
     const cssW = canvas.clientWidth;
     const cssH = canvas.clientHeight;
-    const {fit, offX, offY} = fitRef.current;
+    if (cssW <= 0 || cssH <= 0) return false;
+    // Derive these from the CURRENT canvas size. fitRef is populated by draw()
+    // and can still describe the previous case/frame when this runs on load.
+    const fit = Math.min(cssW / WIDTH, cssH / HEIGHT);
+    const offX = (cssW - WIDTH * fit) / 2;
+    const offY = (cssH - HEIGHT * fit) / 2;
     const screenScale = Math.min(
       Math.max(1, cssW - padding * 2) / width,
       Math.max(1, cssH - padding * 2) / height,
@@ -1040,6 +1056,7 @@ function NetworkGraph(props, ref) {
       ty: cssH / 2 - offY - cy * fit * k,
     };
     focusRef.current = null;
+    return true;
   }
 
   // One click untangles the hairball — what the analyst used to do by hand
