@@ -276,7 +276,7 @@ export function graphVerdict(
       : item.calls > 0 ? `${formatNum(item.calls)} дуудлага` : "шууд холбоос";
     const rootCount = formatNum(item.roots.length);
     const bridge = item.distance === 1
-      ? `${rootCount} шалгаж буй хүнтэй шууд холбогдсон`
+      ? `Шалгаж буй ${rootCount} хүмүүстэй дансны гүйлгээгээр холбогдсон`
       : `${rootCount} шалгаж буй хүнээс 2 дамжлагын зайд`;
     return {
       kind: item.node.type === "ACCOUNT" ? "Данс"
