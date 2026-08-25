@@ -163,13 +163,19 @@ function resizeToDataUri(file: File): Promise<string> {
 }
 
 export default function LinkChartPage() {
+  const caseQ = useQuery<{activeCase:
+    {id: number; caseId: string; caseName: string} | null}>(ACTIVE_CASE_QUERY);
+  const activeCaseId = caseQ.data?.activeCase?.id ?? null;
   const {data, loading, refetch} = useQuery<LcData>(LINKCHART_QUERY);
   const txQ = useQuery<TxData>(TRANSACTIONS_QUERY);
   const callQ = useQuery<CallData>(CALL_RECORDS_QUERY);
   const flowQ = useQuery<{networkFlow: {
     nodeLabels: string[]; nodeColors: string[]; sourceIndices: number[];
     targetIndices: number[]; values: number[]; linkColors: string[];
-  }}>(NETWORK_FLOW_QUERY);
+  }}>(NETWORK_FLOW_QUERY, {
+    variables: {caseFileId: activeCaseId},
+    skip: caseQ.loading || activeCaseId == null,
+  });
   const [generate, {loading: generating}] = useMutation(GENERATE_LINKS);
   const [selected, setSelected] = useState<NetworkNode | null>(null);
   // Clicked EDGE — the noise-removal target (a whole connection at once).
@@ -249,9 +255,6 @@ export default function LinkChartPage() {
   // and draw the link. Holds the source person while the modal is open.
   const [addConnectFrom, setAddConnectFrom] = useState<NetworkNode | null>(null);
   const [tagEvidence] = useMutation(TAG_EVIDENCE);
-  const caseQ = useQuery<{activeCase:
-    {id: number; caseId: string; caseName: string} | null}>(ACTIVE_CASE_QUERY);
-  const activeCaseId = caseQ.data?.activeCase?.id ?? null;
 
   // Open the "new person → connect" modal. Manual links live inside a saved
   // board, so require one first (mirrors startConnect).

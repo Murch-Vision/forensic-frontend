@@ -144,8 +144,8 @@ export const LINKCHART_QUERY = gql`
 `;
 
 export const NETWORK_FLOW_QUERY = gql`
-  query NetworkFlow {
-    networkFlow {
+  query NetworkFlow($caseFileId: Int!) {
+    networkFlow(caseFileId: $caseFileId) {
       nodeLabels nodeColors sourceIndices targetIndices values linkColors
     }
   }
