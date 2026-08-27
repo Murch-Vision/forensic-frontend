@@ -10,9 +10,7 @@ import {useState} from "react";
 import {useLazyQuery, useQuery} from "@apollo/client";
 import {
   REPORTS_QUERY,
-  REPORT_BUNDLE,
   REPORT_MARKED_PDF,
-  REPORT_VERDICT_PDF,
 } from "../graphql/queries";
 import {
   Badge,
@@ -43,40 +41,23 @@ interface RpData {
 
 export default function ReportsPage() {
   const {data, loading} = useQuery<RpData>(REPORTS_QUERY);
-  const [getVerdictPdf, verdictPdfQ] =
-    useLazyQuery<{reportVerdictPdf: ReportFile}>(REPORT_VERDICT_PDF, {
-      fetchPolicy: "network-only",
-      onCompleted: (d) => d?.reportVerdictPdf && downloadBase64(d.reportVerdictPdf),
-    });
-  const [getBundle, bundleQ] = useLazyQuery<{reportBundle: ReportFile}>(
-    REPORT_BUNDLE,
-    {fetchPolicy: "no-cache"}
-  );
-  const [getMarkedPdf, markedQ] =
+  const [getReport, reportQ] =
     useLazyQuery<{reportMarkedSuspectsPdf: ReportFile}>(REPORT_MARKED_PDF,
       {fetchPolicy: "no-cache"});
+  const [reportError, setReportError] = useState("");
 
-  // Threshold modal: ask for a minimum single-transaction amount before export.
-  const [showThreshold, setShowThreshold] = useState(false);
-  const [threshold, setThreshold] = useState("");
-
-  async function onMarkedPdf(minAmount: number) {
-    setShowThreshold(false);
+  async function onReport() {
+    setReportError("");
     try {
-      const r = await getMarkedPdf({variables: {minAmount}});
+      const r = await getReport({variables: {minAmount: 0}});
       if (r.data?.reportMarkedSuspectsPdf) {
         downloadBase64(r.data.reportMarkedSuspectsPdf);
-      } else if (r.error) {
-        alert(r.error.message);
+      } else {
+        setReportError(r.error?.message ?? "Тайлан үүсгэж чадсангүй.");
       }
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      setReportError(e instanceof Error ? e.message : String(e));
     }
-  }
-
-  async function onBundle() {
-    const r = await getBundle();
-    if (r.data?.reportBundle) downloadBase64(r.data.reportBundle);
   }
 
 
@@ -91,21 +72,10 @@ export default function ReportsPage() {
 
   const s = data.dashboardStats;
   const actions = (
-    <>
-      <button className="btn btn-accent"
-        onClick={() => { setThreshold(""); setShowThreshold(true); }}
-        disabled={markedQ.loading}>
-        {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ГҮЙЛГЭЭНИЙ ТАЙЛАН (PDF)"}
-      </button>
-      <button className="btn btn-primary" onClick={() => void getVerdictPdf()}
-        disabled={verdictPdfQ.loading}>
-        {verdictPdfQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ДАНСНЫ ДҮН ШИНЖИЛГЭЭ (PDF)"}
-      </button>
-      <button className="btn" onClick={onBundle}
-        disabled={bundleQ.loading}>
-        {bundleQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "БҮРДЭЛ (ZIP)"}
-      </button>
-    </>
+    <button className="btn btn-accent" onClick={() => void onReport()}
+      disabled={reportQ.loading}>
+      {reportQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН"}
+    </button>
   );
 
   return (
@@ -156,43 +126,22 @@ export default function ReportsPage() {
         />
       </Card>
 
-      {showThreshold && (
-        <div className="modal-overlay" onClick={() => setShowThreshold(false)}>
+      {reportError && (
+        <div className="modal-overlay" onClick={() => setReportError("")}>
           <div className="modal-content" style={{width: "min(440px, 92vw)"}}
             onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <span className="modal-title">Гүйлгээний доод босго</span>
+              <span className="modal-title">Тайлан үүссэнгүй</span>
               <button className="modal-close"
-                onClick={() => setShowThreshold(false)}>×</button>
+                onClick={() => setReportError("")}>×</button>
             </div>
             <div className="modal-body">
-              <label className="form-label">
-                Нэг гүйлгээний доод дүн (₮)
-              </label>
-              <input className="form-input" type="number" min={0} autoFocus
-                placeholder="ж: 100000"
-                value={threshold}
-                onChange={(e) => setThreshold(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    onMarkedPdf(Math.max(0, Math.floor(Number(threshold) || 0)));
-                  }
-                }} />
-              <div style={{fontSize: 12, color: "var(--text-muted)",
-                marginTop: 8}}>
-                Энэ дүнгээс их (буюу тэнцүү) гүйлгээ хийсэн БҮХ этгээд —
-                сэжигтэн эсэхээс үл хамааран — тайланд орно.
-                Хоосон эсвэл 0 бол зөвхөн тэмдэглэсэн сэжигтнүүд орно.
-              </div>
+              <div>{reportError}</div>
               <div style={{display: "flex", gap: 8, justifyContent: "flex-end",
                 marginTop: 20}}>
-                <button className="btn" onClick={() => setShowThreshold(false)}>
-                  Болих
-                </button>
                 <button className="btn btn-accent"
-                  onClick={() =>
-                    onMarkedPdf(Math.max(0, Math.floor(Number(threshold) || 0)))}>
-                  PDF ТАТАХ
+                  onClick={() => setReportError("")}>
+                  ХААХ
                 </button>
               </div>
             </div>
