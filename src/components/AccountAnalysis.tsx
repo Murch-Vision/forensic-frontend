@@ -305,7 +305,7 @@ export default function AccountAnalysis() {
         <div className="top-counterparties-table">
           <DataTable columns={cpCols} rows={a.topCounterparties}
             rowKey={(r) => r.key} empty="Харилцагч алга"
-            defaultSort={{col: 2, dir: "desc"}} />
+            defaultSort={{col: 4, dir: "desc"}} />
         </div>
       </Card>
 

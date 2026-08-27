@@ -143,6 +143,11 @@ export default function ReportsPage() {
   const periodTo = accounts.reduce<string | null>((max, a) =>
     !max || (a.lastTxn && a.lastTxn > max) ? a.lastTxn : max, null);
   const directTotal = data.directTransfers.reduce((sum, t) => sum + t.total, 0);
+  const directCount = data.directTransfers.reduce((sum, t) =>
+    sum + t.txnCount, 0);
+  const topDirect = [...data.directTransfers]
+    .sort((a, b) => b.total - a.total)[0] ?? null;
+  const busiest = [...accounts].sort((a, b) => b.txnCount - a.txnCount)[0];
   const actions = (
     <>
       <button className="btn btn-accent"
@@ -179,7 +184,7 @@ export default function ReportsPage() {
             <StatCard label="Нийт гүйлгээ" value={formatNum(totals.txns)} />
             <StatCard label="Нийт орлого" value={formatMoney(totals.credit)} color="green" />
             <StatCard label="Нийт зарлага" value={formatMoney(totals.debit)} color="red" />
-            <StatCard label="Шууд мөнгөн урсгал" value={formatMoney(directTotal)} color="cyan" />
+            <StatCard label="Данс хооронд шилжсэн" value={formatMoney(directTotal)} color="cyan" />
           </div>
 
           <Card title="Шинжилсэн данс ба эзэмшигч" noPadding style={{marginBottom: 16}}>
@@ -197,10 +202,13 @@ export default function ReportsPage() {
               ]} />
           </Card>
 
-          <div className="report-tables-grid">
-            <Card title={`Дундын харилцсан тал (${formatNum(mutual.length)})`} noPadding fill>
+          <section className="report-section">
+            <h2>ХОЛБООСЫН ШИНЖИЛГЭЭ</h2>
+            <Card title={`Дундын харилцсан тал (${formatNum(mutual.length)})`}
+              noPadding>
               <DataTable rows={mutual.slice(0, 60)} rowKey={(r) => r.key}
                 empty="Дундын харилцсан тал алга"
+                scroll={{maxHeight: 360, overflowY: "auto"}}
                 columns={[
                   {header: "Харилцсан тал / данс", render: (r) => (
                     <div className="report-party-cell"><strong>{r.name}</strong><span>{r.account ?? "Дансны дугааргүй"}</span></div>
@@ -210,19 +218,29 @@ export default function ReportsPage() {
                   {header: "Зарлага", align: "right", render: (r) => formatMoney(r.debitTotal)},
                 ]} />
             </Card>
-
-            <Card title={`Данс хоорондын шууд гүйлгээ (${formatNum(data.directTransfers.length)})`} noPadding fill>
-              <DataTable rows={data.directTransfers}
-                rowKey={(t) => `${t.fromAccountId}-${t.toAccountId}`}
-                empty="Шууд гүйлгээ алга"
-                columns={[
-                  {header: "Хаанаас", render: (t) => t.fromLabel},
-                  {header: "Хаашаа", render: (t) => t.toLabel},
-                  {header: "Гүйлгээ", align: "right", render: (t) => formatNum(t.txnCount)},
-                  {header: "Нийт дүн", align: "right", render: (t) => formatMoney(t.total)},
-                ]} />
+            <Card title="Шинжилсэн данснуудын хоорондын гүйлгээ"
+              style={{marginTop: 16}}>
+              <div className="report-summary-text">
+                {directCount > 0 ? (
+                  <>
+                    <p>Шинжилсэн данснууд хоорондоо нийт <strong>{formatNum(directCount)} удаа</strong>, <strong>{formatMoney(directTotal)}</strong>-ийн гүйлгээ хийсэн.</p>
+                    {topDirect && <p>Хамгийн өндөр дүнтэй чиглэл: <strong>{topDirect.fromLabel}</strong>-аас <strong>{topDirect.toLabel}</strong> руу {formatMoney(topDirect.total)}.</p>}
+                  </>
+                ) : <p>Шинжилсэн данснуудын хооронд шууд гүйлгээ илрээгүй.</p>}
+              </div>
             </Card>
-          </div>
+          </section>
+
+          <section className="report-section">
+            <h2>ЕРӨНХИЙ ДҮГНЭЛТ</h2>
+            <Card>
+              <ol className="report-conclusion-list">
+                <li>Энэ тайланд {formatNum(accounts.length)} дансны {formatNum(totals.txns)} гүйлгээг нэгтгэн үзлээ. Эдгээр дансанд нийт {formatMoney(totals.credit)} орж, {formatMoney(totals.debit)} гарсан байна.</li>
+                {busiest && <li>Хамгийн олон хөдөлгөөнтэй нь {busiest.ownerName || "эзэмшигч тодорхойгүй"} хүний {busiest.accountNumber} дугаартай данс бөгөөд {formatNum(busiest.txnCount)} гүйлгээтэй.</li>}
+                <li>Эдгээр нь банкны хуулгад тулгуурласан тоон нэгтгэл бөгөөд анхаарал татсан харилцаа, гүйлгээг дараагийн шалгалтаар баримттай нь нягтлах шаардлагатай.</li>
+              </ol>
+            </Card>
+          </section>
         </>
       )}
 

@@ -480,6 +480,41 @@ body {
   align-items: stretch;
 }
 
+.report-section {
+  margin: 24px 0 16px;
+}
+
+.report-section > h2 {
+  margin: 0 0 12px;
+  padding: 3px 0 3px 12px;
+  border-left: 5px solid var(--accent-cyan);
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: .5px;
+}
+
+.report-summary-text {
+  display: grid;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.report-summary-text p { margin: 0; }
+.report-summary-text strong { color: var(--text-primary); }
+
+.report-conclusion-list {
+  margin: 0;
+  padding-left: 24px;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.report-conclusion-list li + li { margin-top: 10px; }
+
 @media (max-width: 1100px) {
   .report-scope-grid,
   .report-tables-grid {
