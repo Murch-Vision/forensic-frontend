@@ -14,30 +14,68 @@ import {
   REPORT_VERDICT_PDF,
 } from "../graphql/queries";
 import {
-  Badge,
   Card,
   DataTable,
+  Empty,
   Loading,
   PageHeader,
   StatCard,
 } from "../components/kit";
-import {formatMoney, sevClass} from "../lib/format";
+import {formatDate, formatMoney, formatNum} from "../lib/format";
 import {downloadBase64, type ReportFile} from "../lib/download";
-import type {CaseFile, PatternAlert} from "../types";
+
+interface ReportAccount {
+  accountId: number;
+  accountNumber: string;
+  ownerName: string | null;
+  txnCount: number;
+  counterpartyCount: number;
+  creditTotal: number;
+  debitTotal: number;
+  netTotal: number;
+  hasTimeOfDay: boolean;
+  nightCount: number;
+  nightTotal: number;
+  firstTxn: string | null;
+  lastTxn: string | null;
+}
+
+interface ReportRelation {
+  key: string;
+  name: string;
+  account: string | null;
+  txnCount: number;
+  creditTotal: number;
+  debitTotal: number;
+  netTotal: number;
+  mutual: boolean;
+}
+
+interface ReportTransfer {
+  fromAccountId: number;
+  toAccountId: number;
+  fromLabel: string;
+  toLabel: string;
+  txnCount: number;
+  total: number;
+}
 
 interface RpData {
-  dashboardStats: {
-    totalSuspects: number;
-    totalBankAccounts: number;
-    totalTransactions: number;
-    totalCallRecords: number;
-    totalLinks: number;
-    highRiskSuspects: number;
-    flaggedTransactions: number;
-    totalTransactionVolume: number;
+  activeCase: {
+    id: number;
+    caseId: string;
+    caseName: string;
+  } | null;
+  accountAnalyses: ReportAccount[];
+  caseRelations: {
+    mutualRelations: number;
+    txnCount: number;
+    creditTotal: number;
+    debitTotal: number;
+    netTotal: number;
+    relations: ReportRelation[];
   };
-  patterns: PatternAlert[];
-  caseFiles: CaseFile[];
+  directTransfers: ReportTransfer[];
 }
 
 export default function ReportsPage() {
@@ -91,7 +129,20 @@ export default function ReportsPage() {
     );
   }
 
-  const s = data.dashboardStats;
+  const accounts = data.accountAnalyses;
+  const mutual = data.caseRelations.relations.filter((r) => r.mutual);
+  const totals = accounts.reduce((sum, account) => ({
+    txns: sum.txns + account.txnCount,
+    credit: sum.credit + account.creditTotal,
+    debit: sum.debit + account.debitTotal,
+  }), {txns: 0, credit: 0, debit: 0});
+  const ownerCount = new Set(accounts.map((a) => a.ownerName?.trim())
+    .filter(Boolean)).size;
+  const periodFrom = accounts.reduce<string | null>((min, a) =>
+    !min || (a.firstTxn && a.firstTxn < min) ? a.firstTxn : min, null);
+  const periodTo = accounts.reduce<string | null>((max, a) =>
+    !max || (a.lastTxn && a.lastTxn > max) ? a.lastTxn : max, null);
+  const directTotal = data.directTransfers.reduce((sum, t) => sum + t.total, 0);
   const actions = (
     <>
       <button className="btn btn-accent"
@@ -109,50 +160,71 @@ export default function ReportsPage() {
   return (
     <div className="page-container">
       <PageHeader icon="📄" title="Тайлан"
-        subtitle="ТАГНУУЛЫН ТАЙЛАНГИЙН УРЬДЧИЛСАН ХАРАГДАЦ" actions={actions} />
+        subtitle="ИДЭВХТЭЙ ХЭРГИЙН ДАНСНЫ ДҮН ШИНЖИЛГЭЭ" actions={actions} />
 
-      <div className="metrics-grid">
-        <StatCard label="Сэжигтэн" value={s.totalSuspects} />
-        <StatCard label="Данс" value={s.totalBankAccounts} />
-        <StatCard label="Гүйлгээ" value={s.totalTransactions} />
-        <StatCard label="Дуудлага" value={s.totalCallRecords} />
-        <StatCard label="Холбоос" value={s.totalLinks} />
-        <StatCard label="Өндөр эрсдэл" value={s.highRiskSuspects}
-          color="red" />
-        <StatCard label="Нийт дүн" value={formatMoney(s.totalTransactionVolume)}
-          color="green" />
-      </div>
+      {!data.activeCase || accounts.length === 0 ? (
+        <Empty message="Идэвхтэй хэрэгт шинжлэх дансны хуулга алга." />
+      ) : (
+        <>
+          <Card title="Тайлангийн хамрах хүрээ" style={{marginBottom: 16}}>
+            <div className="report-scope-grid">
+              <div><span>Хэрэг</span><strong>{data.activeCase.caseId} · {data.activeCase.caseName}</strong></div>
+              <div><span>Хугацаа</span><strong>{formatDate(periodFrom)} — {formatDate(periodTo)}</strong></div>
+            </div>
+          </Card>
 
-      <Card title="Хэргүүд" noPadding style={{marginBottom: 16}}>
-        <DataTable
-          rows={data.caseFiles}
-          rowKey={(c) => c.id}
-          columns={[
-            {header: "Дугаар", render: (c) => c.caseId},
-            {header: "Нэр", render: (c) => c.caseName},
-            {header: "Төлөв", render: (c) => c.status},
-            {header: "Чухал", render: (c) => (
-              <Badge text={c.priority} kind={sevClass(c.priority)} />
-            )},
-            {header: "Мөрдөгч", render: (c) => c.leadInvestigator ?? "—"},
-          ]}
-        />
-      </Card>
+          <div className="metrics-grid">
+            <StatCard label="Шинжилсэн данс" value={formatNum(accounts.length)} />
+            <StatCard label="Данс эзэмшигч" value={formatNum(ownerCount)} />
+            <StatCard label="Нийт гүйлгээ" value={formatNum(totals.txns)} />
+            <StatCard label="Нийт орлого" value={formatMoney(totals.credit)} color="green" />
+            <StatCard label="Нийт зарлага" value={formatMoney(totals.debit)} color="red" />
+            <StatCard label="Шууд мөнгөн урсгал" value={formatMoney(directTotal)} color="cyan" />
+          </div>
 
-      <Card title={`Сэрэмжлүүлэг (${data.patterns.length})`} noPadding>
-        <DataTable
-          rows={data.patterns}
-          rowKey={(p, i) => i}
-          empty="Сэрэмжлүүлэг алга"
-          columns={[
-            {header: "Төрөл", render: (p) => p.alertType},
-            {header: "Зэрэг", render: (p) => (
-              <Badge text={p.severity} kind={sevClass(p.severity)} />
-            )},
-            {header: "Тайлбар", render: (p) => p.description},
-          ]}
-        />
-      </Card>
+          <Card title="Шинжилсэн данс ба эзэмшигч" noPadding style={{marginBottom: 16}}>
+            <DataTable rows={accounts} rowKey={(a) => a.accountId}
+              columns={[
+                {header: "Эзэмшигч / данс", render: (a) => (
+                  <div className="report-party-cell"><strong>{a.ownerName || "Эзэмшигч тодорхойгүй"}</strong><span>{a.accountNumber}</span></div>
+                )},
+                {header: "Хугацаа", render: (a) => `${formatDate(a.firstTxn)} — ${formatDate(a.lastTxn)}`},
+                {header: "Гүйлгээ", align: "right", render: (a) => formatNum(a.txnCount)},
+                {header: "Харилцсан тал", align: "right", render: (a) => formatNum(a.counterpartyCount)},
+                {header: "Орлого", align: "right", render: (a) => formatMoney(a.creditTotal)},
+                {header: "Зарлага", align: "right", render: (a) => formatMoney(a.debitTotal)},
+                {header: "Зөрүү", align: "right", render: (a) => formatMoney(a.netTotal)},
+              ]} />
+          </Card>
+
+          <div className="report-tables-grid">
+            <Card title={`Дундын харилцсан тал (${formatNum(mutual.length)})`} noPadding fill>
+              <DataTable rows={mutual.slice(0, 60)} rowKey={(r) => r.key}
+                empty="Дундын харилцсан тал алга"
+                columns={[
+                  {header: "Харилцсан тал / данс", render: (r) => (
+                    <div className="report-party-cell"><strong>{r.name}</strong><span>{r.account ?? "Дансны дугааргүй"}</span></div>
+                  )},
+                  {header: "Гүйлгээ", align: "right", render: (r) => formatNum(r.txnCount)},
+                  {header: "Орлого", align: "right", render: (r) => formatMoney(r.creditTotal)},
+                  {header: "Зарлага", align: "right", render: (r) => formatMoney(r.debitTotal)},
+                ]} />
+            </Card>
+
+            <Card title={`Данс хоорондын шууд гүйлгээ (${formatNum(data.directTransfers.length)})`} noPadding fill>
+              <DataTable rows={data.directTransfers}
+                rowKey={(t) => `${t.fromAccountId}-${t.toAccountId}`}
+                empty="Шууд гүйлгээ алга"
+                columns={[
+                  {header: "Хаанаас", render: (t) => t.fromLabel},
+                  {header: "Хаашаа", render: (t) => t.toLabel},
+                  {header: "Гүйлгээ", align: "right", render: (t) => formatNum(t.txnCount)},
+                  {header: "Нийт дүн", align: "right", render: (t) => formatMoney(t.total)},
+                ]} />
+            </Card>
+          </div>
+        </>
+      )}
 
       {showThreshold && (
         <div className="modal-overlay" onClick={() => setShowThreshold(false)}>

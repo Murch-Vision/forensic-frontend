@@ -410,12 +410,21 @@ export const REFRESH_SANCTIONS = gql`
 
 export const REPORTS_QUERY = gql`
   query Reports {
-    dashboardStats {
-      totalSuspects totalBankAccounts totalTransactions totalCallRecords
-      totalLinks highRiskSuspects flaggedTransactions totalTransactionVolume
+    activeCase { id caseId caseName }
+    accountAnalyses(topLimit: 30) {
+      accountId accountNumber ownerName txnCount counterpartyCount
+      creditTotal debitTotal netTotal hasTimeOfDay nightCount nightTotal
+      firstTxn lastTxn
     }
-    patterns { alertType severity description }
-    caseFiles { id caseId caseName status priority leadInvestigator }
+    caseRelations {
+      mutualRelations txnCount creditTotal debitTotal netTotal
+      relations {
+        key name account txnCount creditTotal debitTotal netTotal mutual
+      }
+    }
+    directTransfers {
+      fromAccountId toAccountId fromLabel toLabel txnCount total
+    }
   }
 `;
 
