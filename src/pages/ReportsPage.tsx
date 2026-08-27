@@ -11,10 +11,8 @@ import {useLazyQuery, useQuery} from "@apollo/client";
 import {
   REPORTS_QUERY,
   REPORT_BUNDLE,
-  REPORT_EXCEL,
   REPORT_MARKED_PDF,
-  REPORT_PDF,
-  REPORT_VERDICT_DOCX,
+  REPORT_VERDICT_PDF,
 } from "../graphql/queries";
 import {
   Badge,
@@ -45,19 +43,10 @@ interface RpData {
 
 export default function ReportsPage() {
   const {data, loading} = useQuery<RpData>(REPORTS_QUERY);
-  const [getPdf, pdfQ] = useLazyQuery<{reportPdf: ReportFile}>(REPORT_PDF, {
-    fetchPolicy: "no-cache",
-  });
-  const [getExcel, excelQ] = useLazyQuery<{reportExcel: ReportFile}>(
-    REPORT_EXCEL,
-    {fetchPolicy: "no-cache"}
-  );
-  const [getVerdict, verdictQ] =
-    useLazyQuery<{reportVerdictDocx: ReportFile}>(REPORT_VERDICT_DOCX, {
+  const [getVerdictPdf, verdictPdfQ] =
+    useLazyQuery<{reportVerdictPdf: ReportFile}>(REPORT_VERDICT_PDF, {
       fetchPolicy: "network-only",
-      onCompleted: (d) => {
-        if (d?.reportVerdictDocx) downloadBase64(d.reportVerdictDocx);
-      },
+      onCompleted: (d) => d?.reportVerdictPdf && downloadBase64(d.reportVerdictPdf),
     });
   const [getBundle, bundleQ] = useLazyQuery<{reportBundle: ReportFile}>(
     REPORT_BUNDLE,
@@ -85,16 +74,6 @@ export default function ReportsPage() {
     }
   }
 
-  async function onPdf() {
-    const r = await getPdf();
-    if (r.data?.reportPdf) downloadBase64(r.data.reportPdf);
-  }
-
-  async function onExcel() {
-    const r = await getExcel();
-    if (r.data?.reportExcel) downloadBase64(r.data.reportExcel);
-  }
-
   async function onBundle() {
     const r = await getBundle();
     if (r.data?.reportBundle) downloadBase64(r.data.reportBundle);
@@ -115,22 +94,12 @@ export default function ReportsPage() {
     <>
       <button className="btn btn-accent"
         onClick={() => { setThreshold(""); setShowThreshold(true); }}
-        disabled={markedQ.loading}
-        title="Банкны гүйлгээний тайланг PDF-ээр татах — босго тавибал түүнээс дээш гүйлгээтэй бүх этгээд орно">
+        disabled={markedQ.loading}>
         {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ГҮЙЛГЭЭНИЙ ТАЙЛАН (PDF)"}
       </button>
-      <button className="btn btn-accent" onClick={() => void getVerdict()}
-        disabled={verdictQ.loading}
-        title="Дансны дүн шинжилгээний дүгнэлт — Word файл">
-        {verdictQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ДҮГНЭЛТ (WORD)"}
-      </button>
-      <button className="btn btn-primary" onClick={onPdf}
-        disabled={pdfQ.loading}>
-        {pdfQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "PDF ЭКСПОРТ"}
-      </button>
-      <button className="btn" onClick={onExcel}
-        disabled={excelQ.loading}>
-        {excelQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "EXCEL ЭКСПОРТ"}
+      <button className="btn btn-primary" onClick={() => void getVerdictPdf()}
+        disabled={verdictPdfQ.loading}>
+        {verdictPdfQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ДАНСНЫ ДҮН ШИНЖИЛГЭЭ (PDF)"}
       </button>
       <button className="btn" onClick={onBundle}
         disabled={bundleQ.loading}>
@@ -193,7 +162,7 @@ export default function ReportsPage() {
             onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span className="modal-title">Гүйлгээний доод босго</span>
-              <button className="modal-close" title="Хаах"
+              <button className="modal-close"
                 onClick={() => setShowThreshold(false)}>×</button>
             </div>
             <div className="modal-body">
