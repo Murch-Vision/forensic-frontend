@@ -180,8 +180,8 @@ export default function ReportsPage() {
               <div style={{fontSize: 12, color: "var(--text-muted)",
                 marginTop: 8}}>
                 Энэ дүнгээс их (буюу тэнцүү) гүйлгээ хийсэн БҮХ этгээд —
-                сэжигтэн эсэхээс үл хамааран — тайланд орно.
-                Хоосон эсвэл 0 бол зөвхөн тэмдэглэсэн сэжигтнүүд орно.
+                тайланд орно. Хоосон эсвэл 0 бол импортолсон бүх сэжигтний
+                гүйлгээг хамруулна.
               </div>
               <div style={{display: "flex", gap: 8, justifyContent: "flex-end",
                 marginTop: 20}}>
