@@ -153,7 +153,7 @@ export default function ReportsPage() {
       <button className="btn btn-accent"
         onClick={() => { setThreshold(""); setShowThreshold(true); }}
         disabled={markedQ.loading}>
-        {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ГҮЙЛГЭЭНИЙ ТАЙЛАН (PDF)"}
+        {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ГҮЙЛГЭЭНИЙ ТАЙЛАН"}
       </button>
       <button className="btn btn-primary" onClick={() => void onReport()}
         disabled={verdictQ.loading}>
