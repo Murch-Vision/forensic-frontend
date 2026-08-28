@@ -11,7 +11,7 @@ import {useLazyQuery, useQuery} from "@apollo/client";
 import {
   REPORTS_QUERY,
   REPORT_MARKED_PDF,
-  REPORT_VERDICT_PDF,
+  REPORT_VERDICT_DOCX,
 } from "../graphql/queries";
 import {
   Card,
@@ -83,8 +83,8 @@ export default function ReportsPage() {
   const [getMarkedPdf, markedQ] =
     useLazyQuery<{reportMarkedSuspectsPdf: ReportFile}>(REPORT_MARKED_PDF,
       {fetchPolicy: "no-cache"});
-  const [getVerdictPdf, verdictQ] =
-    useLazyQuery<{reportVerdictPdf: ReportFile}>(REPORT_VERDICT_PDF,
+  const [getVerdictDocx, verdictQ] =
+    useLazyQuery<{reportVerdictDocx: ReportFile}>(REPORT_VERDICT_DOCX,
       {fetchPolicy: "no-cache"});
   const [reportError, setReportError] = useState("");
   const [showThreshold, setShowThreshold] = useState(false);
@@ -108,9 +108,9 @@ export default function ReportsPage() {
   async function onReport() {
     setReportError("");
     try {
-      const r = await getVerdictPdf();
-      if (r.data?.reportVerdictPdf) {
-        downloadBase64(r.data.reportVerdictPdf);
+      const r = await getVerdictDocx();
+      if (r.data?.reportVerdictDocx) {
+        downloadBase64(r.data.reportVerdictDocx);
       } else {
         setReportError(r.error?.message ?? "Тайлан үүсгэж чадсангүй.");
       }
@@ -157,7 +157,7 @@ export default function ReportsPage() {
       </button>
       <button className="btn btn-primary" onClick={() => void onReport()}
         disabled={verdictQ.loading}>
-        {verdictQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН"}
+        {verdictQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН (WORD)"}
       </button>
     </>
   );
