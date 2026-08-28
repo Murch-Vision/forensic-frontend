@@ -157,7 +157,7 @@ export default function ReportsPage() {
       </button>
       <button className="btn btn-primary" onClick={() => void onReport()}
         disabled={verdictQ.loading}>
-        {verdictQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН (WORD)"}
+        {verdictQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН"}
       </button>
     </>
   );
