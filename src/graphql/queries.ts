@@ -580,6 +580,12 @@ export const REPORT_VERDICT_PDF = gql`
   }
 `;
 
+export const REPORT_VERDICT_HTML = gql`
+  query ReportVerdictHtml {
+    reportVerdictHtml { filename mimeType base64 }
+  }
+`;
+
 export const CASE_CONCLUSIONS_QUERY = gql`
   query CaseConclusions {
     caseConclusions { id bankAccountId text updatedAt }

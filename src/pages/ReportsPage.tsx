@@ -12,6 +12,8 @@ import {
   REPORTS_QUERY,
   REPORT_MARKED_PDF,
   REPORT_VERDICT_DOCX,
+  REPORT_VERDICT_HTML,
+  REPORT_VERDICT_PDF,
 } from "../graphql/queries";
 import {
   Card,
@@ -83,8 +85,14 @@ export default function ReportsPage() {
   const [getMarkedPdf, markedQ] =
     useLazyQuery<{reportMarkedSuspectsPdf: ReportFile}>(REPORT_MARKED_PDF,
       {fetchPolicy: "no-cache"});
-  const [getVerdictDocx, verdictQ] =
+  const [getVerdictPdf, verdictPdfQ] =
+    useLazyQuery<{reportVerdictPdf: ReportFile}>(REPORT_VERDICT_PDF,
+      {fetchPolicy: "no-cache"});
+  const [getVerdictDocx, verdictDocxQ] =
     useLazyQuery<{reportVerdictDocx: ReportFile}>(REPORT_VERDICT_DOCX,
+      {fetchPolicy: "no-cache"});
+  const [getVerdictHtml, verdictHtmlQ] =
+    useLazyQuery<{reportVerdictHtml: ReportFile}>(REPORT_VERDICT_HTML,
       {fetchPolicy: "no-cache"});
   const [reportError, setReportError] = useState("");
   const [showThreshold, setShowThreshold] = useState(false);
@@ -105,14 +113,26 @@ export default function ReportsPage() {
     }
   }
 
-  async function onReport() {
+  function deliver(file: ReportFile | undefined, message?: string) {
+    if (file) downloadBase64(file);
+    else setReportError(message ?? "Тайлан үүсгэж чадсангүй.");
+  }
+
+  // Нэг тайлан, гурван хэлбэр. Гурвуулаа сервер дээр ижил тоо, ижил дүгнэлтээс
+  // үүсдэг тул хоорондоо зөрөхгүй: PDF нь хэвлэх, Word нь засварлах, HTML нь
+  // Word, PDF уншигчгүй компьютер дээр нээх зориулалттай.
+  async function onVerdict(kind: "pdf" | "docx" | "html") {
     setReportError("");
     try {
-      const r = await getVerdictDocx();
-      if (r.data?.reportVerdictDocx) {
-        downloadBase64(r.data.reportVerdictDocx);
+      if (kind === "pdf") {
+        const r = await getVerdictPdf();
+        deliver(r.data?.reportVerdictPdf, r.error?.message);
+      } else if (kind === "docx") {
+        const r = await getVerdictDocx();
+        deliver(r.data?.reportVerdictDocx, r.error?.message);
       } else {
-        setReportError(r.error?.message ?? "Тайлан үүсгэж чадсангүй.");
+        const r = await getVerdictHtml();
+        deliver(r.data?.reportVerdictHtml, r.error?.message);
       }
     } catch (e) {
       setReportError(e instanceof Error ? e.message : String(e));
@@ -155,9 +175,17 @@ export default function ReportsPage() {
         disabled={markedQ.loading}>
         {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ГҮЙЛГЭЭНИЙ ТАЙЛАН"}
       </button>
-      <button className="btn btn-primary" onClick={() => void onReport()}
-        disabled={verdictQ.loading}>
-        {verdictQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН"}
+      <button className="btn btn-primary" onClick={() => void onVerdict("pdf")}
+        disabled={verdictPdfQ.loading}>
+        {verdictPdfQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН PDF"}
+      </button>
+      <button className="btn btn-primary" onClick={() => void onVerdict("docx")}
+        disabled={verdictDocxQ.loading}>
+        {verdictDocxQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН WORD"}
+      </button>
+      <button className="btn btn-primary" onClick={() => void onVerdict("html")}
+        disabled={verdictHtmlQ.loading}>
+        {verdictHtmlQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН HTML"}
       </button>
     </>
   );
