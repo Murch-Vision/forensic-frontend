@@ -17,6 +17,7 @@ import {
   UPLOAD_START,
 } from "../graphql/queries";
 import {Card, DataTable, Loading, PageHeader, StatCard} from "../components/kit";
+import {Select} from "../components/inputs";
 import {formatDate, formatNum} from "../lib/format";
 import {useAuth} from "../lib/auth";
 
@@ -134,7 +135,6 @@ export default function OffendersPage() {
   const rows = data?.knownOffenders.rows ?? [];
   const total = data?.knownOffenders.total ?? 0;
   const labels = data?.knownOffenderLabels ?? [];
-  const registered = labels.reduce((max, l) => Math.max(max, l.count), 0);
 
   const actions = isAdmin ? (
     <>
@@ -196,30 +196,23 @@ export default function OffendersPage() {
         <StatCard label="Бүртгэлд байгаа хүн" value={formatNum(total)}
           color="red" />
         <StatCard label="Жагсаалт" value={formatNum(labels.length)} />
-        <StatCard label="Хамгийн том жагсаалт" value={formatNum(registered)} />
       </div>
-
-      <Card title="Жагсаалтууд" style={{marginBottom: 16}}>
-        <div style={{display: "flex", flexWrap: "wrap", gap: 8}}>
-          <button className={`btn btn-sm${label ? "" : " btn-primary"}`}
-            onClick={() => {setLabel(""); setSkip(0);}}>
-            Бүгд
-          </button>
-          {labels.map((l) => (
-            <button key={l.label}
-              className={`btn btn-sm${label === l.label ? " btn-primary" : ""}`}
-              onClick={() => {setLabel(l.label); setSkip(0);}}>
-              {l.label} · {formatNum(l.count)}
-            </button>
-          ))}
-        </div>
-      </Card>
 
       <Card title={`Регистр (${formatNum(total)})`} noPadding
         actions={
-          <input className="form-input" value={search} style={{width: 220}}
-            placeholder="Регистрээр хайх"
-            onChange={(e) => {setSearch(e.target.value); setSkip(0);}} />
+          <div style={{display: "flex", gap: 8, alignItems: "center"}}>
+            <Select value={label} searchable style={{width: 240}}
+              title="Нэг жагсаалтаар шүүх"
+              onChange={(v) => {setLabel(v); setSkip(0);}}
+              options={[
+                {value: "", label: "Бүх жагсаалт"},
+                ...labels.map((l) => ({value: l.label,
+                  label: `${l.label} · ${formatNum(l.count)}`})),
+              ]} />
+            <input className="form-input" value={search} style={{width: 200}}
+              placeholder="Регистрээр хайх"
+              onChange={(e) => {setSearch(e.target.value); setSkip(0);}} />
+          </div>
         }>
         {loading && !data ? <Loading /> : (
           <>
