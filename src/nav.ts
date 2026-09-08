@@ -26,6 +26,7 @@ export const NAV_META: NavMeta[] = [
   {path: "/people", label: "Субьектийн жагсаалт", icon: "\u{1F465}",
     adminOnly: true},
   {path: "/import", label: "Өгөгдөл импорт", icon: "\u{1F4E5}"},
+  {path: "/offenders", label: "Хэрэгтний бүртгэл", icon: "\u{1F6A8}"},
   {path: "/transactions", label: "Дансны дүн шинжилгээ", icon: "\u{1F4B0}"},
   {path: "/calls", label: "Дуудлагын бүртгэл", icon: "\u{1F4DE}"},
   {path: "/timeline", label: "Он цагийн хэлхээ", icon: "\u{23F1}"},

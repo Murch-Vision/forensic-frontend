@@ -15,6 +15,7 @@ import CasesPage from "./pages/CasesPage";
 import PeoplePage from "./pages/PeoplePage";
 import DashboardPage from "./pages/DashboardPage";
 import ImportPage from "./pages/ImportPage";
+import OffendersPage from "./pages/OffendersPage";
 import TransactionsPage from "./pages/TransactionsPage";
 import CallRecordsPage from "./pages/CallRecordsPage";
 import TimelinePage from "./pages/TimelinePage";
@@ -33,6 +34,7 @@ const PAGE_ELEMENTS: Record<string, ReactNode> = {
   "/dashboard": <DashboardPage />,
   "/people": <PeoplePage />,
   "/import": <ImportPage />,
+  "/offenders": <OffendersPage />,
   "/transactions": <TransactionsPage />,
   "/calls": <CallRecordsPage />,
   "/timeline": <TimelinePage />,

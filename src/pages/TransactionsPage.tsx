@@ -544,7 +544,7 @@ export default function TransactionsPage() {
 
   // "Who with whom" — follow the money. The case account and the counterparty,
   // each shown as a name + its account number.
-  interface Party {name: string; account: string | null}
+  interface Party {name: string; account: string | null; offender?: boolean}
   const ourParty = (t: BankTransaction): Party => {
     const sid = suspectByAcct.get(t.bankAccountId);
     const owner = sid != null ? nameBySuspect.get(sid) : null;
@@ -554,6 +554,7 @@ export default function TransactionsPage() {
   const cpParty = (t: BankTransaction): Party => ({
     name: t.counterpartyName ?? (t.counterpartyAccount ? "Тодорхойгүй" : "—"),
     account: t.counterpartyAccount ?? null,
+    offender: t.counterpartyOffender ?? false,
   });
   // The ДАНС ЭЗЭМШИГЧ is ALWAYS the left column and the ХАРЬЦАА always the
   // right one, so the eye reads a single subject straight down the page. The
@@ -567,9 +568,13 @@ export default function TransactionsPage() {
       {t.type === "credit" ? "←" : "→"}
     </span>
   );
+  // Улаан = хэрэгтний бүртгэлд регистрээр нь таарсан хүн ([[OffendersPage]]).
   const partyCell = (p: Party) => (
     <div style={{lineHeight: 1.3}}>
-      <div>{p.name}</div>
+      <div style={p.offender
+        ? {color: "var(--accent-red)", fontWeight: 600} : undefined}>
+        {p.name}{p.offender ? " · ХЭРЭГТЭН" : ""}
+      </div>
       {p.account && (
         <div style={{fontSize: 11, color: "var(--text-muted)",
           fontFamily: "var(--font-mono)"}}>{p.account}</div>

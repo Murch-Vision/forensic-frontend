@@ -80,6 +80,8 @@ interface GlobalPerson {
   photoData        : string | null;
   occupation       : string | null;
   nationalId       : string | null;
+  // Хэрэгтний бүртгэлд регистрээр нь таарсан эсэх.
+  offender         : boolean;
   matchedBy        : string[];
   suspects         : PersonSuspect[];
   cases            : PersonCaseRef[];
@@ -394,8 +396,10 @@ export default function PeoplePage() {
                     <div style={{flex: 1, minWidth: 0}}>
                       <div style={{fontSize: 13, fontWeight: 600,
                         overflow: "hidden", textOverflow: "ellipsis",
-                        whiteSpace: "nowrap"}}>
-                        {p.fullName}
+                        whiteSpace: "nowrap",
+                        // Улаан = хэрэгтний бүртгэлд регистрээр нь таарсан.
+                        color: p.offender ? "var(--accent-red)" : undefined}}>
+                        {p.offender ? "\u26A0 " : ""}{p.fullName}
                       </div>
                       <div style={{fontSize: 11,
                         color: "var(--text-muted)", marginTop: 2,

@@ -131,6 +131,9 @@ export interface BankTransaction {
   referenceNumber     : string | null;
   counterpartyAccount : string | null;
   counterpartyName    : string | null;
+  counterpartyNationalId? : string | null;
+  // Хэрэгтний бүртгэлд регистрээр нь таарсан эсэх (сервер шийднэ).
+  counterpartyOffender?: boolean;
   channel             : string | null;
   location            : string | null;
   runningBalance      : number;

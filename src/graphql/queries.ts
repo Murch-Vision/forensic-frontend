@@ -36,7 +36,7 @@ export const CASE_RELATIONS_QUERY = gql`
       txnCount creditCount debitCount
       creditTotal debitTotal netTotal unnamedTxnCount
       relations {
-        key name account nationalId
+        key name account nationalId offender
         txnCount creditCount debitCount
         creditTotal debitTotal netTotal
         accountIds mutual subjectMatch
@@ -45,7 +45,8 @@ export const CASE_RELATIONS_QUERY = gql`
         accountId label ownerName accountNumber txnCount relationCount mutualCount
         creditCount debitCount creditTotal debitTotal netTotal
         relations {
-          key name account txnCount creditCount debitCount
+          key name account nationalId offender
+          txnCount creditCount debitCount
           creditTotal debitTotal netTotal mutual subjectMatch
         }
       }
@@ -93,7 +94,8 @@ export const TRANSACTIONS_QUERY = gql`
     bankAccounts { id accountNumber bankName suspectId }
     transactions(includeRemoved: true) {
       id bankAccountId timestamp amount type category description
-      counterpartyAccount counterpartyName channel runningBalance flagStatus
+      counterpartyAccount counterpartyName counterpartyNationalId
+      counterpartyOffender channel runningBalance flagStatus
       currency
     }
   }
@@ -814,7 +816,7 @@ export const SELF_UPDATE = gql`
 export const GLOBAL_PEOPLE_QUERY = gql`
   query GlobalPeople {
     globalPeople {
-      key fullName aliases riskLevel photoData occupation nationalId
+      key fullName aliases riskLevel photoData occupation nationalId offender
       matchedBy phoneNumbers accountNumbers transactionCount callRecordCount
       suspects {
         id suspectId fullName aliases nationalId passportNumber dateOfBirth
@@ -826,5 +828,38 @@ export const GLOBAL_PEOPLE_QUERY = gql`
         caseFile { id caseId caseName status priority }
       }
     }
+  }
+`;
+
+// ── Хэрэгтний бүртгэл ──────────────────────────────────────────────────────
+export const KNOWN_OFFENDERS_QUERY = gql`
+  query KnownOffenders($search: String, $label: String, $take: Int, $skip: Int) {
+    knownOffenders(search: $search, label: $label, take: $take, skip: $skip) {
+      total
+      rows { id nationalId labels sourceFile updatedAt }
+    }
+    knownOffenderLabels { label count }
+  }
+`;
+
+export const IMPORT_KNOWN_OFFENDERS = gql`
+  mutation ImportKnownOffenders($content: String!, $filename: String!, $uploadId: String) {
+    importKnownOffenders(content: $content, filename: $filename, uploadId: $uploadId) {
+      readCells validCells invalidCells uniquePeople added updated total
+      labels { label count }
+      invalidSample
+    }
+  }
+`;
+
+export const DELETE_KNOWN_OFFENDER = gql`
+  mutation DeleteKnownOffender($id: Int!) {
+    deleteKnownOffender(id: $id)
+  }
+`;
+
+export const CLEAR_KNOWN_OFFENDERS = gql`
+  mutation ClearKnownOffenders {
+    clearKnownOffenders
   }
 `;

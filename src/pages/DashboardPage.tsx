@@ -89,6 +89,7 @@ interface Relation {
   name        : string;
   account     : string | null;
   nationalId? : string | null;
+  offender?   : boolean;
   txnCount    : number;
   creditCount?: number;
   debitCount? : number;
@@ -133,15 +134,13 @@ interface RelationData {
   };
 }
 
-// Шар = дундын харьцаа. ⛔ THE RED IS GONE, and must not come back while the
-// subject list is built by the importer: importService.ensureSuspect() inserts
-// a suspect row (`IMP-<регистр>`) for EVERY counterparty регистр it reads out
-// of a statement. Measured 2026-08-16 on this database: 226 suspects, 225 with
-// a регистр, and 225 of the 313 counterparties "matched" one — every match
-// being the row the import had just created from that same counterparty. The
-// red therefore marked nothing but "this name was imported", while reading as
-// "this person is a known subject".
-function relColor(r: {mutual: boolean}): string {
+// Шар = дундын харьцаа. Улаан = ХЭРЭГТНИЙ БҮРТГЭЛД регистрээр нь таарсан хүн.
+// ⚠️ Улаан 2026-08-16-нд авагдсан нь өөр шалтгаантай: тэр үеийн улаан нь
+// импорт өөрөө үүсгэсэн сэжигтэн мөрийг тэмдэглэдэг байсан тул юу ч
+// хэлдэггүй байв. Одоохон улаан нь ГАДНААС ирсэн, хүний гараар бүрдүүлсэн
+// жагсаалттай тулгасан үр дүн — өөр эх сурвалж, өөр утга.
+function relColor(r: {mutual: boolean; offender?: boolean}): string {
+  if (r.offender) return "var(--accent-red)";
   return r.mutual ? "var(--accent-amber)" : "var(--text-primary)";
 }
 
@@ -195,8 +194,8 @@ function AcctColumn({g, onPick}: {
             <span style={{flex: 1, minWidth: 0, overflow: "hidden",
               textOverflow: "ellipsis", whiteSpace: "nowrap",
               color: relColor(r)}}
-              title={r.name}>
-              {r.name}
+              title={r.offender ? `${r.name} · ХЭРЭГТЭН` : r.name}>
+              {r.offender ? "\u26A0 " : ""}{r.name}
             </span>
             <span style={{fontFamily: "var(--font-mono)",
               color: "var(--text-secondary)"}}>
@@ -267,6 +266,11 @@ function PartyModal({r, groups, txns, onClose, onOpenTxns}: {
             {r.mutual && (
               <span style={{color: "var(--accent-amber)"}}>
                 Дундын харьцаа
+              </span>
+            )}
+            {r.offender && (
+              <span style={{color: "var(--accent-red)", fontWeight: 700}}>
+                ХЭРЭГТНИЙ БҮРТГЭЛД БАЙНА
               </span>
             )}
           </div>
@@ -609,7 +613,12 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   // every row is дундын, painting them all amber says nothing.
   const relCols: Column<Relation>[] = [
     {header: "Харьцаа", sortValue: (r) => r.name,
-      render: (r) => r.name},
+      render: (r) => (
+        <span style={r.offender
+          ? {color: "var(--accent-red)", fontWeight: 600} : undefined}>
+          {r.offender ? "\u26A0 " : ""}{r.name}
+        </span>
+      )},
     {header: "Гүйлгээ", align: "right", sortValue: (r) => r.txnCount,
       render: (r) => formatNum(r.txnCount)},
     {header: "Орлого", align: "right", sortValue: (r) => r.creditTotal,
@@ -690,11 +699,17 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
       )},
   ];
 
-  // Шар өнгө ганцаараа — тайлбартай. (Улаан тэмдэглэгээ авагдсан: relColor.)
+  // Хоёр өнгө, хоёулаа тайлбартай.
   const relLegend = (
-    <span style={{fontSize: 11, color: "var(--accent-amber)"}}
-      title="Хоёр ба түүнээс дээш хуулсан данстай харьцсан">
-      Дундын
+    <span style={{fontSize: 11, display: "flex", gap: 10}}>
+      <span style={{color: "var(--accent-red)"}}
+        title="Хэрэгтний бүртгэлд регистрээр нь таарсан">
+        Хэрэгтэн
+      </span>
+      <span style={{color: "var(--accent-amber)"}}
+        title="Хоёр ба түүнээс дээш хуулсан данстай харьцсан">
+        Дундын
+      </span>
     </span>
   );
   // Drill-through: the counterparty is a PERSON now, so filter the transaction
