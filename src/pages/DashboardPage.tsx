@@ -162,10 +162,9 @@ function PartyCell({name, account}: {name: string; account?: string | null}) {
 
 // One statement account as a COLUMN: the account and its transaction total on
 // top, then whom it dealt with and how many times — the client's own layout.
-function AcctColumn({g, nav, link}: {
+function AcctColumn({g, onPick}: {
   g: AccountRelations;
-  nav: (to: string) => void;
-  link: (r: Relation, accountId?: number) => string;
+  onPick: (r: Relation) => void;
 }) {
   return (
     // Grows to fill the card when there are few columns (one selected account
@@ -192,7 +191,7 @@ function AcctColumn({g, nav, link}: {
             style={{display: "flex", gap: 8, alignItems: "center",
               padding: "6px 12px", fontSize: 12, cursor: "pointer",
               borderTop: "1px solid var(--border-primary)"}}
-            onClick={() => nav(link(r, g.accountId))}>
+            onClick={() => onPick(r)}>
             <span style={{flex: 1, minWidth: 0, overflow: "hidden",
               textOverflow: "ellipsis", whiteSpace: "nowrap",
               color: relColor(r)}}
@@ -205,6 +204,116 @@ function AcctColumn({g, nav, link}: {
             </span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// Хүн дээр дарахад ГҮЙЛГЭЭ рүү шууд үсэрдэг байсныг больж, эхлээд тухайн
+// хүний хураангуй нээгдэнэ (клиентийн хүсэлт, 2026-09-08). Гүйлгээ рүү орох
+// нь одоо СОНГОЛТ: «Гүйлгээг харах» товч.
+function PartyModal({r, groups, txns, onClose, onOpenTxns}: {
+  r: Relation;
+  groups: AccountRelations[];
+  txns: DashTxn[];
+  onClose: () => void;
+  onOpenTxns: () => void;
+}) {
+  const named = Boolean(r.name && r.name !== "—");
+  const mine = txns.filter((t) =>
+    (named && t.counterpartyName === r.name)
+    || (!named && Boolean(r.account) && t.counterpartyAccount === r.account));
+  const dates = mine.map((t) => t.timestamp).sort();
+  const biggest = mine.reduce((max, t) => Math.max(max, t.amount), 0);
+  // Аль данстай нь харьцсан бэ — тухайн хүнийг агуулж буй баганууд.
+  const withAccounts = groups
+    .map((g) => ({g, hit: g.relations.find((x) => x.key === r.key)}))
+    .filter((x): x is {g: AccountRelations; hit: Relation} => Boolean(x.hit));
+
+  const facts: [string, string][] = [
+    ["Гүйлгээ", formatNum(r.txnCount)],
+    ["Орлого", formatMoney(r.creditTotal)],
+    ["Зарлага", formatMoney(r.debitTotal)],
+    ["Зөрүү", formatMoney(r.netTotal)],
+    ["Эхний гүйлгээ", dates.length ? formatDate(dates[0]) : "—"],
+    ["Сүүлийн гүйлгээ",
+      dates.length ? formatDate(dates[dates.length - 1]) : "—"],
+    ["Хамгийн том гүйлгээ", biggest ? formatMoney(biggest) : "—"],
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" style={{width: "min(620px, 94vw)"}}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">{named ? r.name : "Нэргүй тал"}</span>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <div style={{display: "flex", gap: 16, flexWrap: "wrap",
+            marginBottom: 14, fontSize: 12}}>
+            <span style={{color: "var(--text-muted)"}}>Данс</span>
+            <span style={{fontFamily: "var(--font-mono)"}}>
+              {r.account || "—"}
+            </span>
+            {r.nationalId && (
+              <>
+                <span style={{color: "var(--text-muted)"}}>Регистр</span>
+                <span style={{fontFamily: "var(--font-mono)"}}>
+                  {r.nationalId}
+                </span>
+              </>
+            )}
+            {r.mutual && (
+              <span style={{color: "var(--accent-amber)"}}>
+                Дундын харьцаа
+              </span>
+            )}
+          </div>
+          <div style={{display: "grid", gap: 1,
+            gridTemplateColumns: "1fr 1fr",
+            background: "var(--border-primary)"}}>
+            {facts.map(([label, value], i) => (
+              <div key={label} style={{background: "var(--bg-card)",
+                padding: "8px 12px", display: "flex",
+                justifyContent: "space-between", gap: 12, fontSize: 12,
+                // Сондгой нь дангаараа хагас мөр эзлэхгүй.
+                gridColumn: i === facts.length - 1 && facts.length % 2
+                  ? "1 / -1" : undefined}}>
+                <span style={{color: "var(--text-muted)"}}>{label}</span>
+                <span style={{fontFamily: "var(--font-mono)"}}>{value}</span>
+              </div>
+            ))}
+          </div>
+          {withAccounts.length > 0 && (
+            <div style={{marginTop: 16}}>
+              <div style={{fontSize: 11, color: "var(--text-muted)",
+                marginBottom: 6}}>ХУУЛСАН АЛЬ ДАНСТАЙ</div>
+              {withAccounts.map(({g, hit}) => (
+                <div key={g.accountId} style={{display: "flex", gap: 12,
+                  justifyContent: "space-between", padding: "6px 0",
+                  fontSize: 12,
+                  borderTop: "1px solid var(--border-primary)"}}>
+                  <span style={{minWidth: 0, overflow: "hidden",
+                    textOverflow: "ellipsis", whiteSpace: "nowrap"}}>
+                    {g.ownerName ?? g.accountNumber}
+                  </span>
+                  <span style={{fontFamily: "var(--font-mono)",
+                    color: "var(--text-secondary)", whiteSpace: "nowrap"}}>
+                    {formatNum(hit.txnCount)} гүйлгээ ·{" "}
+                    {formatMoney(hit.creditTotal + hit.debitTotal)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn" onClick={onClose}>Хаах</button>
+          <button className="btn btn-primary" onClick={onOpenTxns}>
+            Энэ хүнтэй хийсэн гүйлгээг харах
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -327,6 +436,8 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   // question "which transactions are big" has no answer until he says what
   // big means, and a top-10 guess answered it for him.
   const [minAmountText, setMinAmountText] = useState("");
+  // Дарсан хүн. null = хаалттай. Гүйлгээ рүү шилжих нь энэ цонхны товчоор.
+  const [party, setParty] = useState<{r: Relation} | null>(null);
   const {data, loading} = useQuery<CaseData>(DASHBOARD_CASE_QUERY);
   const relQ = useQuery<RelationData>(CASE_RELATIONS_QUERY);
   const evQ = useQuery<{evidenceForCase: {id: number}[]}>(EVIDENCE_FOR_CASE, {
@@ -626,7 +737,7 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
           <DataTable columns={relCols} rows={mutual} scroll={SCROLL}
             rowKey={(r) => r.key} empty="Дундын харьцаа алга"
             pageSize={50}
-            onRowClick={(r) => nav(relLink(r))} />
+            onRowClick={(r) => setParty({r})} />
         )}
       </Card>
     );
@@ -647,8 +758,8 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
         fill noPadding>
         <div style={{...SCROLL, display: "flex", overflowX: "auto"}}>
           {sel.map((col) => (
-            <AcctColumn key={col.accountId} g={col} nav={nav}
-              link={relLink} />
+            <AcctColumn key={col.accountId} g={col}
+              onPick={(r) => setParty({r})} />
           ))}
         </div>
       </Card>
@@ -720,6 +831,11 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
         gridTemplateColumns: sections.length > 1 ? "1fr 1fr" : "1fr"}}>
         {sections}
       </div>
+      {party && (
+        <PartyModal r={party.r} groups={groups}
+          txns={shownTxns} onClose={() => setParty(null)}
+          onOpenTxns={() => nav(relLink(party.r))} />
+      )}
     </Shell>
   );
 }
