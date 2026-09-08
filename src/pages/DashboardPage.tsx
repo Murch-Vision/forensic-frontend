@@ -21,6 +21,7 @@ import {
   DataTable,
   Empty,
   Loading,
+  OffenderTag,
   PageHeader,
   StatCard,
 } from "../components/kit";
@@ -194,8 +195,8 @@ function AcctColumn({g, onPick}: {
             <span style={{flex: 1, minWidth: 0, overflow: "hidden",
               textOverflow: "ellipsis", whiteSpace: "nowrap",
               color: relColor(r)}}
-              title={r.offender ? `${r.name} · ХЭРЭГТЭН` : r.name}>
-              {r.offender ? "\u26A0 " : ""}{r.name}
+              title={r.name}>
+              {r.offender && <OffenderTag />}{r.name}
             </span>
             <span style={{fontFamily: "var(--font-mono)",
               color: "var(--text-secondary)"}}>
@@ -616,7 +617,7 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
       render: (r) => (
         <span style={r.offender
           ? {color: "var(--accent-red)", fontWeight: 600} : undefined}>
-          {r.offender ? "\u26A0 " : ""}{r.name}
+          {r.offender && <OffenderTag />}{r.name}
         </span>
       )},
     {header: "Гүйлгээ", align: "right", sortValue: (r) => r.txnCount,

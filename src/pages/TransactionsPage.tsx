@@ -20,6 +20,7 @@ import {
   Card,
   DataTable,
   Loading,
+  OffenderTag,
   PageHeader,
   StatCard,
 } from "../components/kit";
@@ -573,7 +574,7 @@ export default function TransactionsPage() {
     <div style={{lineHeight: 1.3}}>
       <div style={p.offender
         ? {color: "var(--accent-red)", fontWeight: 600} : undefined}>
-        {p.name}{p.offender ? " · ХЭРЭГТЭН" : ""}
+        {p.offender && <OffenderTag />}{p.name}
       </div>
       {p.account && (
         <div style={{fontSize: 11, color: "var(--text-muted)",

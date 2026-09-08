@@ -106,6 +106,16 @@ export function Empty({message}: {message: string}) {
   );
 }
 
+// ⛔ Улаан ӨНГӨ дангаараа юу ч хэлдэггүй: улаан нэрийг «мэдээлэл дутуу»,
+// «алдаа» гэж уншиж болно. Хэрэгтэн гэдгийг ҮГЭЭР нь бичнэ — тэмдэглэгээ
+// хаа байсан ижил, нэг газраас.
+export function OffenderTag() {
+  return (
+    <span className="badge high"
+      style={{marginRight: 6, whiteSpace: "nowrap"}}>ХЭРЭГТЭН</span>
+  );
+}
+
 export function Badge({text, kind}: {text: string; kind: string}) {
   return <span className={`badge ${kind}`}>{text}</span>;
 }

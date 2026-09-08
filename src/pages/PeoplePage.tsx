@@ -27,6 +27,7 @@ import {
   DataTable,
   Empty,
   Loading,
+  OffenderTag,
   PageHeader,
 } from "../components/kit";
 import PersonFormModal, {type PersonForm} from "../components/PersonFormModal";
@@ -399,7 +400,7 @@ export default function PeoplePage() {
                         whiteSpace: "nowrap",
                         // Улаан = хэрэгтний бүртгэлд регистрээр нь таарсан.
                         color: p.offender ? "var(--accent-red)" : undefined}}>
-                        {p.offender ? "\u26A0 " : ""}{p.fullName}
+                        {p.offender && <OffenderTag />}{p.fullName}
                       </div>
                       <div style={{fontSize: 11,
                         color: "var(--text-muted)", marginTop: 2,
