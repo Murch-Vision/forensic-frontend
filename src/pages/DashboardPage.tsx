@@ -631,7 +631,7 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   // direction is in the COLUMNS now, with the зөрүү beside them, and Давтамж
   // is the pair's whole transaction count, not one direction's.
   interface FlowRow {
-    key: string; accountId: number; account: string;
+    key: string; relKey: string; accountId: number; account: string;
     owner: string; ownerAccount: string | null;
     name: string; cpAccount: string | null;
     count: number; creditN: number; debitN: number;
@@ -640,6 +640,7 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   const flowRows: FlowRow[] = sel
     .flatMap((grp) => grp.relations.map((r) => ({
       key: `${grp.accountId}:${r.key}`,
+      relKey: r.key,
       accountId: grp.accountId,
       account: grp.label,
       owner: grp.ownerName ?? grp.accountNumber,
@@ -777,10 +778,19 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
             rowKey={(f) => f.key} empty="Харьцаа алга"
             pageSize={50}
             defaultSort={{col: 2, dir: "desc"}}
-            onRowClick={(f) => nav(`/transactions?acct=${f.accountId}&${
-              f.name && f.name !== "—"
-                ? `cpname=${encodeURIComponent(f.name)}`
-                : `cp=${encodeURIComponent(f.cpAccount ?? "")}`}`)} />
+            onRowClick={(f) => {
+              // Мөрөнд дарахад бас тухайн ХҮН нээгдэнэ — жагсаалт бүр
+              // ижил аашилна. Нийт тоо нь харьцааны мөрөөс, олдохгүй бол
+              // энэ хос дээрх тоо.
+              const hit = relations.find((x) => x.key === f.relKey);
+              setParty({r: hit ?? {
+                key: f.relKey, name: f.name, account: f.cpAccount,
+                txnCount: f.count, creditCount: f.creditN,
+                debitCount: f.debitN, creditTotal: f.credit,
+                debitTotal: f.debit, netTotal: f.net,
+                mutual: false, subjectMatch: false,
+              }});
+            }} />
       </Card>
     );
   }
