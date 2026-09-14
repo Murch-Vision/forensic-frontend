@@ -45,7 +45,7 @@ interface CaseRef {
   description: string | null;
   status: string;
   priority: string;
-  leadInvestigator: string | null;
+  investigator: string | null;
   createdAt: string;
 }
 
@@ -504,8 +504,8 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
         kind={STATUS_BADGE[cf.status] ?? "unknown"} />
       {/* ⛔ No priority badge. "Дунд" is a field on the case record that
           changes nothing on this page and answers no question asked here. */}
-      {cf.leadInvestigator && (
-        <span style={META}>Мөрдөгч: {cf.leadInvestigator}</span>
+      {cf.investigator && (
+        <span style={META}>Мөрдөгч: {cf.investigator}</span>
       )}
       {hasTxns && <span style={META}>Гүйлгээ: {d.txnRange}</span>}
       {data.callRecords.length > 0 && (

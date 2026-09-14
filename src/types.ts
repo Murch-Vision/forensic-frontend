@@ -181,6 +181,7 @@ export interface CaseFile {
   status           : string;
   priority         : string;
   leadInvestigator : string | null;
+  investigator?    : string | null;
   caseType         : string | null;
   createdAt        : string;
 }

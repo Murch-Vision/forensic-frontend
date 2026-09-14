@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : CasesPage.tsx
  * Created at  : 2026-07-02
- * Updated at  : 2026-07-02
+ * Updated at  : 2026-09-14
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -38,7 +38,8 @@ interface CaseRow {
   description: string | null;
   status: string;
   priority: string;
-  leadInvestigator: string | null;
+  // Хэргийг бүртгэсэн алба хаагч — сервер бүртгэлээс нь уншина.
+  investigator: string | null;
   createdAt: string;
   closedAt: string | null;
 }
@@ -103,7 +104,7 @@ export default function CasesPage() {
   const [formError, setFormError] = useState("");
   const [editCase, setEditCase] = useState<CaseRow | null>(null);
   const [editForm, setEditForm] = useState({caseName: "", description: "",
-    priority: "MEDIUM", leadInvestigator: ""});
+    priority: "MEDIUM"});
   const [editError, setEditError] = useState("");
   const [showMerge, setShowMerge] = useState(false);
   const [mergeTarget, setMergeTarget] = useState<number | null>(null);
@@ -143,7 +144,6 @@ export default function CasesPage() {
       caseName: c.caseName,
       description: c.description ?? "",
       priority: c.priority,
-      leadInvestigator: c.leadInvestigator ?? "",
     });
     setEditError("");
   }
@@ -160,7 +160,6 @@ export default function CasesPage() {
         caseName,
         description: editForm.description.trim() || null,
         priority: editForm.priority,
-        leadInvestigator: editForm.leadInvestigator.trim() || null,
       }}});
       setEditCase(null);
     } catch (err) {
@@ -289,9 +288,9 @@ export default function CasesPage() {
                     </span>
                   </td>
                   <td style={{whiteSpace: "nowrap",
-                    color: c.leadInvestigator ? undefined
+                    color: c.investigator ? undefined
                       : "var(--text-muted)"}}>
-                    {c.leadInvestigator ?? "—"}
+                    {c.investigator ?? "—"}
                   </td>
                   <td style={{whiteSpace: "nowrap"}}>
                     {formatDate(c.createdAt)}
@@ -491,24 +490,15 @@ export default function CasesPage() {
                 value={editForm.description}
                 onChange={(e) => setEditForm((f) =>
                   ({...f, description: e.target.value}))} />
-              <div className="form-grid-2">
-                <div>
-                  <label className="form-label">Зэрэглэл</label>
-                  <Select style={{width: "100%"}}
-                    value={editForm.priority}
-                    onChange={(v) => setEditForm((f) =>
-                      ({...f, priority: v}))}
-                    options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map(
-                      (p) => ({value: p, label: PRIORITY_LABELS[p]}))} />
-                </div>
-                <div>
-                  <label className="form-label">Мөрдөгч</label>
-                  <input className="form-input"
-                    value={editForm.leadInvestigator}
-                    onChange={(e) => setEditForm((f) =>
-                      ({...f, leadInvestigator: e.target.value}))} />
-                </div>
-              </div>
+              {/* ⛔ «Мөрдөгч» талбар байхгүй: хэргийг бүртгэсэн алба хаагч
+                  бүртгэлээс нь автоматаар гарна, гараар бичих юм биш. */}
+              <label className="form-label">Зэрэглэл</label>
+              <Select style={{width: "100%"}}
+                value={editForm.priority}
+                onChange={(v) => setEditForm((f) =>
+                  ({...f, priority: v}))}
+                options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map(
+                  (p) => ({value: p, label: PRIORITY_LABELS[p]}))} />
             </div>
             <div className="modal-footer">
               <button className="btn" onClick={() => setEditCase(null)}>

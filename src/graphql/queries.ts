@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : queries.ts
  * Created at  : 2026-06-23
- * Updated at  : 2026-08-07
+ * Updated at  : 2026-09-14
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -14,7 +14,7 @@ import {gql} from "@apollo/client";
 export const DASHBOARD_CASE_QUERY = gql`
   query DashboardCase {
     activeCase {
-      id caseId caseName description status priority leadInvestigator createdAt
+      id caseId caseName description status priority investigator createdAt
     }
     suspects { id suspectId fullName riskLevel occupation initials }
     bankAccounts { id bankName accountNumber suspectId }
@@ -663,7 +663,7 @@ export const CASE_FILES_QUERY = gql`
   query CaseFilesFull {
     caseFiles {
       id caseId caseName description status priority
-      leadInvestigator createdAt closedAt
+      investigator createdAt closedAt
     }
   }
 `;
@@ -671,7 +671,7 @@ export const CASE_FILES_QUERY = gql`
 export const UPDATE_CASE_FILE = gql`
   mutation UpdateCaseFile($caseFileId: Int!, $input: CaseFileUpdateInput!) {
     updateCaseFile(caseFileId: $caseFileId, input: $input) {
-      id caseId caseName description status priority leadInvestigator
+      id caseId caseName description status priority investigator
     }
   }
 `;
