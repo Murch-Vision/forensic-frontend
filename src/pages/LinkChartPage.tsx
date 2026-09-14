@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : LinkChartPage.tsx
  * Created at  : 2026-06-23
- * Updated at  : 2026-08-07
+ * Updated at  : 2026-09-14
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -32,6 +32,7 @@ import {
   DataTable,
   Empty,
   Loading,
+  OffenderTag,
   PageHeader,
   SankeyChart,
   ToggleChip,
@@ -80,6 +81,7 @@ interface LcSuspect {
   organization : string | null;
   initials     : string;
   photoData    : string | null;
+  offender     : boolean;
 }
 
 interface LcLink {
@@ -1364,7 +1366,11 @@ export default function LinkChartPage() {
                     <div className="graph-detail-type">
                       {NODE_TYPE_LABEL[selected.type] ?? selected.type}
                     </div>
-                    <div className="graph-detail-title">{selected.label}</div>
+                    <div className="graph-detail-title"
+                      style={selected.offender
+                        ? {color: "var(--accent-red)"} : undefined}>
+                      {selected.offender && <OffenderTag />}{selected.label}
+                    </div>
                     {selected.sub && (
                       <div className="graph-detail-sub">{selected.sub}</div>
                     )}

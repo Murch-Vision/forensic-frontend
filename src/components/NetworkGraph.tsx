@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : NetworkGraph.tsx
  * Created at  : 2026-06-24
- * Updated at  : 2026-08-08
+ * Updated at  : 2026-09-14
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -33,6 +33,11 @@ const TYPE_STYLE: Record<NetworkNodeType, TypeStyle> = {
   ACCOUNT : {ring: "#00B0FF", icon: "🏦", r: 14},
   PHONE   : {ring: "#E040FB", icon: "📱", r: 12},
 };
+
+// Хэрэгтний бүртгэлд таарсан хүн (2026-09-14, клиентийн хүсэлт): цагираг нь
+// улаан, нэрний өмнө ХЭРЭГТЭН гэсэн ҮГ — өнгө дангаараа «алдаа» гэж
+// уншигддаг (kit.OffenderTag-ийн адил дүрэм). --accent-red-тэй ижил.
+const OFFENDER_COLOR = "#FF1744";
 
 const TYPE_LABEL: Record<NetworkNodeType, string> = {
   PERSON  : "Сэжигтэн",
@@ -497,7 +502,8 @@ function NetworkGraph(props, ref) {
     // Nodes.
     const showAll = v.k >= 1.3;
     for (const n of nodes) {
-      const st = TYPE_STYLE[n.type];
+      const st = n.offender
+        ? {...TYPE_STYLE[n.type], ring: OFFENDER_COLOR} : TYPE_STYLE[n.type];
       const r = radiusOf(n);
       const dim = hl && hl !== n.id && !neighbors.has(n.id);
       const baseAlpha = dim ? 0.2 : 1;
@@ -546,8 +552,9 @@ function NetworkGraph(props, ref) {
       if (showLabel) {
         ctx.font = LABEL_FONT;
         ctx.textBaseline = "top";
-        ctx.fillStyle = "#c8cce0";
-        ctx.fillText(n.label, n.x, n.y + r + 3);
+        ctx.fillStyle = n.offender ? OFFENDER_COLOR : "#c8cce0";
+        ctx.fillText(n.offender ? `ХЭРЭГТЭН · ${n.label}` : n.label,
+          n.x, n.y + r + 3);
         if (n.sub && (showAll || hl === n.id)) {
           ctx.fillStyle = "#7a7fa0";
           ctx.fillText(n.sub, n.x, n.y + r + 15);
@@ -1301,6 +1308,7 @@ function NetworkGraph(props, ref) {
   // with no edges (e.g. no purple "Хамаарал" left after merging money) doesn't
   // linger in the key and confuse the analyst.
   const presentTypes = new Set(props.nodes.map((n) => n.type));
+  const hasOffender = props.nodes.some((n) => n.offender);
   const presentKinds = new Set(props.links.map((l) => l.kind));
 
   return (
@@ -1341,6 +1349,16 @@ function NetworkGraph(props, ref) {
             <span style={{color: "#9aa0b5"}}>{TYPE_LABEL[t]}</span>
           </div>
         ))}
+        {hasOffender && (
+          <div style={{display: "flex", alignItems: "center", gap: 6}}>
+            <span style={{
+              width: 12, height: 12, borderRadius: "50%",
+              border: `2px solid ${OFFENDER_COLOR}`,
+              background: "#0b0e1a", display: "inline-block",
+            }} />
+            <span style={{color: OFFENDER_COLOR, fontWeight: 700}}>Хэрэгтэн</span>
+          </div>
+        )}
         <div style={{height: 1, background: "#252a45", margin: "3px 0"}} />
         {(Object.keys(LINK_STYLE) as NetworkLinkKind[])
           .filter((k) => presentKinds.has(k)).map((k) => (

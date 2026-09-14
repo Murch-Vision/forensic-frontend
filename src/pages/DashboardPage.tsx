@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : DashboardPage.tsx
  * Created at  : 2026-06-23
- * Updated at  : 2026-07-05
+ * Updated at  : 2026-09-14
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -24,6 +24,7 @@ import {
   OffenderTag,
   PageHeader,
   StatCard,
+  ToggleChip,
 } from "../components/kit";
 import type {Column} from "../components/kit";
 import {MultiSelect} from "../components/inputs";
@@ -162,10 +163,12 @@ function PartyCell({name, account}: {name: string; account?: string | null}) {
 
 // One statement account as a COLUMN: the account and its transaction total on
 // top, then whom it dealt with and how many times — the client's own layout.
-function AcctColumn({g, onPick}: {
+function AcctColumn({g, onlyMutual, onPick}: {
   g: AccountRelations;
+  onlyMutual: boolean;
   onPick: (r: Relation) => void;
 }) {
+  const rows = onlyMutual ? g.relations.filter((r) => r.mutual) : g.relations;
   return (
     // Grows to fill the card when there are few columns (one selected account
     // used to leave two thirds of the box empty) and holds 320px when there
@@ -182,11 +185,13 @@ function AcctColumn({g, onPick}: {
           account={g.ownerName ? g.accountNumber : null} />
         <div style={{color: "var(--text-secondary)", fontWeight: 400,
           marginTop: 2}}>
-          {formatNum(g.txnCount)} гүйлгээ · {formatNum(g.relationCount)} харьцаа
+          {formatNum(g.txnCount)} гүйлгээ · {onlyMutual
+            ? `${formatNum(rows.length)} дундын`
+            : `${formatNum(g.relationCount)} харьцаа`}
         </div>
       </div>
       <div style={{flex: 1, minHeight: 0, overflowY: "auto"}}>
-        {g.relations.map((r) => (
+        {rows.map((r) => (
           <div key={`${g.accountId}:${r.key}`}
             style={{display: "flex", gap: 8, alignItems: "center",
               padding: "6px 12px", fontSize: 12, cursor: "pointer",
@@ -443,6 +448,11 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   const [minAmountText, setMinAmountText] = useState("");
   // Дарсан хүн. null = хаалттай. Гүйлгээ рүү шилжих нь энэ цонхны товчоор.
   const [party, setParty] = useState<{r: Relation} | null>(null);
+  // «Нийт харьцаа»-ны багана бүрт зөвхөн дундын харьцааг үлдээнэ (клиентийн
+  // хүсэлт, 2026-09-14): сэжигтнүүдийн дундын хүмүүсийг тус тусын дансны
+  // баганад нь, бусдыг нь нуугаад харах. Анхдагч нь унтраалттай — хуудас
+  // урьдынхаараа нээгдэнэ.
+  const [onlyMutual, setOnlyMutual] = useState(false);
   const {data, loading} = useQuery<CaseData>(DASHBOARD_CASE_QUERY);
   const relQ = useQuery<RelationData>(CASE_RELATIONS_QUERY);
   const evQ = useQuery<{evidenceForCase: {id: number}[]}>(EVIDENCE_FOR_CASE, {
@@ -770,12 +780,19 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     sections.push(
       <Card key="byacct"
         title={`Нийт харьцаа — гүйлгээний тоогоор (${
-          formatNum(relations.length)})`}
-        actions={relLegend}
+          formatNum(onlyMutual ? mutualCount : relations.length)})`}
+        actions={
+          <span style={{display: "flex", alignItems: "center", gap: 12}}>
+            <ToggleChip label="Зөвхөн дундын" on={onlyMutual}
+              color="var(--accent-amber)"
+              onToggle={() => setOnlyMutual((v) => !v)} />
+            {relLegend}
+          </span>
+        }
         fill noPadding>
         <div style={{...SCROLL, display: "flex", overflowX: "auto"}}>
           {sel.map((col) => (
-            <AcctColumn key={col.accountId} g={col}
+            <AcctColumn key={col.accountId} g={col} onlyMutual={onlyMutual}
               onPick={(r) => setParty({r})} />
           ))}
         </div>

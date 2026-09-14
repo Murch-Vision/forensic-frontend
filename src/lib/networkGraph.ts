@@ -1,7 +1,7 @@
 /* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
  * File Name   : networkGraph.ts
  * Created at  : 2026-06-30
- * Updated at  : 2026-08-07
+ * Updated at  : 2026-09-14
  * Author      : jeefo
  * Purpose     :
  * Description :
@@ -36,6 +36,9 @@ export interface NetworkNode {
   // For PERSON nodes: the suspect's photo (data URI), drawn in place of the
   // generic 👤 icon when present.
   photoData? : string | null;
+  // PERSON: регистр нь Хэрэгтний бүртгэлд таарсан — графт улаанаар, ХЭРЭГТЭН
+  // гэсэн үгтэйгээр зурагдана.
+  offender? : boolean;
 }
 
 // Raw numbers behind an evidence edge — what the Дүгнэлт sentences are
@@ -77,6 +80,7 @@ interface GraphSuspect {
   riskLevel    : string;
   organization : string | null;
   photoData?   : string | null;
+  offender?    : boolean;
 }
 
 interface GraphSuspectLink {
@@ -172,6 +176,7 @@ export function buildEvidenceNetwork(
       sub     : s.organization ?? undefined,
       stats   : [["Эрсдэл", RISK_LABEL[s.riskLevel] ?? s.riskLevel]],
       photoData : s.photoData ?? null,
+      offender  : Boolean(s.offender),
     });
   }
 
