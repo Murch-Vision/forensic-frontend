@@ -163,13 +163,13 @@ function PartyCell({name, account}: {name: string; account?: string | null}) {
 
 // One statement account as a COLUMN: the account and its transaction total on
 // top, then whom it dealt with and how many times — the client's own layout.
-function AcctColumn({g, onlySuspects, onPick}: {
+function AcctColumn({g, keep, onPick}: {
   g: AccountRelations;
-  // Set = зөвхөн сэжигтэн харьцагчийг үлдээнэ; null = бүгд.
-  onlySuspects: ((r: Relation) => boolean) | null;
+  // Өнгөний шүүлт: null = бүгд, эс бөгөөс зөвхөн тохирох мөр.
+  keep: ((r: Relation) => boolean) | null;
   onPick: (r: Relation) => void;
 }) {
-  const rows = onlySuspects ? g.relations.filter(onlySuspects) : g.relations;
+  const rows = keep ? g.relations.filter(keep) : g.relations;
   return (
     // Grows to fill the card when there are few columns (one selected account
     // used to leave two thirds of the box empty) and holds 320px when there
@@ -186,9 +186,7 @@ function AcctColumn({g, onlySuspects, onPick}: {
           account={g.ownerName ? g.accountNumber : null} />
         <div style={{color: "var(--text-secondary)", fontWeight: 400,
           marginTop: 2}}>
-          {formatNum(g.txnCount)} гүйлгээ · {onlySuspects
-            ? `${formatNum(rows.length)} сэжигтэн`
-            : `${formatNum(g.relationCount)} харьцаа`}
+          {formatNum(g.txnCount)} гүйлгээ · {formatNum(rows.length)} харьцаа
         </div>
       </div>
       <div style={{flex: 1, minHeight: 0, overflowY: "auto"}}>
@@ -449,13 +447,14 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   const [minAmountText, setMinAmountText] = useState("");
   // Дарсан хүн. null = хаалттай. Гүйлгээ рүү шилжих нь энэ цонхны товчоор.
   const [party, setParty] = useState<{r: Relation} | null>(null);
-  // «Нийт харьцаа»-ны багана бүрт зөвхөн СЭЖИГТНҮҮД ХООРОНДОО шууд хийсэн
-  // гүйлгээг үлдээнэ (клиентийн хүсэлт, 2026-09-14). Анхдагч нь унтраалттай —
-  // хуудас урьдынхаараа нээгдэнэ.
-  // ⛔ «Дундын» (`mutual`) БИШ: тэр нь хоёр дансанд давтагдсан ямар ч тал —
-  // ПРЕМИУМ НЭКСУС ХК, ҮЙЛЧИЛГЭЭНИЙ ТӨЛБӨР гарч ирээд «сэжигтэн дундын гэж
-  // байхад энэ юу вэ?» гэсэн хариу авсан.
-  const [onlySuspects, setOnlySuspects] = useState(false);
+  // «Нийт харьцаа»-ны өнгөний тайлбар нь өөрөө шүүлт (клиентийн хүсэлт,
+  // 2026-09-14): «Хэрэгтэн» дарвал зөвхөн улаан, «Дундын» дарвал зөвхөн шар
+  // мөрүүд үлдэнэ; хоёулаа асвал аль нэг нь. Хоёулаа унтраалттай = бүгд.
+  // ⛔ Хоёр удаа буруу ойлгосон: эхлээд тусдаа «Зөвхөн дундын» товч, дараа нь
+  // «Сэжигтнүүд хоорондоо» (хуулсан дансны эзэнтэй таарах харьцагч). Клиент:
+  // «энэ жагсаалтаараа нөгөө улаарсан, шарласан байгаануудаа дангаар нь».
+  const [showOffender, setShowOffender] = useState(false);
+  const [showMutual, setShowMutual] = useState(false);
   const {data, loading} = useQuery<CaseData>(DASHBOARD_CASE_QUERY);
   const relQ = useQuery<RelationData>(CASE_RELATIONS_QUERY);
   const evQ = useQuery<{evidenceForCase: {id: number}[]}>(EVIDENCE_FOR_CASE, {
@@ -559,23 +558,6 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   const relations = [...merged.values()]
     .sort((x, y) => y.txnCount - x.txnCount || x.name.localeCompare(y.name));
   const mutualCount = relations.filter((r) => r.mutual).length;
-
-  // Сэжигтэн = хуулга нь орж ирсэн данс бүрийн эзэн (баганын толгой). Хэргийн
-  // «сэжигтэн» хүснэгтийг ашиглахгүй: импорт харьцагч бүрт тэнд мөр үүсгэдэг
-  // тул бараг бүгд таарна. Харьцагчийг эзний НЭРЭЭР (relationService хүнийг
-  // нэрээр нь түлхүүрлэдэг) эсвэл хуулсан дансны ДУГААРААР нь танина — банк
-  // дугаарын өмнөх тэгийг заримдаа хасдаг тул тэггүйгээр харьцуулна. Сонгосон
-  // данснаас үл хамааран хэргийн бүх хуулсан данс тооцогдоно.
-  const normName = (v: string | null | undefined) =>
-    (v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-  const normAcct = (v: string | null | undefined) =>
-    (v ?? "").replace(/\D/g, "").replace(/^0+/, "");
-  const suspectNames = new Set(groups.map((x) => normName(x.ownerName))
-    .filter((v) => /[\p{L}\p{N}]/u.test(v)));
-  const suspectAccts = new Set(groups.map((x) => normAcct(x.accountNumber))
-    .filter(Boolean));
-  const isSuspect = (r: Relation) => suspectNames.has(normName(r.name))
-    || (Boolean(normAcct(r.account)) && suspectAccts.has(normAcct(r.account)));
 
   let creditCount = 0, debitCount = 0, creditTotal = 0, debitTotal = 0;
   for (const t of shownTxns) {
@@ -730,17 +712,17 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
       )},
   ];
 
-  // Хоёр өнгө, хоёулаа тайлбартай.
+  // Хоёр өнгө = хоёр шүүлт. Тайлбар ба товч нэг л зүйл.
+  const relKeep = showOffender || showMutual
+    ? (r: Relation) => (showOffender && Boolean(r.offender))
+      || (showMutual && r.mutual)
+    : null;
   const relLegend = (
-    <span style={{fontSize: 11, display: "flex", gap: 10}}>
-      <span style={{color: "var(--accent-red)"}}
-        title="Хэрэгтний бүртгэлд регистрээр нь таарсан">
-        Хэрэгтэн
-      </span>
-      <span style={{color: "var(--accent-amber)"}}
-        title="Хоёр ба түүнээс дээш хуулсан данстай харьцсан">
-        Дундын
-      </span>
+    <span style={{display: "flex", alignItems: "center", gap: 8}}>
+      <ToggleChip label="Хэрэгтэн" legend color="var(--accent-red)"
+        on={showOffender} onToggle={() => setShowOffender((v) => !v)} />
+      <ToggleChip label="Дундын" legend color="var(--accent-amber)"
+        on={showMutual} onToggle={() => setShowMutual((v) => !v)} />
     </span>
   );
   // Drill-through: the counterparty is a PERSON now, so filter the transaction
@@ -800,20 +782,13 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     sections.push(
       <Card key="byacct"
         title={`Нийт харьцаа — гүйлгээний тоогоор (${
-          formatNum(onlySuspects
-            ? relations.filter(isSuspect).length : relations.length)})`}
-        actions={
-          <span style={{display: "flex", alignItems: "center", gap: 12}}>
-            <ToggleChip label="Сэжигтнүүд хоорондоо" on={onlySuspects}
-              onToggle={() => setOnlySuspects((v) => !v)} />
-            {relLegend}
-          </span>
-        }
+          formatNum(relKeep
+            ? relations.filter(relKeep).length : relations.length)})`}
+        actions={relLegend}
         fill noPadding>
         <div style={{...SCROLL, display: "flex", overflowX: "auto"}}>
           {sel.map((col) => (
-            <AcctColumn key={col.accountId} g={col}
-              onlySuspects={onlySuspects ? isSuspect : null}
+            <AcctColumn key={col.accountId} g={col} keep={relKeep}
               onPick={(r) => setParty({r})} />
           ))}
         </div>

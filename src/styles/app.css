@@ -1227,6 +1227,14 @@ body {
     background: var(--chip-accent);
     box-shadow: 0 0 6px color-mix(in srgb, var(--chip-accent) 80%, transparent);
 }
+/* Legend variant — the chip is also the colour key of what it filters, so
+   the colour stays visible while OFF; ON adds the border and glow. */
+.toggle-chip.tinted.legend:not(.on) {
+    color: var(--chip-accent);
+}
+.toggle-chip.tinted.legend:not(.on) .toggle-chip-dot {
+    background: color-mix(in srgb, var(--chip-accent) 45%, transparent);
+}
 /* Edge-kind visibility bar above the link-chart canvas. */
 .graph-filter-bar {
     display: flex;

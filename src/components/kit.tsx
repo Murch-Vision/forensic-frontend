@@ -122,16 +122,19 @@ export function Badge({text, kind}: {text: string; kind: string}) {
 
 // On/off filter pill — use instead of native checkboxes in toolbars.
 // `color` tints the ON state (legend-style chips, e.g. edge kinds); without
-// it the chip stays accent-cyan.
-export function ToggleChip({label, on, onToggle, color}: {
+// it the chip stays accent-cyan. `legend` keeps the colour while OFF too —
+// for a chip that is also the colour key of the list it filters.
+export function ToggleChip({label, on, onToggle, color, legend}: {
   label: string;
   on: boolean;
   onToggle: () => void;
   color?: string;
+  legend?: boolean;
 }) {
   return (
     <button type="button" aria-pressed={on}
-      className={`toggle-chip${color ? " tinted" : ""}${on ? " on" : ""}`}
+      className={`toggle-chip${color ? " tinted" : ""}${
+        color && legend ? " legend" : ""}${on ? " on" : ""}`}
       style={color
         ? {"--chip-accent": color} as CSSProperties
         : undefined}
