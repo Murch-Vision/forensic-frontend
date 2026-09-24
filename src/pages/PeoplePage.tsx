@@ -201,6 +201,21 @@ export default function PeoplePage() {
   const activeCase = caseQ.data?.activeCase ?? null;
 
   const people = useMemo(() => data?.globalPeople ?? [], [data]);
+  const bankOptions = useMemo(() => {
+    const banks = new Map<string, string>();
+    for (const person of people) {
+      for (const number of person.accountNumbers) {
+        const bank = parseMongolianIban(number);
+        if (bank?.bankName) banks.set(bank.bankCode, bank.bankName);
+      }
+    }
+    return [...banks].map(([value, label]) => ({value, label}))
+      .sort((a, b) => a.label.localeCompare(b.label, "mn"));
+  }, [people]);
+  const requestedBank = params.get("bank") ?? "all";
+  const bankFilter = requestedBank === "unknown"
+    || bankOptions.some((bank) => bank.value === requestedBank)
+    ? requestedBank : "all";
 
   // Distinct cases present across everyone, with a per-case headcount, for the
   // case filter dropdown.
@@ -224,6 +239,11 @@ export default function PeoplePage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return people.filter((p) => {
+      if (bankFilter !== "all" && !p.accountNumbers.some((number) => {
+        const bank = parseMongolianIban(number);
+        return bankFilter === "unknown" ? !bank?.bankName
+          : bank?.bankCode === bankFilter;
+      })) return false;
       if (groupFilter === "offender" && !p.offender) return false;
       if (groupFilter === "other" && p.offender) return false;
       if (groupFilter === "high-risk"
@@ -238,7 +258,7 @@ export default function PeoplePage() {
         p.accountNumbers.some((n) => n.toLowerCase().includes(q)) ||
         (p.nationalId ?? "").toLowerCase().includes(q));
     });
-  }, [people, search, caseFilter, groupFilter]);
+  }, [people, search, caseFilter, groupFilter, bankFilter]);
 
   const selected =
     filtered.find((p) => p.key === selectedKey) ?? filtered[0] ?? null;
@@ -398,6 +418,19 @@ export default function PeoplePage() {
                     {value: "other", label: "Хэрэгтний бүртгэлд таараагүй"},
                     {value: "high-risk", label: "Өндөр эрсдэлтэй"},
                   ]} />
+                <Select value={bankFilter} searchable
+                  onChange={(value) => setParams((previous) => {
+                    const next = new URLSearchParams(previous);
+                    if (value === "all") next.delete("bank");
+                    else next.set("bank", value);
+                    return next;
+                  })}
+                  style={{width: "100%", marginBottom: 8}}
+                  options={[
+                    {value: "all", label: "Бүх банк"},
+                    ...bankOptions,
+                    {value: "unknown", label: "Банк тодорхойгүй"},
+                  ]} />
                 <input className="form-input" style={{width: "100%"}}
                   placeholder="Нэр, утас, данс, РД-гаар хайх..."
                   value={search}
@@ -427,15 +460,24 @@ export default function PeoplePage() {
                         color: p.offender ? "var(--accent-red)" : undefined}}>
                         {p.offender && <OffenderTag />}{p.fullName}
                       </div>
+                      {p.accountNumbers.length > 0 && (
+                        <div style={{fontSize: 12, fontWeight: 600,
+                          color: "var(--accent-cyan)", marginTop: 4,
+                          overflowWrap: "anywhere"}}>
+                          Банк: {[...new Set(p.accountNumbers.map((n) =>
+                            parseMongolianIban(n)?.bankName ?? "Банк тодорхойгүй"))]
+                            .join(" · ")}
+                        </div>
+                      )}
+                      {(p.phoneNumbers[0] || p.occupation || !p.accountNumbers.length) && (
                       <div style={{fontSize: 11,
                         color: "var(--text-muted)", marginTop: 2,
                         overflow: "hidden", textOverflow: "ellipsis",
                         whiteSpace: "nowrap"}}>
-                        {[...new Set(p.accountNumbers.map((n) =>
-                          parseMongolianIban(n)?.bankName).filter(Boolean)),
-                          p.phoneNumbers[0], p.occupation]
+                        {[p.phoneNumbers[0], p.occupation]
                           .filter(Boolean).join(" · ") || "Мэдээлэл алга"}
                       </div>
+                      )}
                     </div>
                     <div style={{display: "flex", gap: 4, flexShrink: 0}}>
                       {p.suspects.length > 1 && (

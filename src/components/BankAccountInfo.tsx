@@ -16,7 +16,7 @@ export function BankAccountInfo({number}: {number: string}) {
 
   return (
     <div style={{display: "grid", gap: 8, minWidth: 0}}>
-      <div style={{fontSize: 12, color: "var(--text-secondary)"}}>
+      <div style={{fontSize: 13, fontWeight: 600, color: "var(--accent-cyan)"}}>
         {account?.bankName ?? "Банк тодорхойгүй"}
       </div>
       {account && (
