@@ -1008,18 +1008,6 @@ function NetworkGraph(props, ref) {
     }
   }
 
-  function onReset() {
-    viewRef.current = {k: 1, tx: 0, ty: 0};
-    nodesRef.current.forEach((n) => {
-      n.fx = null;
-      n.fy = null;
-    });
-    alphaRef.current = 1;
-    ensureRunning();
-    // Forget any saved arrangement — this is a clean, fresh re-layout.
-    emitLayout(null);
-  }
-
   function zoomButton(factor: number) {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1329,10 +1317,6 @@ function NetworkGraph(props, ref) {
             + "холбоог эргэн тойронд нь, дундын хүмүүсийг голд нь эгнүүлнэ"}
           onClick={() => autoCluster()}>
           ✥ Бөөгнүүлэх
-        </button>
-        <button className="btn" style={{...overlayBtn, height: 30}}
-          onClick={onReset}>
-          ↺ Дахин эхлүүлэх
         </button>
       </div>
       <div style={{
