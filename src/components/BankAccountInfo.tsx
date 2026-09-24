@@ -1,8 +1,12 @@
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import {useMutation} from "@apollo/client";
 import {describeAccount, isNumberLikeName, type StoredBankAccount}
   from "../lib/iban";
 import {VERIFY_BANK_ACCOUNT} from "../graphql/queries";
+
+// Accounts already looked up automatically this session — a number no bank
+// knows is not asked again on every visit.
+const autoChecked = new Set<string>();
 
 export function BankAccountInfo({account, personName, onVerified}: {
   account: StoredBankAccount;
@@ -16,6 +20,14 @@ export function BankAccountInfo({account, personName, onVerified}: {
     found: boolean; message: string}}>(VERIFY_BANK_ACCOUNT);
   const needsCheck = !info.bankName
     || (personName !== undefined && isNumberLikeName(personName));
+
+  // Unknown bank: look it up as soon as the card shows, no click needed.
+  useEffect(() => {
+    if (info.bankName || autoChecked.has(account.accountNumber)) return;
+    autoChecked.add(account.accountNumber);
+    void check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account.accountNumber, info.bankName]);
 
   async function copy(value: string, label: string) {
     try {
@@ -44,7 +56,7 @@ export function BankAccountInfo({account, personName, onVerified}: {
         alignItems: "center"}}>
         <span style={{fontSize: 13, fontWeight: 600,
           color: "var(--accent-cyan)"}}>
-          {info.bankName ?? "Банк тодорхойгүй"}
+          {info.bankName ?? (loading ? "Банк шалгаж байна…" : "Банк тодорхойгүй")}
         </span>
         {needsCheck && (
           <button className="btn btn-sm" disabled={loading} onClick={check}

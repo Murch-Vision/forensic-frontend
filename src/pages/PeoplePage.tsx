@@ -156,6 +156,13 @@ function Avatar({name, photoData, riskLevel, lg, xl}: {
   );
 }
 
+// " · Хаан банк · Голомт банк" — the banks behind a person's accounts.
+function bankNames(accounts: StoredBankAccount[]): string {
+  const names = [...new Set(accounts.map((a) => describeAccount(a).bankName)
+    .filter((name): name is string => Boolean(name)))];
+  return names.length ? ` · ${names.join(" · ")}` : "";
+}
+
 function InfoField({label, value}: {label: string; value: string | null}) {
   return (
     <div>
@@ -745,7 +752,8 @@ export default function PeoplePage() {
                       </div>
                     )}
                 </Card>
-                <Card title={`Банкны данс (${selected.accountNumbers.length})`}
+                <Card title={`Банкны данс (${selected.accountNumbers.length})${
+                  bankNames(selected.bankAccounts)}`}
                   actions={
                     <button className="btn"
                       onClick={() => setShowAccountForm((v) => !v)}>
