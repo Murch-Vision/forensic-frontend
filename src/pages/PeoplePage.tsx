@@ -11,6 +11,7 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useMemo, useState} from "react";
+import {useSearchParams} from "react-router-dom";
 import {useMutation, useQuery} from "@apollo/client";
 import {
   ACTIVE_CASE_QUERY,
@@ -33,6 +34,8 @@ import {
 import PersonFormModal, {type PersonForm} from "../components/PersonFormModal";
 import {Select} from "../components/inputs";
 import {useDrilldown} from "../lib/drilldown";
+import {parseMongolianIban} from "../lib/iban";
+import {BankAccountInfo} from "../components/BankAccountInfo";
 import type {RiskLevel, SuspectStatus} from "../types";
 
 interface PersonSuspect {
@@ -171,6 +174,10 @@ export default function PeoplePage() {
     useQuery<{globalPeople: GlobalPerson[]}>(GLOBAL_PEOPLE_QUERY);
   const [search, setSearch] = useState("");
   const [caseFilter, setCaseFilter] = useState(0);
+  const [params, setParams] = useSearchParams();
+  const requestedGroup = params.get("group") ?? "all";
+  const groupFilter = ["offender", "other", "high-risk"].includes(requestedGroup)
+    ? requestedGroup : "all";
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
@@ -217,6 +224,10 @@ export default function PeoplePage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return people.filter((p) => {
+      if (groupFilter === "offender" && !p.offender) return false;
+      if (groupFilter === "other" && p.offender) return false;
+      if (groupFilter === "high-risk"
+        && p.riskLevel !== "HIGH" && p.riskLevel !== "CRITICAL") return false;
       if (caseFilter
         && !p.cases.some((c) => c.caseFile.id === caseFilter)) return false;
       if (!q) return true;
@@ -227,7 +238,7 @@ export default function PeoplePage() {
         p.accountNumbers.some((n) => n.toLowerCase().includes(q)) ||
         (p.nationalId ?? "").toLowerCase().includes(q));
     });
-  }, [people, search, caseFilter]);
+  }, [people, search, caseFilter, groupFilter]);
 
   const selected =
     filtered.find((p) => p.key === selectedKey) ?? filtered[0] ?? null;
@@ -373,6 +384,20 @@ export default function PeoplePage() {
                     ...caseOptions.map((c) => ({value: c.id,
                       label: `${c.name} (${c.count})`})),
                   ]} />
+                <Select value={groupFilter}
+                  onChange={(value) => setParams((previous) => {
+                    const next = new URLSearchParams(previous);
+                    if (value === "all") next.delete("group");
+                    else next.set("group", value);
+                    return next;
+                  })}
+                  style={{width: "100%", marginBottom: 8}}
+                  options={[
+                    {value: "all", label: "Бүх бүртгэл"},
+                    {value: "offender", label: "Хэрэгтний бүртгэлд таарсан"},
+                    {value: "other", label: "Хэрэгтний бүртгэлд таараагүй"},
+                    {value: "high-risk", label: "Өндөр эрсдэлтэй"},
+                  ]} />
                 <input className="form-input" style={{width: "100%"}}
                   placeholder="Нэр, утас, данс, РД-гаар хайх..."
                   value={search}
@@ -406,7 +431,9 @@ export default function PeoplePage() {
                         color: "var(--text-muted)", marginTop: 2,
                         overflow: "hidden", textOverflow: "ellipsis",
                         whiteSpace: "nowrap"}}>
-                        {[p.phoneNumbers[0], p.occupation]
+                        {[...new Set(p.accountNumbers.map((n) =>
+                          parseMongolianIban(n)?.bankName).filter(Boolean)),
+                          p.phoneNumbers[0], p.occupation]
                           .filter(Boolean).join(" · ") || "Мэдээлэл алга"}
                       </div>
                     </div>
@@ -661,10 +688,9 @@ export default function PeoplePage() {
                   {selected.accountNumbers.length === 0
                     ? <Empty message="Банкны данс алга" />
                     : (
-                      <div style={{display: "flex", gap: 6,
-                        flexWrap: "wrap"}}>
+                      <div style={{display: "grid", gap: 16}}>
                         {selected.accountNumbers.map((n) => (
-                          <span key={n} className="id-chip">{n}</span>
+                          <BankAccountInfo key={n} number={n} />
                         ))}
                       </div>
                     )}
