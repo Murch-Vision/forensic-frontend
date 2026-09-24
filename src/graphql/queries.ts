@@ -7,6 +7,7 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {gql} from "@apollo/client";
+import {visit} from "graphql";
 
 // Dashboard, active case: the evidence queries are case-scoped server-side,
 // so these lists ARE the case. Counterparty figures come from caseRelations
@@ -144,6 +145,14 @@ export const LINKCHART_QUERY = gql`
     }
   }
 `;
+
+// Older API processes do not yet accept the account-owner option. Keep all
+// existing selections when retrying against that schema.
+export const LINKCHART_COMPAT_QUERY = visit(LINKCHART_QUERY, {
+  Argument(node) {
+    return node.name.value === "includeAccountOwners" ? null : undefined;
+  },
+});
 
 export const NETWORK_FLOW_QUERY = gql`
   query NetworkFlow($caseFileId: Int!) {

@@ -19,6 +19,7 @@ import {
   DELETE_MANUAL_LINK,
   GENERATE_LINKS,
   LINKCHART_QUERY,
+  LINKCHART_COMPAT_QUERY,
   NETWORK_FLOW_QUERY,
   SET_ACTIVE_CASE,
   SET_SUSPECT_PHOTO,
@@ -168,7 +169,20 @@ export default function LinkChartPage() {
   const caseQ = useQuery<{activeCase:
     {id: number; caseId: string; caseName: string} | null}>(ACTIVE_CASE_QUERY);
   const activeCaseId = caseQ.data?.activeCase?.id ?? null;
-  const {data, loading, refetch} = useQuery<LcData>(LINKCHART_QUERY);
+  const linkQ = useQuery<LcData>(LINKCHART_QUERY);
+  // Apollo puts validation errors from HTTP 400 responses in networkError.
+  const validationResponse = (linkQ.error?.networkError as
+    {result?: {errors?: Array<{message: string}>}} | null)?.result;
+  const linkErrors = [
+    ...(linkQ.error?.graphQLErrors ?? []),
+    ...(validationResponse?.errors ?? []),
+  ];
+  const needsCompat = linkErrors.some((error) =>
+    error.message.includes('Unknown argument "includeAccountOwners"')
+    && error.message.includes('"Query.suspects"'));
+  const compatQ = useQuery<LcData>(LINKCHART_COMPAT_QUERY, {skip: !needsCompat});
+  const graphQ = needsCompat ? compatQ : linkQ;
+  const {data, loading, refetch} = graphQ;
   const txQ = useQuery<TxData>(TRANSACTIONS_QUERY);
   const callQ = useQuery<CallData>(CALL_RECORDS_QUERY);
   const flowQ = useQuery<{networkFlow: {
@@ -968,13 +982,25 @@ export default function LinkChartPage() {
     </div>
   );
 
-  if (loading || caseQ.loading || txQ.loading || callQ.loading || graphsQ.loading || !data || !network) {
+  const loadError = graphQ.error || caseQ.error || txQ.error || callQ.error || graphsQ.error;
+  const isLoading = loading || caseQ.loading || txQ.loading || callQ.loading || graphsQ.loading;
+  if (loadError || isLoading || !data || !network) {
     return (
       <div className="page-container">
         <PageHeader icon="🕸" title="Холбоосын зураглал"
           subtitle="СҮЛЖЭЭНИЙ ШИНЖИЛГЭЭ" actions={actions} />
         <CaseGate>
-          <Loading />
+          {loadError || !isLoading ? (
+            <Card>
+              <p role="alert">Зураглалын мэдээллийг ачаалж чадсангүй.</p>
+              <button className="btn" onClick={() => {
+                void Promise.allSettled([
+                  refetch(), caseQ.refetch(), txQ.refetch(),
+                  callQ.refetch(), graphsQ.refetch(),
+                ]);
+              }}>Дахин оролдох</button>
+            </Card>
+          ) : <Loading />}
         </CaseGate>
       </div>
     );
