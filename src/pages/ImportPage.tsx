@@ -18,7 +18,7 @@ import {
   UPLOAD_APPEND,
   UPLOAD_START,
 } from "../graphql/queries";
-import {Badge, Card, Empty, Loading, PageHeader} from "../components/kit";
+import {Badge, Card, DataTable, Empty, Loading, PageHeader} from "../components/kit";
 import {Select} from "../components/inputs";
 import CaseGate from "../components/CaseGate";
 import {formatDate, formatNum} from "../lib/format";
@@ -251,7 +251,7 @@ function AccountPurge() {
             </div>
           )}
           {err && (
-            <div style={{marginTop: 12, padding: "8px 12px", fontSize: 12,
+            <div role="alert" style={{marginTop: 12, padding: "8px 12px", fontSize: 12,
               color: "var(--risk-high)",
               border: "1px solid var(--risk-high)", borderRadius: 6}}>
               {err}
@@ -288,7 +288,10 @@ export default function ImportPage() {
 
   const [runImport, importQ] = useMutation<{importData: Summary}>(IMPORT_DATA);
 
+  const [importing, setImporting] = useState(false);
+  const importLock = useRef(false);
   const summary = importQ.data?.importData;
+  const working = busy || importing || importQ.loading || uploadPct !== null;
   const isExcel = !!filename && isExcelName(filename);
 
   // Stream large content to the server in chunks and return its uploadId;
@@ -315,6 +318,8 @@ export default function ImportPage() {
   }
 
   async function handleFile(file: File) {
+    if (working) return;
+    importQ.reset();
     setPreview(null);
     setRowRange(AUTO_RANGE);
     setSheets([]);
@@ -363,6 +368,8 @@ export default function ImportPage() {
   }
 
   function clearFile() {
+    if (working) return;
+    importQ.reset();
     setContent("");
     setFilename(null);
     setFileSize(0);
@@ -393,6 +400,8 @@ export default function ImportPage() {
     rangeArg: RowRange = rowRange
   ) {
     if (!contentArg && !uploadArg) return;
+    importQ.reset();
+    setError(null);
     setBusy(true);
     try {
       const res = await client.query<{previewImport: Preview}>({
@@ -412,6 +421,9 @@ export default function ImportPage() {
       const seed: Record<string, string> = {};
       for (const m of pv.mapping) seed[m.field] = m.column;
       setMapping(seed);
+    } catch (e) {
+      setPreview(null);
+      setError(e instanceof Error ? e.message : "Файл боловсруулахад алдаа гарлаа.");
     } finally {
       setBusy(false);
     }
@@ -421,13 +433,19 @@ export default function ImportPage() {
   // hands that decision back to the detector rather than freezing a guess.
   function commitRow(field: keyof RowRange, raw: string) {
     const n = Number(raw.replace(/[^\d]/g, ""));
+    const current = field === "headerRow" ? preview?.headerRow
+      : field === "startRow" ? preview?.firstDataRow : preview?.lastDataRow;
+    if (n === current || (!n && rowRange[field] == null)) return;
     const next: RowRange = {...rowRange, [field]: n > 0 ? n : null};
     setRowRange(next);
     void doPreview(content, filename, sheetName, uploadId, next);
   }
 
   async function onImport() {
-    if (!content) return;
+    if (!content || !preview || working || importLock.current) return;
+    importLock.current = true;
+    setImporting(true);
+    importQ.reset();
     setError(null);
     const mappingArg = Object.entries(mapping)
       .filter(([, col]) => col && col.trim())
@@ -471,10 +489,15 @@ export default function ImportPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message
         : "Импорт амжилтгүй боллоо.");
+    } finally {
+      importLock.current = false;
+      setImporting(false);
+      setUploadPct(null);
     }
   }
 
   function setMap(field: string, column: string) {
+    importQ.reset();
     setMapping((prev) => ({...prev, [field]: column}));
   }
 
@@ -486,10 +509,13 @@ export default function ImportPage() {
         subtitle="CSV / TSV / EXCEL ХУУЛГА · CDR · ХАНДАЛТЫН ЛОГ" />
 
       <CaseGate>
-      <Card title="1 — Файл оруулах" style={{marginBottom: 16}}>
+      <section className={filename ? "import-command has-file" : "import-command"}>
+      <Card title="1 — Файл сонгох">
+        <div className="import-source">
         <input
           ref={fileInput}
           type="file"
+          disabled={working}
           accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm"
           style={{display: "none"}}
           onChange={(e) => {
@@ -498,34 +524,34 @@ export default function ImportPage() {
           }}
         />
         <div
-          className={dragOver ? "dropzone dragover" : "dropzone"}
+          className={`dropzone${dragOver ? " dragover" : ""}${filename ? " import-file-selected" : ""}`}
           role="button"
           tabIndex={0}
-          onClick={() => fileInput.current?.click()}
+          onClick={() => {if (!working) fileInput.current?.click();}}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              fileInput.current?.click();
+              if (!working) fileInput.current?.click();
             }
           }}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
         >
-          <svg className="dropzone-icon" width="36" height="36"
+          {!filename && <svg className="dropzone-icon" width="36" height="36"
             viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="17 8 12 3 7 8" />
             <line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
+          </svg>}
           {filename ? (
             <div className="file-chip" onClick={(e) => e.stopPropagation()}>
               <span>{filename}</span>
               {isExcel && <Badge text="EXCEL" kind="low" />}
               <span className="file-chip-size">{formatSize(fileSize)}</span>
-              <button className="file-chip-remove" onClick={clearFile}
-                title="Файл арилгах" aria-label="Файл арилгах">✕</button>
+              <button disabled={working} className="file-chip-remove" onClick={clearFile}
+                aria-label="Файл арилгах">✕</button>
             </div>
           ) : (
             <>
@@ -538,47 +564,80 @@ export default function ImportPage() {
           {isExcel && sheets.length > 0 && (
             <div onClick={(e) => e.stopPropagation()}
               style={{display: "inline-block"}}>
-              <Select value={sheetName ?? ""}
+              <Select disabled={working} value={sheetName ?? ""}
                 onChange={(v) => {
                   setSheetName(v);
                   setRowRange(AUTO_RANGE);
                   void doPreview(content, filename, v, uploadId, AUTO_RANGE);
                 }}
                 options={sheets.map((s) => ({value: s, label: s}))}
-                style={{maxWidth: 240}}
-                title="Excel хуудас сонгох" />
+                style={{maxWidth: 240}} />
             </div>
           )}
         </div>
-        <div style={{display: "flex", gap: 12, marginTop: 16,
-          alignItems: "flex-end", flexWrap: "wrap"}}>
+        <div className="import-actions">
           <div>
             <label className="form-label">Төрөл</label>
-            <Select value={kind}
-              onChange={(v) => setKind(v as ImportKind)}
+            <Select disabled={working} value={kind}
+              onChange={(v) => {importQ.reset(); setKind(v as ImportKind);}}
               options={KINDS}
               style={{minWidth: 220}} />
           </div>
-          <button className="btn btn-primary" onClick={onImport}
-            disabled={importQ.loading || busy || !content}>
-            {importQ.loading ? "ИМПОРТЛОЖ БАЙНА..."
+          {summary ? <button className="btn btn-primary" onClick={() => fileInput.current?.click()}>
+            ӨӨР ФАЙЛ СОНГОХ
+          </button> : <button className="btn btn-primary" onClick={onImport}
+            disabled={working || !content || !preview}>
+            {importing || importQ.loading ? "ИМПОРТЛОЖ БАЙНА..."
               : uploadPct !== null ? `БАЙРШУУЛЖ БАЙНА... ${uploadPct}%`
               : busy ? "ШИНЖИЛЖ БАЙНА..." : "ИМПОРТЛОХ"}
-          </button>
+          </button>}
         </div>
-        <div style={{fontSize: 11, color: "var(--text-muted)", marginTop: 8}}>
-          Мөр бүр өөрөө эзэндээ холбогдоно — дуудлага бүртгэлтэй дугаараар,
-          хуулга дансны багана эсвэл дансаараа.
         </div>
+        {!summary && <div className="import-command-hint">
+          {preview ? `${preview.totalRows} мөр · Доорх мөр, баганын тохиргоог шалгаад импортлоно уу.`
+            : "Файл сонгоход урьдчилсан харагдац гарна."}
+        </div>}
         {error && (
-          <div style={{marginTop: 12, padding: "8px 12px", fontSize: 12,
+          <div role="alert" style={{marginTop: 12, padding: "8px 12px", fontSize: 12,
             color: "var(--risk-high)",
             border: "1px solid var(--risk-high)", borderRadius: 6}}>
             {error}
           </div>
         )}
+      {summary && (
+        <div className="import-result" role="status" aria-live="polite">
+          <strong>{summary.errors.length ? "Импортын үр дүн" : "Импорт дууслаа"}</strong>
+          <div style={{display: "flex", flexWrap: "wrap", gap: 16, marginTop: 8, marginBottom: 8}}>
+            <span>Нийт: <strong>{summary.totalRows}</strong></span>
+            <span style={{color: "var(--accent-green)"}}>
+              Импортлосон: <strong>{summary.importedRows}</strong>
+            </span>
+            <span style={{color: "var(--text-muted)"}}>
+              Алгассан: <strong>{summary.skippedRows}</strong>
+            </span>
+            <span style={{color: "var(--accent-amber, #FFB300)"}}>
+              Давхардсан: <strong>{summary.duplicateRows}</strong>
+            </span>
+          </div>
+          {summary.duplicateRows > 0 && (
+            <div style={{fontSize: 12, marginBottom: 12}}>
+              {summary.duplicateRows} мөр санд аль хэдийн байсан тул дахин
+              ороогүй.
+            </div>
+          )}
+          <div className="import-result-errors">
+          {summary.errors.map((e, i) => (
+            <div key={i} style={{fontSize: 11, color: "var(--risk-high)"}}>
+              {e}
+            </div>
+          ))}
+          </div>
+        </div>
+      )}
       </Card>
+      </section>
 
+      <fieldset className="import-settings" disabled={working}>
       {kind === "CDR" && (
         <Card title="Сэжигтэн сонгох — дуудлагын эзэн"
           style={{marginBottom: 16}}>
@@ -613,8 +672,9 @@ export default function ImportPage() {
         </Card>
       )}
 
+      <div className="import-workspace">
       {preview && (
-        <Card title="2 — Урьдчилсан харагдац" style={{marginBottom: 16}} noPadding>
+        <Card title="2 — Мөр шалгах" noPadding>
           <div style={{padding: "12px 16px", fontSize: 12,
             borderBottom: "1px solid var(--border-primary)"}}>
             Танигдсан загвар:{" "}
@@ -643,37 +703,21 @@ export default function ImportPage() {
           {preview.headers.length === 0 ? (
             <Empty message="Багана танигдсангүй" />
           ) : (
-            <div style={{overflowX: "auto"}}>
-              <table className="data-grid" style={{width: "100%"}}>
-                <thead>
-                  <tr>
-                    {preview.headers.map((h, i) => <th key={i}>{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.sampleRows.map((row, i) => (
-                    <tr key={i}>
-                      {preview.headers.map((_h, j) => (
-                        <td key={j}>{row[j] ?? "—"}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable rows={preview.sampleRows} rowKey={(_row, i) => i}
+              scroll={{maxHeight: 380, overflow: "auto"}}
+              columns={preview.headers.map((header, i) => ({header,
+                render: (row: (string | null)[]) => row[i] ?? "—"}))} />
           )}
         </Card>
       )}
 
       {preview && (
-        <Card title="Баганы тааруулалт (нягтлах)" style={{marginBottom: 16}}>
+        <Card title="3 — Багана тааруулах">
           <div style={{fontSize: 11, color: "var(--text-muted)",
             marginBottom: 12}}>
             Автоматаар тааруулсан баганууд. Шаардлагатай бол гараар засна уу.
           </div>
-          <div style={{display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-            gap: 12}}>
+          <div className="import-mapping">
             {mapFields.map((f) => (
               <div key={f.key}>
                 <label className="form-label">{f.label}</label>
@@ -687,38 +731,12 @@ export default function ImportPage() {
           </div>
         </Card>
       )}
-
-      {summary && (
-        <Card title="3 — Үр дүн">
-          <div style={{display: "flex", gap: 24, marginBottom: 12}}>
-            <span>Нийт: <strong>{summary.totalRows}</strong></span>
-            <span style={{color: "var(--accent-green)"}}>
-              Импортлосон: <strong>{summary.importedRows}</strong>
-            </span>
-            <span style={{color: "var(--text-muted)"}}>
-              Алгассан: <strong>{summary.skippedRows}</strong>
-            </span>
-            <span style={{color: "var(--accent-amber, #FFB300)"}}>
-              Давхардсан: <strong>{summary.duplicateRows}</strong>
-            </span>
-          </div>
-          {summary.duplicateRows > 0 && (
-            <div style={{fontSize: 12, marginBottom: 12}}>
-              {summary.duplicateRows} мөр санд аль хэдийн байсан тул дахин
-              ороогүй.
-            </div>
-          )}
-          {summary.errors.map((e, i) => (
-            <div key={i} style={{fontSize: 11, color: "var(--risk-high)"}}>
-              {e}
-            </div>
-          ))}
-        </Card>
-      )}
-
-      <div style={{marginTop: 16}}>
-        <AccountPurge />
       </div>
+      </fieldset>
+      <details className="import-maintenance">
+        <summary>Импортолсон данс удирдах</summary>
+        <AccountPurge />
+      </details>
       </CaseGate>
     </div>
   );

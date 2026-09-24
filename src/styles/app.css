@@ -324,6 +324,35 @@ body {
     transition: var(--transition);
     text-align: center;
 }
+
+.import-command { margin-bottom: 16px; }
+.import-command.has-file { position: sticky; top: 0; z-index: 20; }
+.import-command .card { box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.import-source { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 16px; }
+.import-source .dropzone { flex: 1 1 360px; }
+.dropzone.import-file-selected { min-height: 64px; padding: 10px; flex-direction: row; flex-wrap: wrap; }
+.import-file-selected .file-chip { max-width: 100%; }
+.import-file-selected .file-chip > span:first-child { overflow-wrap: anywhere; }
+.import-actions { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.import-command-hint { margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+.import-settings { border: 0; padding: 0; margin: 0; min-width: 0; }
+.import-workspace { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+.import-workspace > .card { min-width: 0; }
+.import-mapping { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; max-height: 420px; overflow: auto; padding-right: 6px; }
+.import-mapping > div { display: flex; flex-direction: column; justify-content: flex-end; }
+.import-result { border-top: 1px solid var(--border-primary); margin-top: 12px; padding-top: 12px; }
+.import-result > strong { color: var(--accent-cyan); }
+.import-result-errors { max-height: 120px; overflow: auto; }
+.import-maintenance { margin-top: 20px; }
+.import-maintenance > summary { cursor: pointer; padding: 12px 0; color: var(--text-secondary); }
+@media (max-width: 1100px) {
+    .import-workspace { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+    .import-command.has-file { position: static; }
+    .import-actions { width: 100%; }
+    .import-actions > div { flex: 1; }
+}
 .dropzone:hover, .dropzone:focus-visible, .dropzone.dragover {
     border-color: var(--accent-cyan);
     background: rgba(0, 229, 255, 0.04);
