@@ -754,6 +754,9 @@ function NetworkGraph(props, ref) {
     // the first animation frame, after the canvas has a real CSS size.
     viewRef.current = {k: 1, tx: 0, ty: 0};
     autoFitPendingRef.current = true;
+    // Use the same tidy arrangement as the Бөөгнүүлэх button on first load.
+    // Never replace restored node positions or persist an automatic layout.
+    if (!restoredAny) autoCluster(false);
     ensureRunning();
     return () => {
       cancelAnimationFrame(rafRef.current);
@@ -1073,7 +1076,7 @@ function NetworkGraph(props, ref) {
   //   2. spread the hubs apart, ring each hub's own satellites around it,
   //   3. lay the SHARED nodes — connected to several hubs — out as a tidy
   //      column midway between exactly the hubs they bridge.
-  function autoCluster() {
+  function autoCluster(persist = true) {
     const nodes = nodesRef.current;
     const links = linksRef.current;
     if (!nodes.length) return;
@@ -1288,7 +1291,7 @@ function NetworkGraph(props, ref) {
     // can be much larger than the nominal simulation area for dense cases.
     fitAllNodes();
     ensureRunning();
-    emitLayout(currentPositions());
+    if (persist) emitLayout(currentPositions());
   }
 
   // The controls float over the canvas, so .btn's transparent background lets
@@ -1324,7 +1327,7 @@ function NetworkGraph(props, ref) {
         <button className="btn" style={{...overlayBtn, height: 30}}
           title={"Автоматаар цэгцлэх: төв хүмүүсийг салгаж, тус бүрийн "
             + "холбоог эргэн тойронд нь, дундын хүмүүсийг голд нь эгнүүлнэ"}
-          onClick={autoCluster}>
+          onClick={() => autoCluster()}>
           ✥ Бөөгнүүлэх
         </button>
         <button className="btn" style={{...overlayBtn, height: 30}}

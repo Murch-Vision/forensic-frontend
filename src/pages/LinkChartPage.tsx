@@ -498,19 +498,29 @@ export default function LinkChartPage() {
   const [confirmDelGraph, setConfirmDelGraph] = useState<number | null>(null);
   // Momentary "✓ saved" flash after overwriting the loaded board.
   const [savedFlash, setSavedFlash] = useState(false);
-  // Layout to restore into the canvas + a key that forces re-application.
-  // Seeded from localStorage so freely-dragged node positions come back after
-  // a reload without needing to save a board.
+  // Draft positions belong to a case, just like named saved boards.
+  const positionsKey = `forensic.nodePositions:${activeCaseId}`;
   const [layout, setLayout] = useState<{
-    positions: Record<string, {x: number; y: number; s?: number; sh?: "rect"}> | null; key: number;
-  }>(() => {
+    positions: Record<string, {x: number; y: number; s?: number; sh?: "rect"}> | null;
+    key: number; caseId: number | null;
+  }>({positions: null, key: 0, caseId: null});
+  const casePositions = useMemo(() => {
+    if (layout.caseId === activeCaseId) return layout.positions;
     try {
-      const raw = localStorage.getItem("forensic.nodePositions");
-      return {positions: raw ? JSON.parse(raw) : null, key: 0};
+      return JSON.parse(localStorage.getItem(positionsKey) || "null");
     } catch {
-      return {positions: null, key: 0};
+      return null;
     }
-  });
+  }, [layout, activeCaseId, positionsKey]);
+  const previousCase = useRef(activeCaseId);
+  useEffect(() => {
+    if (previousCase.current === activeCaseId) return;
+    previousCase.current = activeCaseId;
+    setActiveGraphId(null);
+    setSelected(null);
+    setSelectedLink(null);
+    setFocusId(null);
+  }, [activeCaseId]);
 
   // Called whenever the analyst drags a node (or resets). Persist the new
   // arrangement so it survives reloads, and update the restore baseline
@@ -522,14 +532,14 @@ export default function LinkChartPage() {
     try {
       if (positions) {
         localStorage.setItem(
-          "forensic.nodePositions", JSON.stringify(positions));
+          positionsKey, JSON.stringify(positions));
       } else {
-        localStorage.removeItem("forensic.nodePositions");
+        localStorage.removeItem(positionsKey);
       }
     } catch {
       /* ignore */
     }
-    setLayout((prev) => ({positions, key: prev.key}));
+    setLayout((prev) => ({positions, key: prev.key, caseId: activeCaseId}));
   }
 
   // Snapshot the whole current view for saving.
@@ -575,10 +585,10 @@ export default function LinkChartPage() {
     applyHiddenKinds(new Set((st.hiddenKinds ?? []) as NetworkLinkKind[]));
     saveHidden(new Set(st.hidden ?? []));
     const pos = st.positions ?? {};
-    setLayout({positions: pos, key: Date.now()});
+    setLayout({positions: pos, key: Date.now(), caseId: activeCaseId});
     // A loaded board's layout becomes the new persistent baseline too.
     try {
-      localStorage.setItem("forensic.nodePositions", JSON.stringify(pos));
+      localStorage.setItem(positionsKey, JSON.stringify(pos));
     } catch {
       /* ignore */
     }
@@ -672,11 +682,11 @@ export default function LinkChartPage() {
       // leaving the deleted board's node positions stuck on screen.
       setActiveGraphId(null);
       try {
-        localStorage.removeItem("forensic.nodePositions");
+        localStorage.removeItem(positionsKey);
       } catch {
         /* ignore */
       }
-      setLayout({positions: null, key: Date.now()});
+      setLayout({positions: null, key: Date.now(), caseId: activeCaseId});
       setSelected(null);
       setSelectedLink(null);
     }
@@ -958,7 +968,7 @@ export default function LinkChartPage() {
     </div>
   );
 
-  if (loading || !data || !network) {
+  if (loading || caseQ.loading || txQ.loading || callQ.loading || graphsQ.loading || !data || !network) {
     return (
       <div className="page-container">
         <PageHeader icon="🕸" title="Холбоосын зураглал"
@@ -1281,11 +1291,11 @@ export default function LinkChartPage() {
         )}
         {network.nodes.length > 0 ? (
           <div style={{position: "relative"}}>
-            <NetworkGraph ref={graphRef}
+            <NetworkGraph key={activeCaseId} ref={graphRef}
               nodes={focusView ? focusView.nodes : network.nodes}
               links={focusView ? focusView.links : network.links}
               selectedId={connectFrom?.id ?? selected?.id ?? focusId}
-              initialPositions={focusView ? focusView.positions : layout.positions}
+              initialPositions={focusView ? focusView.positions : casePositions}
               layoutKey={focusView ? `focus:${focusId}` : layout.key}
               // Dragging inside isolate mode rearranges the ring for viewing but
               // must NOT overwrite the real saved layout — only persist in the
