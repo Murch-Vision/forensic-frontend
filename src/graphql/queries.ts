@@ -18,7 +18,7 @@ export const DASHBOARD_CASE_QUERY = gql`
       id caseId caseName description status priority investigator createdAt
     }
     suspects { id suspectId fullName riskLevel occupation initials }
-    bankAccounts { id bankName accountNumber suspectId }
+    bankAccounts { id bankName accountNumber suspectId iban accountHolderName }
     transactions {
       id bankAccountId timestamp amount type flagStatus
       counterpartyName counterpartyAccount

@@ -33,6 +33,7 @@ import {
 } from "../lib/format";
 import {STATUS_BADGE, STATUS_LABELS} from "../nav";
 import type {RiskLevel} from "../types";
+import {accountNameLookup, realPartyName} from "../lib/accountNames";
 
 // Хэрэг-төвтэй самбар. ДҮРЭМ: зөвхөн БАЙГАА өгөгдлийг харуулна — хоосон
 // section, тэг карт, цэс давхардуулсан товч огт байхгүй. Тоо бүр нь өөрийн
@@ -63,6 +64,8 @@ interface DashAccount {
   bankName: string | null;
   accountNumber: string;
   suspectId: number | null;
+  iban: string | null;
+  accountHolderName: string | null;
 }
 
 interface DashTxn {
@@ -89,6 +92,7 @@ interface CaseData {
 interface Relation {
   key         : string;
   name        : string;
+  sourceName? : string;
   account     : string | null;
   nationalId? : string | null;
   offender?   : boolean;
@@ -225,8 +229,8 @@ function PartyModal({r, groups, txns, onClose, onOpenTxns}: {
 }) {
   const named = Boolean(r.name && r.name !== "—");
   const mine = txns.filter((t) =>
-    (named && t.counterpartyName === r.name)
-    || (!named && Boolean(r.account) && t.counterpartyAccount === r.account));
+    (named && (t.counterpartyName === r.name || t.counterpartyName === r.sourceName))
+    || (Boolean(r.account) && t.counterpartyAccount === r.account));
   const dates = mine.map((t) => t.timestamp).sort();
   const biggest = mine.reduce((max, t) => Math.max(max, t.amount), 0);
   // Аль данстай нь харьцсан бэ — тухайн хүнийг агуулж буй баганууд.
@@ -408,7 +412,7 @@ function derive(data: CaseData): Derived {
     if (!a) return {name: `Данс #${id}`, account: null};
     const owner = a.suspectId != null
       ? suspectById.get(a.suspectId)?.fullName : null;
-    const who = owner && !/^-+$/.test(owner.trim()) ? owner : a.bankName;
+    const who = realPartyName(a.accountHolderName) ?? realPartyName(owner) ?? a.bankName;
     return who
       ? {name: who, account: a.accountNumber}
       : {name: a.accountNumber, account: null};
@@ -455,8 +459,31 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   // «энэ жагсаалтаараа нөгөө улаарсан, шарласан байгаануудаа дангаар нь».
   const [showOffender, setShowOffender] = useState(false);
   const [showMutual, setShowMutual] = useState(false);
-  const {data, loading} = useQuery<CaseData>(DASHBOARD_CASE_QUERY);
-  const relQ = useQuery<RelationData>(CASE_RELATIONS_QUERY);
+  const {data: rawData, loading} = useQuery<CaseData>(DASHBOARD_CASE_QUERY, {
+    fetchPolicy: "cache-and-network",
+  });
+  const relQ = useQuery<RelationData>(CASE_RELATIONS_QUERY, {
+    fetchPolicy: "cache-and-network",
+  });
+  const ownerName = useMemo(() => accountNameLookup(rawData?.bankAccounts ?? []),
+    [rawData?.bankAccounts]);
+  const data = useMemo(() => rawData ? {...rawData,
+    transactions: rawData.transactions.map((t) => ({...t,
+      counterpartyName: ownerName(t.counterpartyAccount) ?? t.counterpartyName})),
+  } : undefined, [rawData, ownerName]);
+  const rel = useMemo(() => {
+    const summary = relQ.data?.caseRelations;
+    if (!summary) return undefined;
+    const named = (r: Relation): Relation => ({...r, sourceName: r.name,
+      name: ownerName(r.account) ?? r.name});
+    return {...summary, relations: summary.relations.map(named),
+      byAccount: summary.byAccount.map((group) => {
+        const name = ownerName(group.accountNumber) ?? group.ownerName;
+        return {...group, ownerName: name,
+          label: name ? `${name} · ${group.accountNumber}` : group.label,
+          relations: group.relations.map(named)};
+      })};
+  }, [relQ.data, ownerName]);
   const evQ = useQuery<{evidenceForCase: {id: number}[]}>(EVIDENCE_FOR_CASE, {
     variables: {caseFileId},
   });
@@ -484,7 +511,6 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   const isEmpty = data.suspects.length === 0 && !hasTxns
     && data.callRecords.length === 0;
 
-  const rel = relQ.data?.caseRelations;
   const groups = rel?.byAccount ?? [];
 
   const meta = cf && (
@@ -728,8 +754,9 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   // Drill-through: the counterparty is a PERSON now, so filter the transaction
   // list by his name — an account number would only carry one of his.
   const relLink = (r: Relation, accountId?: number): string => {
-    const q = r.name && r.name !== "—"
-      ? `cpname=${encodeURIComponent(r.name)}`
+    const sourceName = r.sourceName ?? r.name;
+    const q = sourceName && sourceName !== "—" && r.key.startsWith("name:")
+      ? `cpname=${encodeURIComponent(sourceName)}`
       : `cp=${encodeURIComponent(r.account ?? "")}`;
     return `/transactions?${accountId ? `acct=${accountId}&` : ""}${q}`;
   };
