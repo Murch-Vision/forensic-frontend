@@ -51,3 +51,35 @@ export function parseMongolianIban(value: string) {
     accountNumber: iban.slice(8),
   };
 }
+
+// A stored account as the API returns it.
+export interface StoredBankAccount {
+  accountNumber     : string;
+  iban?             : string | null;
+  bankName?         : string | null;
+  accountHolderName?: string | null;
+}
+
+// What the UI shows for an account: the verified IBAN (bank_accounts.iban)
+// wins over the imported number, the stored bank name fills in codes the
+// table above lacks.
+export function describeAccount(account: StoredBankAccount) {
+  const parsed = parseMongolianIban(account.iban ?? "")
+    ?? parseMongolianIban(account.accountNumber);
+  return {
+    iban         : parsed?.iban ?? null,
+    bankCode     : parsed?.bankCode ?? null,
+    bankName     : parsed?.bankName ?? account.bankName ?? null,
+    accountNumber: parsed?.accountNumber ?? account.accountNumber,
+    holderName   : account.accountHolderName ?? null,
+  };
+}
+
+// A person/holder "name" that is really an account number or IBAN — what an
+// import writes when the statement carries no owner name.
+export function isNumberLikeName(name: string | null | undefined): boolean {
+  const text = String(name ?? "").trim();
+  return !text || /^[-–—_.]+$/.test(text)
+    || /^(unknown|null|n\/?a|тодорхойгүй)$/i.test(text)
+    || /^[A-Z]{0,2}\d[\d\s-]*$/i.test(text);
+}

@@ -647,6 +647,15 @@ export const CREATE_BANK_ACCOUNT = gql`
   }
 `;
 
+// Банк / эзэмшигч тодорхойгүй дансыг IBAN лавлагаагаар шалгаж нөхөх.
+export const VERIFY_BANK_ACCOUNT = gql`
+  mutation VerifyBankAccount($accountNumber: String!) {
+    verifyBankAccount(accountNumber: $accountNumber) {
+      accountNumber found iban bankName holderName nameUpdated message
+    }
+  }
+`;
+
 export const CREATE_PHONE_NUMBER = gql`
   mutation CreatePhoneNumber($input: PhoneNumberInput!) {
     createPhoneNumber(input: $input) { id number }
@@ -818,6 +827,7 @@ export const GLOBAL_PEOPLE_QUERY = gql`
     globalPeople {
       key fullName aliases riskLevel photoData occupation nationalId offender
       matchedBy phoneNumbers accountNumbers transactionCount callRecordCount
+      bankAccounts { id accountNumber iban bankName accountHolderName }
       suspects {
         id suspectId fullName aliases nationalId passportNumber dateOfBirth
         gender address city country primaryPhone email occupation

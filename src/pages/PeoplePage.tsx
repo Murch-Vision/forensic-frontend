@@ -20,6 +20,7 @@ import {
   GLOBAL_PEOPLE_QUERY,
   MARK_AS_SUSPECT,
   TAG_EVIDENCE,
+  VERIFY_BANK_ACCOUNT,
 } from "../graphql/queries";
 import {DELETE_SUSPECT} from "../graphql/suspects";
 import {
@@ -34,7 +35,8 @@ import {
 import PersonFormModal, {type PersonForm} from "../components/PersonFormModal";
 import {Select} from "../components/inputs";
 import {useDrilldown} from "../lib/drilldown";
-import {parseMongolianIban} from "../lib/iban";
+import {describeAccount, isNumberLikeName, type StoredBankAccount}
+  from "../lib/iban";
 import {BankAccountInfo} from "../components/BankAccountInfo";
 import type {RiskLevel, SuspectStatus} from "../types";
 
@@ -91,6 +93,7 @@ interface GlobalPerson {
   cases            : PersonCaseRef[];
   phoneNumbers     : string[];
   accountNumbers   : string[];
+  bankAccounts     : StoredBankAccount[];
   transactionCount : number;
   callRecordCount  : number;
 }
@@ -194,6 +197,11 @@ export default function PeoplePage() {
   const [createPhoneNumber] = useMutation(CREATE_PHONE_NUMBER);
   const [tagEvidence] = useMutation(TAG_EVIDENCE);
   const [markAsSuspect, markQ] = useMutation(MARK_AS_SUSPECT);
+  const [verifyBankAccount] = useMutation<{verifyBankAccount: {found: boolean}}>(
+    VERIFY_BANK_ACCOUNT);
+  // Bulk IBAN check: progress while running, the outcome afterwards.
+  const [bulk, setBulk] = useState<{done: number; total: number} | null>(null);
+  const [bulkMessage, setBulkMessage] = useState("");
 
   // Evidence tagging follows the case picked in the global AppHeader.
   interface CaseRef {id: number; caseId: string; caseName: string}
@@ -204,9 +212,9 @@ export default function PeoplePage() {
   const bankOptions = useMemo(() => {
     const banks = new Map<string, string>();
     for (const person of people) {
-      for (const number of person.accountNumbers) {
-        const bank = parseMongolianIban(number);
-        if (bank?.bankName) banks.set(bank.bankCode, bank.bankName);
+      for (const account of person.bankAccounts) {
+        const bank = describeAccount(account);
+        if (bank.bankName) banks.set(bank.bankCode ?? bank.bankName, bank.bankName);
       }
     }
     return [...banks].map(([value, label]) => ({value, label}))
@@ -239,10 +247,10 @@ export default function PeoplePage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return people.filter((p) => {
-      if (bankFilter !== "all" && !p.accountNumbers.some((number) => {
-        const bank = parseMongolianIban(number);
-        return bankFilter === "unknown" ? !bank?.bankName
-          : bank?.bankCode === bankFilter;
+      if (bankFilter !== "all" && !p.bankAccounts.some((account) => {
+        const bank = describeAccount(account);
+        return bankFilter === "unknown" ? !bank.bankName
+          : (bank.bankCode ?? bank.bankName) === bankFilter;
       })) return false;
       if (groupFilter === "offender" && !p.offender) return false;
       if (groupFilter === "other" && p.offender) return false;
@@ -256,6 +264,7 @@ export default function PeoplePage() {
         p.aliases.some((a) => a.toLowerCase().includes(q)) ||
         p.phoneNumbers.some((n) => n.toLowerCase().includes(q)) ||
         p.accountNumbers.some((n) => n.toLowerCase().includes(q)) ||
+        p.bankAccounts.some((a) => (a.iban ?? "").toLowerCase().includes(q)) ||
         (p.nationalId ?? "").toLowerCase().includes(q));
     });
   }, [people, search, caseFilter, groupFilter, bankFilter]);
@@ -384,6 +393,29 @@ export default function PeoplePage() {
   const highRisk = people.filter((p) =>
     p.riskLevel === "HIGH" || p.riskLevel === "CRITICAL").length;
 
+  // Accounts whose bank or owner is still unknown — the bulk check's work list.
+  const unverified = [...new Set(people.flatMap((p) => p.bankAccounts
+    .filter((a) => !describeAccount(a).bankName || isNumberLikeName(p.fullName))
+    .map((a) => a.accountNumber)))];
+
+  // One at a time: every lookup may walk all banks on the public service.
+  async function verifyAll() {
+    const total = unverified.length;
+    let found = 0;
+    setBulkMessage("");
+    for (let i = 0; i < total; i++) {
+      setBulk({done: i, total});
+      try {
+        const {data} = await verifyBankAccount(
+          {variables: {accountNumber: unverified[i]}});
+        if (data?.verifyBankAccount.found) found++;
+      } catch { /* one failure must not stop the rest */ }
+    }
+    setBulk(null);
+    setBulkMessage(`${total} данснаас ${found} нь олдож шинэчлэгдлээ.`);
+    await refetch();
+  }
+
   return (
     <div className="page-container">
       {header}
@@ -441,6 +473,17 @@ export default function PeoplePage() {
                   <span><b>{grouped}</b> давхардсан</span>
                   <span className="risk"><b>{highRisk}</b> эрсдэлтэй</span>
                 </div>
+                {(unverified.length > 0 || bulk) && (
+                  <button className="btn" style={{width: "100%", marginTop: 8}}
+                    disabled={Boolean(bulk)} onClick={verifyAll}
+                    title="Банк эсвэл эзэмшигч нь тодорхойгүй дансуудыг IBAN лавлагаагаар шалгах">
+                    {bulk ? `Шалгаж байна… ${bulk.done}/${bulk.total}`
+                      : `Тодорхойгүй ${unverified.length} дансыг шалгах`}
+                  </button>
+                )}
+                {bulkMessage && <div role="status" style={{fontSize: 11,
+                  color: "var(--text-secondary)", marginTop: 4}}>
+                  {bulkMessage}</div>}
               </div>
               <div className="person-list">
                 {filtered.length === 0 ? (
@@ -460,12 +503,12 @@ export default function PeoplePage() {
                         color: p.offender ? "var(--accent-red)" : undefined}}>
                         {p.offender && <OffenderTag />}{p.fullName}
                       </div>
-                      {p.accountNumbers.length > 0 && (
+                      {p.bankAccounts.length > 0 && (
                         <div style={{fontSize: 12, fontWeight: 600,
                           color: "var(--accent-cyan)", marginTop: 4,
                           overflowWrap: "anywhere"}}>
-                          Банк: {[...new Set(p.accountNumbers.map((n) =>
-                            parseMongolianIban(n)?.bankName ?? "Банк тодорхойгүй"))]
+                          Банк: {[...new Set(p.bankAccounts.map((a) =>
+                            describeAccount(a).bankName ?? "Банк тодорхойгүй"))]
                             .join(" · ")}
                         </div>
                       )}
@@ -731,8 +774,10 @@ export default function PeoplePage() {
                     ? <Empty message="Банкны данс алга" />
                     : (
                       <div style={{display: "grid", gap: 16}}>
-                        {selected.accountNumbers.map((n) => (
-                          <BankAccountInfo key={n} number={n} />
+                        {selected.bankAccounts.map((a) => (
+                          <BankAccountInfo key={a.accountNumber} account={a}
+                            personName={selected.fullName}
+                            onVerified={refetch} />
                         ))}
                       </div>
                     )}
