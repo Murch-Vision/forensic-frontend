@@ -851,6 +851,15 @@ export const GLOBAL_PEOPLE_QUERY = gql`
 `;
 
 // ── Хэрэгтний бүртгэл ──────────────────────────────────────────────────────
+export const OFFENDER_NAMES_QUERY = gql`
+  query OffenderNames {
+    globalPeople {
+      key
+      suspects { id nationalId fullName }
+    }
+  }
+`;
+
 export const KNOWN_OFFENDERS_QUERY = gql`
   query KnownOffenders($search: String, $label: String, $take: Int, $skip: Int) {
     knownOffenders(search: $search, label: $label, take: $take, skip: $skip) {

@@ -6,13 +6,15 @@
  * Description : Excel-ээс шууд уншина. ⛔ Багана сонгох алхам БАЙХГҮЙ: багана
  *               бүр нь жагсаалт, нүд бүр нь регистр гэж үзнэ.
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
-import {useRef, useState} from "react";
-import {useApolloClient, useMutation, useQuery} from "@apollo/client";
+import {useMemo, useRef, useState} from "react";
+import {gql, useApolloClient, useMutation, useQuery} from "@apollo/client";
+import {useSearchParams} from "react-router-dom";
 import {
   CLEAR_KNOWN_OFFENDERS,
   DELETE_KNOWN_OFFENDER,
   IMPORT_KNOWN_OFFENDERS,
   KNOWN_OFFENDERS_QUERY,
+  OFFENDER_NAMES_QUERY,
   UPLOAD_APPEND,
   UPLOAD_START,
 } from "../graphql/queries";
@@ -20,10 +22,12 @@ import {Card, DataTable, Loading, PageHeader, StatCard} from "../components/kit"
 import {Select} from "../components/inputs";
 import {formatDate, formatNum} from "../lib/format";
 import {useAuth} from "../lib/auth";
+import {namedFirst, namesByRegister, normalizeRegister} from "../lib/registerNames";
 
 const UPLOAD_THRESHOLD = 700 * 1024;
 const UPLOAD_CHUNK = 400 * 1024;
 const PAGE = 100;
+const FETCH_PAGE = 500; // Existing API's maximum page size.
 
 interface Offender {
   id: number;
@@ -58,16 +62,69 @@ export default function OffendersPage() {
   const {isAdmin} = useAuth();
   const client = useApolloClient();
   const fileInput = useRef<HTMLInputElement>(null);
+  // Search can contain a person's name/register; keep it out of URLs/history.
   const [search, setSearch] = useState("");
-  const [label, setLabel] = useState("");
-  const [skip, setSkip] = useState(0);
+  const [params, setParams] = useSearchParams();
+  const label = params.get("label") ?? "";
+  const requestedNames = params.get("names");
+  const nameFilter = requestedNames === "known" || requestedNames === "unknown"
+    ? requestedNames : "all";
+  const requestedSort = params.get("sort");
+  const sort = requestedSort === "name-desc" || requestedSort === "register"
+    ? requestedSort : "name-asc";
+  function setViewParam(key: string, value: string, defaultValue: string) {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (value === defaultValue) next.delete(key); else next.set(key, value);
+      next.delete("page");
+      return next;
+    });
+  }
+  const requestedPage = Number(params.get("page") ?? 1);
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  function setSkip(value: number) {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (value === 0) next.delete("page");
+      else next.set("page", String(Math.floor(value / PAGE) + 1));
+      return next;
+    });
+  }
+  function setLabel(value: string) {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (value) next.set("label", value); else next.delete("label");
+      next.delete("page");
+      return next;
+    });
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [summary, setSummary] = useState<Summary | null>(null);
+  const namesQ = useQuery<{globalPeople: Array<{
+    suspects: Array<{nationalId: string | null; fullName: string}>;
+  }> }>(OFFENDER_NAMES_QUERY, {skip: !isAdmin, fetchPolicy: "cache-and-network"});
+  const knownNames = useMemo(() => namesByRegister(namesQ.data?.globalPeople ?? []),
+    [namesQ.data]);
 
-  const {data, loading, refetch} = useQuery<PageData>(KNOWN_OFFENDERS_QUERY, {
-    variables: {search: search || null, label: label || null,
-      take: PAGE, skip},
+  const {data, loading, error: listError, refetch} = useQuery<PageData>(KNOWN_OFFENDERS_QUERY, {
+    variables: {take: FETCH_PAGE, skip: 0},
+    fetchPolicy: "cache-and-network",
+  });
+  // Sort the complete registry before display pagination. Use only existing
+  // API fields so this also works while an older API process is running.
+  const registryTotal = data?.knownOffenders.total ?? 0;
+  const remainingQuery = useMemo(() => {
+    const fields = [];
+    for (let offset = FETCH_PAGE; offset < registryTotal; offset += FETCH_PAGE) {
+      fields.push(`page${offset}: knownOffenders(take: ${FETCH_PAGE}, skip: ${offset}) {
+        rows { id nationalId labels sourceFile updatedAt }
+      }`);
+    }
+    return gql(`query RemainingOffenders { ${fields.join("\n") || "__typename"} }`);
+  }, [registryTotal]);
+  const remainingQ = useQuery<Record<string, {rows: Offender[]}>>(remainingQuery, {
+    skip: registryTotal <= FETCH_PAGE,
     fetchPolicy: "cache-and-network",
   });
   const [runImport] = useMutation<{importKnownOffenders: Summary}>(
@@ -132,8 +189,31 @@ export default function OffendersPage() {
     }
   }
 
-  const rows = data?.knownOffenders.rows ?? [];
-  const total = data?.knownOffenders.total ?? 0;
+  const sortedRows = useMemo(() => {
+    const all = [...(data?.knownOffenders.rows ?? [])];
+    if (registryTotal > FETCH_PAGE && remainingQ.data) {
+      for (const part of Object.values(remainingQ.data)) all.push(...part.rows);
+    }
+    const query = search.trim().toUpperCase();
+    const registerQuery = normalizeRegister(search) ?? query;
+    const filtered = all.filter((row) => {
+      if (label && !row.labels.includes(label)) return false;
+      const names = knownNames.get(normalizeRegister(row.nationalId) ?? "") ?? [];
+      if (nameFilter === "known" && !names.length) return false;
+      if (nameFilter === "unknown" && names.length) return false;
+      return !query || row.nationalId.includes(registerQuery)
+        || names.some((name) => name.includes(query));
+    });
+    return sort === "register"
+      ? filtered.sort((a, b) => a.nationalId.localeCompare(b.nationalId, "mn"))
+      : namedFirst(filtered, knownNames, sort === "name-desc" ? "desc" : "asc");
+  }, [data, registryTotal, remainingQ.data, knownNames, search, label, nameFilter, sort]);
+  const total = sortedRows.length;
+  const skip = Math.min(page - 1, Math.max(0, Math.ceil(total / PAGE) - 1)) * PAGE;
+  const rows = sortedRows.slice(skip, skip + PAGE);
+  const registryLoading = loading || namesQ.loading
+    || (registryTotal > FETCH_PAGE && remainingQ.loading);
+  const registryError = listError || (registryTotal > FETCH_PAGE && remainingQ.error);
   const labels = data?.knownOffenderLabels ?? [];
 
   const actions = isAdmin ? (
@@ -164,6 +244,24 @@ export default function OffendersPage() {
       {error && (
         <Card style={{marginBottom: 16}}>
           <div style={{color: "var(--accent-red)"}}>{error}</div>
+        </Card>
+      )}
+
+      {namesQ.error && (
+        <Card style={{marginBottom: 16}}>
+          <p role="alert">Нэрийн мэдээллийг ачаалж чадсангүй.</p>
+          <button className="btn" onClick={() => {
+            void namesQ.refetch().catch(() => {});
+          }}>Дахин оролдох</button>
+        </Card>
+      )}
+      {registryError && (
+        <Card style={{marginBottom: 16}}>
+          <p role="alert">Бүртгэлийг ачаалж чадсангүй.</p>
+          <button className="btn" onClick={() => {
+            void Promise.allSettled([refetch(),
+              ...(registryTotal > FETCH_PAGE ? [remainingQ.refetch()] : [])]);
+          }}>Дахин оролдох</button>
         </Card>
       )}
 
@@ -200,25 +298,46 @@ export default function OffendersPage() {
 
       <Card title={`Регистр (${formatNum(total)})`} noPadding
         actions={
-          <div style={{display: "flex", gap: 8, alignItems: "center"}}>
+          <div style={{display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center"}}>
+            <Select value={nameFilter} style={{width: 150}}
+              onChange={(value) => setViewParam("names", value, "all")}
+              options={[
+                {value: "all", label: "Бүх хүн"},
+                {value: "known", label: "Нэртэй"},
+                {value: "unknown", label: "Нэргүй"},
+              ]} />
+            <Select value={sort} style={{width: 180}}
+              onChange={(value) => setViewParam("sort", value, "name-asc")}
+              options={[
+                {value: "name-asc", label: "Нэрээр А–Я"},
+                {value: "name-desc", label: "Нэрээр Я–А"},
+                {value: "register", label: "Регистрээр"},
+              ]} />
             <Select value={label} searchable style={{width: 240}}
               title="Нэг жагсаалтаар шүүх"
-              onChange={(v) => {setLabel(v); setSkip(0);}}
+              onChange={setLabel}
               options={[
                 {value: "", label: "Бүх жагсаалт"},
                 ...labels.map((l) => ({value: l.label,
                   label: `${l.label} · ${formatNum(l.count)}`})),
               ]} />
             <input className="form-input" value={search} style={{width: 200}}
-              placeholder="Регистрээр хайх"
+              placeholder="Нэр, регистрээр хайх"
               onChange={(e) => {setSearch(e.target.value); setSkip(0);}} />
           </div>
         }>
-        {loading && !data ? <Loading /> : (
+        {registryLoading ? <Loading /> : registryError ? null : (
           <>
             <DataTable rows={rows} rowKey={(r) => r.id}
               empty="Бүртгэл хоосон — Excel оруулна уу"
               columns={[
+                {header: "Нэр", render: (r: Offender) => {
+                  const names = knownNames.get(normalizeRegister(r.nationalId) ?? "");
+                  return <span style={{whiteSpace: "normal"}}>
+                    {names?.join(" / ") ?? (namesQ.loading ? "Ачаалж байна…"
+                      : namesQ.error ? "Ачаалсангүй" : "—")}
+                  </span>;
+                }},
                 {header: "Регистр", render: (r: Offender) => (
                   <span style={{fontFamily: "var(--font-mono)",
                     color: "var(--accent-red)"}}>{r.nationalId}</span>
