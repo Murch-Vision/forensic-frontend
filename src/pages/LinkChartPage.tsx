@@ -8,7 +8,7 @@
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useEffect, useMemo, useRef, useState} from "react";
 import {useSearchParams} from "react-router-dom";
-import {useApolloClient, useMutation, useQuery} from "@apollo/client";
+import {gql, useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {
   ACTIVE_CASE_QUERY,
   CALL_RECORDS_QUERY,
@@ -184,6 +184,37 @@ export default function LinkChartPage() {
   const graphQ = needsCompat ? compatQ : linkQ;
   const {data, loading, refetch} = graphQ;
   const txQ = useQuery<TxData>(TRANSACTIONS_QUERY);
+  // Older APIs return only people tagged directly to the case. Its accounts
+  // can still reference registered owners outside that list. Resolve those
+  // exact IDs through the existing single-person query before laying out.
+  const ownerRequest = useMemo(() => {
+    const known = new Set(data?.suspects.map((s) => s.id));
+    const ids = data && txQ.data ? [...new Set(txQ.data.bankAccounts
+      .map((a) => a.suspectId)
+      .filter((id): id is number => id != null && !known.has(id)))].sort((a, b) => a - b) : [];
+    return {
+      needed: ids.length > 0,
+      query: ids.length ? gql(`query LinkChartOwners(${ids.map((_, i) => `$id${i}: Int!`).join(", ")}) {
+        ${ids.map((_, i) => `owner${i}: suspect(id: $id${i}) {
+          id suspectId fullName riskLevel organization initials photoData offender
+        }`).join("\n")}
+      }`) : gql`query LinkChartOwners { __typename }`,
+      variables: Object.fromEntries(ids.map((id, i) => [`id${i}`, id])),
+    };
+  }, [data, txQ.data]);
+  const ownersQ = useQuery<Record<string, LcSuspect | null>>(ownerRequest.query, {
+    variables: ownerRequest.variables,
+    skip: !ownerRequest.needed,
+  });
+  const graphSuspects = useMemo(() => {
+    const people = new Map((data?.suspects ?? []).map((s) => [s.id, s]));
+    if (ownerRequest.needed && ownersQ.data) {
+      for (const owner of Object.values(ownersQ.data)) {
+        if (owner) people.set(owner.id, owner);
+      }
+    }
+    return [...people.values()];
+  }, [data, ownerRequest.needed, ownersQ.data]);
   const callQ = useQuery<CallData>(CALL_RECORDS_QUERY);
   const flowQ = useQuery<{networkFlow: {
     nodeLabels: string[]; nodeColors: string[]; sourceIndices: number[];
@@ -750,6 +781,7 @@ export default function LinkChartPage() {
 
   const network = useMemo(() => {
     if (!data || !txQ.data || !callQ.data) return null;
+    if (ownerRequest.needed && (ownersQ.loading || !ownersQ.data)) return null;
     const accounts = txQ.data.bankAccounts;
     const phones = callQ.data.suspects.flatMap((s) =>
       s.phoneNumbers.map((p) => ({suspectId: s.id, number: p.number})));
@@ -791,7 +823,7 @@ export default function LinkChartPage() {
       || (activeGraphId != null && l.caseGraphId === activeGraphId));
 
     const net = buildEvidenceNetwork(
-      data.suspects,
+      graphSuspects,
       scopedLinks,
       accounts,
       txns,
@@ -864,7 +896,8 @@ export default function LinkChartPage() {
       && !hidden.has(l.source) && !hidden.has(l.target));
     return {nodes, links, kindCounts};
   }, [data, txQ.data, callQ.data, ignoredPairs, ignoredTxns, descRules,
-    minAmount, hidden, hiddenKinds, activeGraphId]);
+    minAmount, hidden, hiddenKinds, activeGraphId, graphSuspects,
+    ownerRequest.needed, ownersQ.loading, ownersQ.data]);
 
   // Plain-language conclusions about the picture currently on screen — the
   // client's ask: a first-time viewer must understand the graph without
@@ -982,8 +1015,10 @@ export default function LinkChartPage() {
     </div>
   );
 
-  const loadError = graphQ.error || caseQ.error || txQ.error || callQ.error || graphsQ.error;
-  const isLoading = loading || caseQ.loading || txQ.loading || callQ.loading || graphsQ.loading;
+  const loadError = graphQ.error || caseQ.error || txQ.error || callQ.error || graphsQ.error
+    || (ownerRequest.needed && ownersQ.error);
+  const isLoading = loading || caseQ.loading || txQ.loading || callQ.loading || graphsQ.loading
+    || (ownerRequest.needed && ownersQ.loading);
   if (loadError || isLoading || !data || !network) {
     return (
       <div className="page-container">
@@ -997,6 +1032,7 @@ export default function LinkChartPage() {
                 void Promise.allSettled([
                   refetch(), caseQ.refetch(), txQ.refetch(),
                   callQ.refetch(), graphsQ.refetch(),
+                  ...(ownerRequest.needed ? [ownersQ.refetch()] : []),
                 ]);
               }}>Дахин оролдох</button>
             </Card>
@@ -1029,7 +1065,7 @@ export default function LinkChartPage() {
     });
   }
 
-  const suspects = data.suspects;
+  const suspects = graphSuspects;
   const nameById = new Map(suspects.map((s) => [s.id, s.fullName]));
   // Raw per-kind totals (pre-toggle) — the chips double as the edge legend.
   const totalEvidence = EDGE_KINDS.reduce(
