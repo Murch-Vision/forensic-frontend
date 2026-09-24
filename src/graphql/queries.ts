@@ -134,7 +134,7 @@ export const TIMELINE_QUERY = gql`
 
 export const LINKCHART_QUERY = gql`
   query LinkChart {
-    suspects {
+    suspects(includeAccountOwners: true) {
       id suspectId fullName riskLevel organization initials photoData offender
     }
     suspectLinks {
