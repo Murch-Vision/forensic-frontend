@@ -95,7 +95,7 @@ export default function App() {
             borderBottom: "1px solid var(--border-primary)",
           }}
         >
-          МӨРЧ v1
+          МӨРЧ forensic
         </div>
         {NAV.map((n) => (
           <NavLink

@@ -44,7 +44,7 @@ export default function LoginPage() {
             fontWeight: 700, letterSpacing: 1, color: "var(--accent-cyan)",
             fontSize: 15, marginTop: 6,
           }}>
-            МӨРЧ v1
+            МӨРЧ forensic
           </div>
           <div style={{color: "var(--text-secondary)", fontSize: 12,
             marginTop: 4}}>
