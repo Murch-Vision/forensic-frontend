@@ -6,10 +6,11 @@
  * Purpose     :
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
-import {useRef, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {
   ACCOUNT_RECORDS,
+  ACTIVE_CASE_QUERY,
   DELETE_BANK_ACCOUNT,
   EXCEL_SHEETS,
   IMPORT_DATA,
@@ -174,27 +175,34 @@ interface Deletion {
 // импортлоход шинээр үүсэх тул энэ нь буруу импортыг цэвэрлэх зам.
 function AccountPurge() {
   const client = useApolloClient();
-  const {data, loading} =
-    useQuery<{accountRecords: AccountRecord[]}>(ACCOUNT_RECORDS);
+  const caseQ = useQuery<{activeCase: {id: number} | null}>(ACTIVE_CASE_QUERY);
+  const caseFileId = caseQ.data?.activeCase?.id ?? null;
+  const {data, loading, error} =
+    useQuery<{accountRecords: AccountRecord[]}>(ACCOUNT_RECORDS, {
+      variables: {caseFileId}, skip: caseFileId == null,
+      fetchPolicy: "cache-and-network",
+    });
   const [accountId, setAccountId] = useState(0);
+  const [confirming, setConfirming] = useState(false);
   const [deleteAccount, delQ] =
     useMutation<{deleteBankAccount: Deletion}>(DELETE_BANK_ACCOUNT);
   const [done, setDone] = useState<Deletion | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const accounts = data?.accountRecords ?? [];
+  useEffect(() => {
+    setAccountId(0); setConfirming(false); setDone(null); setErr(null);
+  }, [caseFileId]);
+
+  const accounts = caseFileId == null ? [] : data?.accountRecords ?? [];
   const picked = accounts.find((a) => a.id === accountId) ?? null;
 
   async function run() {
-    if (!picked) return;
-    const ok = window.confirm(
-      `${picked.accountNumber} — ${formatNum(picked.txnCount)} гүйлгээ ` +
-      "бүрмөсөн устана. Устгах уу?");
-    if (!ok) return;
+    if (!picked || caseFileId == null) return;
+    setConfirming(false);
     setErr(null);
     setDone(null);
     try {
-      const res = await deleteAccount({variables: {id: picked.id}});
+      const res = await deleteAccount({variables: {id: picked.id, caseFileId}});
       setDone(res.data?.deleteBankAccount ?? null);
       setAccountId(0);
       // Every other screen holds this account in its cache — the dashboard,
@@ -208,6 +216,7 @@ function AccountPurge() {
 
   return (
     <Card title="Данс устгах">
+      {error && <div role="alert">{error.message}</div>}
       {loading ? <Loading /> : accounts.length === 0 ? (
         <Empty message="Данс алга" />
       ) : (
@@ -217,7 +226,7 @@ function AccountPurge() {
             <div>
               <label className="form-label">Дансны дугаар</label>
               <Select value={accountId} searchable
-                onChange={(v) => { setAccountId(Number(v)); setDone(null); }}
+                onChange={(v) => { setAccountId(Number(v)); setDone(null); setConfirming(false); }}
                 style={{minWidth: 420}}
                 options={[
                   {value: 0, label: "— данс сонгоно уу —"},
@@ -228,11 +237,25 @@ function AccountPurge() {
                   })),
                 ]} />
             </div>
-            <button className="btn btn-danger" onClick={run}
+            <button className="btn btn-danger" onClick={() => setConfirming(true)}
               disabled={!picked || delQ.loading}>
               {delQ.loading ? "УСТГАЖ БАЙНА..." : "УСТГАХ"}
             </button>
           </div>
+          {confirming && picked && (
+            <div role="alert" style={{marginTop: 12}}>
+              <p>{picked.accountNumber} дансны хуулгыг энэ хэргээс устгах уу?
+                Бусад хэрэгт бүртгэлтэй хуулга хадгалагдана.</p>
+              <div style={{display: "flex", gap: 8}}>
+                <button className="btn btn-danger" onClick={run} disabled={delQ.loading}>
+                  УСТГАХЫГ БАТАЛГААЖУУЛАХ
+                </button>
+                <button className="btn" onClick={() => setConfirming(false)}>
+                  БОЛИХ
+                </button>
+              </div>
+            </div>
+          )}
           {picked && (
             <div style={{marginTop: 12, fontSize: 12}}>
               {picked.bankName ? `${picked.bankName} · ` : ""}
@@ -245,7 +268,8 @@ function AccountPurge() {
           {done && (
             <div style={{marginTop: 12, fontSize: 12,
               color: "var(--accent-green)"}}>
-              {done.accountNumber} устлаа · {formatNum(done.transactions)} гүйлгээ
+              {done.accountNumber} дансны хуулгыг энэ хэргээс устгалаа
+              {done.transactions > 0 ? ` · ${formatNum(done.transactions)} гүйлгээ` : ""}
               {done.evidence > 0 ? ` · ${done.evidence} баримт` : ""}
               {done.links > 0 ? ` · ${done.links} холбоос` : ""}
             </div>

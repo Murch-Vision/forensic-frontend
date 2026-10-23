@@ -550,16 +550,16 @@ export const IMPORT_DATA = gql`
 `;
 
 export const ACCOUNT_RECORDS = gql`
-  query AccountRecords {
-    accountRecords {
+  query AccountRecords($caseFileId: Int) {
+    accountRecords(caseFileId: $caseFileId) {
       id accountNumber bankName ownerName txnCount firstTxn lastTxn createdAt
     }
   }
 `;
 
 export const DELETE_BANK_ACCOUNT = gql`
-  mutation DeleteBankAccount($id: Int!) {
-    deleteBankAccount(id: $id) {
+  mutation DeleteBankAccount($id: Int!, $caseFileId: Int) {
+    deleteBankAccount(id: $id, caseFileId: $caseFileId) {
       accountNumber transactions analyses conclusions evidence links
     }
   }
