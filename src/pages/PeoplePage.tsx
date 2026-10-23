@@ -37,7 +37,7 @@ import {Select} from "../components/inputs";
 import {useDrilldown} from "../lib/drilldown";
 import {describeAccount, isNumberLikeName, type StoredBankAccount}
   from "../lib/iban";
-import {BankAccountInfo} from "../components/BankAccountInfo";
+import {RegistryBankAccount, type RegistryAccount} from "../components/RegistryBankAccount";
 import type {RiskLevel, SuspectStatus} from "../types";
 
 interface PersonSuspect {
@@ -93,7 +93,7 @@ interface GlobalPerson {
   cases            : PersonCaseRef[];
   phoneNumbers     : string[];
   accountNumbers   : string[];
-  bankAccounts     : StoredBankAccount[];
+  bankAccounts     : RegistryAccount[];
   transactionCount : number;
   callRecordCount  : number;
 }
@@ -195,6 +195,7 @@ export default function PeoplePage() {
   const [formInitial, setFormInitial] = useState<PersonForm | null>(null);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [showPhoneForm, setShowPhoneForm] = useState(false);
+  const [accountMessage, setAccountMessage] = useState("");
   const [acct, setAcct] = useState({accountNumber: "", bankName: "",
     currentBalance: ""});
   const [phone, setPhone] = useState({number: "", provider: ""});
@@ -499,7 +500,7 @@ export default function PeoplePage() {
                   <div key={p.key}
                     className={`person-row${
                       selected?.key === p.key ? " selected" : ""}`}
-                    onClick={() => setSelectedKey(p.key)}>
+                    onClick={() => { setSelectedKey(p.key); setAccountMessage(""); }}>
                     <Avatar name={p.fullName} photoData={p.photoData}
                       riskLevel={p.riskLevel} />
                     <div style={{flex: 1, minWidth: 0}}>
@@ -783,12 +784,15 @@ export default function PeoplePage() {
                     : (
                       <div style={{display: "grid", gap: 16}}>
                         {selected.bankAccounts.map((a) => (
-                          <BankAccountInfo key={a.accountNumber} account={a}
+                          <RegistryBankAccount key={`${selected.key}:${a.id}`} account={a}
                             personName={selected.fullName}
-                            onVerified={refetch} />
+                            onVerified={refetch}
+                            onDeleted={(number, transactions) => setAccountMessage(
+                              `${number} данс, ${transactions} гүйлгээг устгалаа.`)} />
                         ))}
                       </div>
                     )}
+                  {accountMessage && <p role="status">{accountMessage}</p>}
                 </Card>
               </div>
 

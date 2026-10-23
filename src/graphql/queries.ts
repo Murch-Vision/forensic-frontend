@@ -565,6 +565,23 @@ export const DELETE_BANK_ACCOUNT = gql`
   }
 `;
 
+export const BANK_ACCOUNT_CLEANUP_PREVIEW = gql`
+  query BankAccountCleanupPreview($id: Int!) {
+    bankAccountCleanupPreview(id: $id) {
+      id accountNumber txnCount
+      cases { id caseId caseName }
+    }
+  }
+`;
+
+export const DELETE_ORPHAN_BANK_ACCOUNT = gql`
+  mutation DeleteOrphanBankAccount($id: Int!) {
+    deleteOrphanBankAccount(id: $id) {
+      accountNumber transactions analyses conclusions evidence links
+    }
+  }
+`;
+
 export const REPORT_PDF = gql`
   query ReportPdf {
     reportPdf { filename mimeType base64 }
