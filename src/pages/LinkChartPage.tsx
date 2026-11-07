@@ -223,7 +223,7 @@ export default function LinkChartPage() {
     variables: {caseFileId: activeCaseId},
     skip: caseQ.loading || activeCaseId == null,
   });
-  const [generate, {loading: generating}] = useMutation(GENERATE_LINKS);
+  const [generate, {loading: generating, error: generateError}] = useMutation(GENERATE_LINKS);
   const [selected, setSelected] = useState<NetworkNode | null>(null);
   // Clicked EDGE — the noise-removal target (a whole connection at once).
   const [selectedLink, setSelectedLink] = useState<NetworkLink | null>(null);
@@ -543,6 +543,7 @@ export default function LinkChartPage() {
   const [confirmDelGraph, setConfirmDelGraph] = useState<number | null>(null);
   // Momentary "✓ saved" flash after overwriting the loaded board.
   const [savedFlash, setSavedFlash] = useState(false);
+  const [clusterRequest, setClusterRequest] = useState({caseId: null as number | null, revision: 0});
   // Draft positions belong to a case, just like named saved boards.
   const positionsKey = `forensic.nodePositions:${activeCaseId}`;
   const [layout, setLayout] = useState<{
@@ -561,6 +562,7 @@ export default function LinkChartPage() {
   useEffect(() => {
     if (previousCase.current === activeCaseId) return;
     previousCase.current = activeCaseId;
+    setClusterRequest({caseId: null, revision: 0});
     setActiveGraphId(null);
     setSelected(null);
     setSelectedLink(null);
@@ -738,8 +740,19 @@ export default function LinkChartPage() {
   }
 
   async function onGenerate() {
-    await generate();
-    await refetch();
+    try {
+      await generate();
+      await refetch();
+    } catch {
+      // Apollo's visible error state provides retry without discarding the
+      // analyst's arrangement or leaving an unhandled promise rejection.
+      return;
+    }
+    if (previousCase.current !== activeCaseId) return;
+    // Generation changes the bridges between groups. Re-apply clustering
+    // even when the analyst previously had pinned draft positions.
+    setFocusId(null);
+    setClusterRequest(prev => ({caseId: activeCaseId, revision: prev.revision + 1}));
   }
 
   // Remove a clicked transaction edge: mark EVERY account→counterparty pair
@@ -818,9 +831,19 @@ export default function LinkChartPage() {
     // link shows solely on the board it belongs to, and NOTHING shows when no
     // board is loaded (there is no global/default set of connections). Auto-
     // generated evidence links always show.
+    const visibleTxns = new Map(txns.map(t => [t.id, t]));
     const scopedLinks = data.suspectLinks.filter((l) =>
       l.linkType !== "MANUAL"
-      || (activeGraphId != null && l.caseGraphId === activeGraphId));
+      || (activeGraphId != null && l.caseGraphId === activeGraphId))
+      .flatMap(l => {
+        if (l.linkType !== "FINANCIAL_TRANSFER") return [l];
+        const backing = l.contributingTxnIds
+          .flatMap(id => visibleTxns.has(id) ? [visibleTxns.get(id)!] : []);
+        if (!backing.length) return [];
+        return [{...l, totalFinancialValue: backing.reduce(
+          (sum, t) => sum + Math.abs(t.amount), 0),
+          strength: Math.min(10, backing.length)}];
+      });
 
     const net = buildEvidenceNetwork(
       graphSuspects,
@@ -1139,6 +1162,8 @@ export default function LinkChartPage() {
         subtitle="СҮЛЖЭЭНИЙ ШИНЖИЛГЭЭ" actions={actions} />
       <CaseGate>
 
+      {generateError && <p role="alert">{generateError.message}</p>}
+
       {/* Shared hidden picker for setting a person's portrait from their node. */}
       <input ref={photoInputRef} type="file" accept="image/*"
         style={{display: "none"}} onChange={onPhotoPicked} />
@@ -1359,6 +1384,7 @@ export default function LinkChartPage() {
               selectedId={connectFrom?.id ?? selected?.id ?? focusId}
               initialPositions={focusView ? focusView.positions : casePositions}
               layoutKey={focusView ? `focus:${focusId}` : layout.key}
+              clusterRevision={clusterRequest.caseId === activeCaseId ? clusterRequest.revision : 0}
               // Dragging inside isolate mode rearranges the ring for viewing but
               // must NOT overwrite the real saved layout — only persist in the
               // normal full view.

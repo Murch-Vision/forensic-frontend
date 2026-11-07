@@ -7,6 +7,7 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {forwardRef, useEffect, useImperativeHandle, useRef} from "react";
+import {graphClusterClaims} from "../lib/graphClusters";
 import type {
   NetworkLink,
   NetworkLinkKind,
@@ -240,6 +241,9 @@ interface NetworkGraphProps {
   // the detective saved comes back as-is. Bumping `layoutKey` re-applies it.
   initialPositions? : Record<string, {x: number; y: number; s?: number; sh?: "rect"}> | null;
   layoutKey? : string | number;
+  // Explicit regeneration re-groups the updated graph while preserving each
+  // node's saved size/shape. Ordinary board loads keep their saved positions.
+  clusterRevision? : number;
   // Fired after a drag settles (or after a reset) with the current node
   // layout, so the host can persist the arrangement. null = the layout was
   // reset and any saved positions should be forgotten.
@@ -767,6 +771,12 @@ function NetworkGraph(props, ref) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.nodes, props.links, props.layoutKey]);
 
+  useEffect(() => {
+    if (props.clusterRevision) autoCluster();
+    // The dataset effect above installs the updated graph before clustering.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.clusterRevision]);
+
   // Repaint on container resize so the layout keeps filling the card.
   useEffect(() => {
     const onResize = () => ensureRunning();
@@ -1069,67 +1079,9 @@ function NetworkGraph(props, ref) {
     const links = linksRef.current;
     if (!nodes.length) return;
 
-    const adj = new Map<string, Set<string>>();
-    const touch = (a: string, b: string) => {
-      let s = adj.get(a);
-      if (!s) {
-        s = new Set();
-        adj.set(a, s);
-      }
-      s.add(b);
-    };
-    for (const l of links) {
-      touch(l.s.id, l.t.id);
-      touch(l.t.id, l.s.id);
-    }
-    const deg = (id: string) => adj.get(id)?.size ?? 0;
-
-    // A node OWNED by another (account/phone → person) belongs to its owner.
-    const ownerOf = new Map<string, string>();
-    for (const l of links) {
-      if (l.kind === "owns") ownerOf.set(l.t.id, l.s.id);
-    }
-
-    // Hubs: nodes with at least two OWN satellites (owned nodes or leaves).
-    const satCount = new Map<string, number>();
-    for (const n of nodes) {
-      let c = 0;
-      for (const nb of adj.get(n.id) ?? []) {
-        if (ownerOf.get(nb) === n.id || deg(nb) === 1) c++;
-      }
-      satCount.set(n.id, c);
-    }
-    const centers = nodes
-      .filter((n) => (satCount.get(n.id) ?? 0) >= 2)
-      .sort((a, b) => (satCount.get(b.id) ?? 0) - (satCount.get(a.id) ?? 0));
+    const {centers, claim} = graphClusterClaims(nodes, links.map(l => l.orig));
     if (!centers.length) return;
-    const isCenter = new Set(centers.map((c) => c.id));
-
-    // Multi-source BFS: every node is claimed by the hub(s) that reach it
-    // first. Reached by 2+ hubs at the same distance → a shared/middle node.
-    const claim = new Map<string, {centers: Set<string>; dist: number}>();
-    let frontier: Array<{id: string; root: string}> = [];
-    for (const c of centers) {
-      claim.set(c.id, {centers: new Set([c.id]), dist: 0});
-      frontier.push({id: c.id, root: c.id});
-    }
-    let dist = 0;
-    while (frontier.length) {
-      dist++;
-      const next: Array<{id: string; root: string}> = [];
-      for (const f of frontier) {
-        for (const nb of adj.get(f.id) ?? []) {
-          const cl = claim.get(nb);
-          if (!cl) {
-            claim.set(nb, {centers: new Set([f.root]), dist});
-            next.push({id: nb, root: f.root});
-          } else if (cl.dist === dist && !isCenter.has(nb)) {
-            cl.centers.add(f.root);
-          }
-        }
-      }
-      frontier = next;
-    }
+    const isCenter = new Set(centers.map(c => c.id));
 
     // Satellites per hub, grouped by BFS distance (ring index).
     const sats = new Map<string, SimNode[][]>();
