@@ -1,7 +1,7 @@
 name: desktop-release
 
-# Builds the Tauri desktop app (with the bundled Node API sidecar) for macOS and
-# Windows and attaches the installers to a draft GitHub Release.
+# Builds the Tauri desktop app (with the bundled Node API sidecar) for macOS
+# and attaches the installers to a draft GitHub Release.
 #
 # Trigger by pushing a tag like `v3.2.0`, or run manually (workflow_dispatch).
 #
@@ -29,9 +29,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Target users are mostly Windows; you (the dev) are macOS.
-          - os: windows-latest
-            args: "--bundles nsis,msi"
           - os: macos-latest # Apple Silicon. Add `macos-13` for an Intel build.
             args: "--bundles app,dmg"
     runs-on: ${{ matrix.os }}
