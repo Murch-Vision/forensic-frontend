@@ -1175,6 +1175,7 @@ export default function TransactionsPage() {
         const detailRows: Array<[string, string]> = [
           ["Данс", acctById.get(t.bankAccountId) ?? String(t.bankAccountId)],
           ["Харьцагч", t.counterpartyName ?? "—"],
+          ["Харьцагчийн регистр", t.counterpartyNationalId?.trim() || "—"],
           ["Харьцсан данс", t.counterpartyAccount ?? "—"],
           ["Гүйлгээний утга", t.description ?? "—"],
           ["Ангилал", t.category ?? "—"],
