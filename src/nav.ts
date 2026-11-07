@@ -32,6 +32,7 @@ export const NAV_META: NavMeta[] = [
   {path: "/calls", label: "Дуудлагын бүртгэл", icon: "\u{1F4DE}"},
   {path: "/timeline", label: "Он цагийн хэлхээ", icon: "\u{23F1}"},
   {path: "/linkchart", label: "Холбоосын зураглал", icon: "\u{1F578}"},
+  {path: "/case-analysis", label: "Хэрэг дамнасан шинжилгээ", icon: "🗂", adminOnly: true},
   {path: "/reports", label: "Тайлан", icon: "\u{1F4C4}"},
   {path: "/settings", label: "Тохиргоо", icon: "\u{2699}"},
 ];

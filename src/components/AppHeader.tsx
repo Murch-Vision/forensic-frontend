@@ -7,6 +7,7 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useState} from "react";
+import {useLocation} from "react-router-dom";
 import {useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {ACTIVE_CASE_QUERY, SET_ACTIVE_CASE} from "../graphql/queries";
 import {STATUS_LABELS} from "../nav";
@@ -27,6 +28,7 @@ interface CaseRef {
 }
 
 export default function AppHeader() {
+  const multiCaseView = useLocation().pathname === "/case-analysis";
   const client = useApolloClient();
   const {user, isAdmin, logout} = useAuth();
   const caseQ = useQuery<{activeCase: CaseRef | null; caseFiles: CaseRef[]}>(
@@ -77,7 +79,9 @@ export default function AppHeader() {
 
   return (
     <header className="app-header">
-      <div className="app-header-group">
+      {multiCaseView ? <div className="app-header-group">
+        <span className="app-header-label">Хэрэг дамнасан шинжилгээ</span>
+      </div> : <div className="app-header-group">
         <span className="app-header-label">Хэрэг</span>
         <Select
           className="app-header-status"
@@ -105,7 +109,7 @@ export default function AppHeader() {
               label: `${c.caseId} · ${c.caseName} (${
                 STATUS_LABELS[c.status] ?? c.status})`})),
           ]} />
-      </div>
+      </div>}
 
       {caseSwitching && (
         <div className="case-switch-loader" role="status" aria-live="polite">

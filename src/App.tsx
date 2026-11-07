@@ -23,6 +23,7 @@ import LinkChartPage from "./pages/LinkChartPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
 import AdminPage from "./pages/AdminPage";
+import MultiCaseAnalysisPage from "./pages/MultiCaseAnalysisPage";
 import LoginPage from "./pages/LoginPage";
 import {useAuth} from "./lib/auth";
 
@@ -42,6 +43,7 @@ const PAGE_ELEMENTS: Record<string, ReactNode> = {
   "/reports": <ReportsPage />,
   "/settings": <SettingsPage />,
   "/admin": <AdminPage />,
+  "/case-analysis": <MultiCaseAnalysisPage />,
 };
 
 // The admin control room is only in the sidebar for the boss; the route itself
