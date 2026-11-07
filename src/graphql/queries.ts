@@ -21,7 +21,7 @@ export const DASHBOARD_CASE_QUERY = gql`
     bankAccounts { id bankName accountNumber suspectId iban accountHolderName }
     transactions {
       id bankAccountId timestamp amount type flagStatus
-      counterpartyName counterpartyAccount
+      counterpartyName counterpartyAccount counterpartyNationalId
     }
     callRecords { id startTime }
     suspectLinks { id }
@@ -51,6 +51,14 @@ export const CASE_RELATIONS_QUERY = gql`
           creditTotal debitTotal netTotal mutual subjectMatch
         }
       }
+    }
+  }
+`;
+
+export const REMOVE_CASE_RELATION = gql`
+  mutation RemoveCaseRelation($caseFileId: Int!, $relationKey: String!, $bankAccountIds: [Int!]!) {
+    removeCaseRelation(caseFileId: $caseFileId, relationKey: $relationKey, bankAccountIds: $bankAccountIds) {
+      minAmount ignoredPairs ignoredTxns descRules { mode text }
     }
   }
 `;

@@ -7,13 +7,14 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useMemo, useState} from "react";
-import {useQuery} from "@apollo/client";
-import {useNavigate} from "react-router-dom";
+import {useApolloClient, useMutation, useQuery} from "@apollo/client";
+import {Link, useNavigate} from "react-router-dom";
 import {
   ACTIVE_CASE_QUERY,
   CASE_RELATIONS_QUERY,
   DASHBOARD_CASE_QUERY,
   EVIDENCE_FOR_CASE,
+  REMOVE_CASE_RELATION,
 } from "../graphql/queries";
 import {
   Badge,
@@ -34,6 +35,7 @@ import {
 import {STATUS_BADGE, STATUS_LABELS} from "../nav";
 import type {RiskLevel} from "../types";
 import {accountNameLookup, realPartyName} from "../lib/accountNames";
+import {ignoredTxnsVar} from "../lib/ignoredPairs";
 
 // Хэрэг-төвтэй самбар. ДҮРЭМ: зөвхөн БАЙГАА өгөгдлийг харуулна — хоосон
 // section, тэг карт, цэс давхардуулсан товч огт байхгүй. Тоо бүр нь өөрийн
@@ -77,6 +79,7 @@ interface DashTxn {
   flagStatus: string;
   counterpartyName: string | null;
   counterpartyAccount: string | null;
+  counterpartyNationalId: string | null;
 }
 
 interface CaseData {
@@ -195,22 +198,25 @@ function AcctColumn({g, keep, onPick}: {
       </div>
       <div style={{flex: 1, minHeight: 0, overflowY: "auto"}}>
         {rows.map((r) => (
-          <div key={`${g.accountId}:${r.key}`}
-            style={{display: "flex", gap: 8, alignItems: "center",
+          <button key={`${g.accountId}:${r.key}`} type="button"
+            className="dashboard-relation-row"
+            style={{display: "grid", gridTemplateColumns: "minmax(0, 1fr) 56px",
+              gap: 8, alignItems: "center", width: "100%", textAlign: "left",
+              background: "transparent", border: 0, fontFamily: "inherit",
               padding: "6px 12px", fontSize: 12, cursor: "pointer",
               borderTop: "1px solid var(--border-primary)"}}
             onClick={() => onPick(r)}>
             <span style={{flex: 1, minWidth: 0, overflow: "hidden",
               textOverflow: "ellipsis", whiteSpace: "nowrap",
               color: relColor(r)}}
-              title={r.name}>
+              >
               {r.offender && <OffenderTag />}{r.name}
             </span>
             <span style={{fontFamily: "var(--font-mono)",
-              color: "var(--text-secondary)"}}>
+              color: "var(--text-secondary)", textAlign: "right"}}>
               {formatNum(r.txnCount)}
             </span>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -220,17 +226,35 @@ function AcctColumn({g, keep, onPick}: {
 // Хүн дээр дарахад ГҮЙЛГЭЭ рүү шууд үсэрдэг байсныг больж, эхлээд тухайн
 // хүний хураангуй нээгдэнэ (клиентийн хүсэлт, 2026-09-08). Гүйлгээ рүү орох
 // нь одоо СОНГОЛТ: «Гүйлгээг харах» товч.
-function PartyModal({r, groups, txns, onClose, onOpenTxns}: {
+function PartyModal({r, groups, txns, onClose, onOpenTxns, onRemove}: {
   r: Relation;
   groups: AccountRelations[];
   txns: DashTxn[];
   onClose: () => void;
   onOpenTxns: () => void;
+  onRemove: () => Promise<void>;
 }) {
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function remove() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try { await onRemove(); }
+    catch (e) {
+      setError(e instanceof Error ? e.message : "Харьцааг устгаж чадсангүй.");
+    } finally { setBusy(false); }
+  }
+  const close = () => {if (!busy) onClose();};
   const named = Boolean(r.name && r.name !== "—");
-  const mine = txns.filter((t) =>
-    (named && (t.counterpartyName === r.name || t.counterpartyName === r.sourceName))
-    || (Boolean(r.account) && t.counterpartyAccount === r.account));
+  const accountIds = new Set(groups.map(g => g.accountId));
+  const mine = txns.filter((t) => accountIds.has(t.bankAccountId) && (
+    r.key.startsWith("name:")
+      ? `name:${(t.counterpartyName ?? "").trim().toLowerCase().replace(/\s+/g, " ")}` === r.key
+      : r.key.startsWith("nat:")
+        ? `nat:${(t.counterpartyNationalId ?? "").trim().toUpperCase()}` === r.key
+        : `acct:${(t.counterpartyAccount ?? "").trim()}` === r.key));
   const dates = mine.map((t) => t.timestamp).sort();
   const biggest = mine.reduce((max, t) => Math.max(max, t.amount), 0);
   // Аль данстай нь харьцсан бэ — тухайн хүнийг агуулж буй баганууд.
@@ -250,12 +274,13 @@ function PartyModal({r, groups, txns, onClose, onOpenTxns}: {
   ];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" style={{width: "min(620px, 94vw)"}}
+    <div className="modal-overlay" onClick={close}>
+      <div className="modal-content" role="dialog" aria-modal="true"
+        aria-label="Харьцааны дэлгэрэнгүй" style={{width: "min(620px, 94vw)"}}
         onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">{named ? r.name : "Нэргүй тал"}</span>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" aria-label="Хаах" disabled={busy} onClick={close}>×</button>
         </div>
         <div className="modal-body">
           <div style={{display: "flex", gap: 16, flexWrap: "wrap",
@@ -321,10 +346,27 @@ function PartyModal({r, groups, txns, onClose, onOpenTxns}: {
             </div>
           )}
         </div>
-        <div className="modal-footer">
-          <button className="btn" onClick={onClose}>Хаах</button>
-          <button className="btn btn-primary" onClick={onOpenTxns}>
-            Энэ хүнтэй хийсэн гүйлгээг харах
+        {confirmRemove && <div role="region" aria-label="Харьцаа устгах"
+          style={{padding: "12px 20px", borderTop: "1px solid var(--border-primary)"}}>
+          <p style={{fontSize: 12, margin: "0 0 8px"}}>
+            Дээрх хуулсан данстай хийсэн энэ харьцааны гүйлгээнүүдийг хасна.
+            «Дансны дүн шинжилгээ → Хасагдсаныг сэргээх» хэсгээс буцааж сэргээнэ.
+          </p>
+          {error && <p role="alert" style={{color: "var(--accent-red)"}}>{error}</p>}
+          <div style={{display: "flex", gap: 8, flexWrap: "wrap"}}>
+            <button className="btn" disabled={busy}
+              onClick={() => {setConfirmRemove(false); setError("");}}>Болих</button>
+            <button className="btn btn-danger" disabled={busy} onClick={() => void remove()}>
+              {busy ? "Устгаж байна…" : "Устгахыг баталгаажуулах"}
+            </button>
+          </div>
+        </div>}
+        <div className="modal-footer" style={{flexWrap: "wrap"}}>
+          {!confirmRemove && <button className="btn btn-danger"
+            onClick={() => setConfirmRemove(true)}>Харьцааг устгах</button>}
+          <button className="btn" disabled={busy} onClick={close}>Хаах</button>
+          <button className="btn btn-primary" disabled={busy} onClick={onOpenTxns}>
+            Гүйлгээг харах
           </button>
         </div>
       </div>
@@ -443,6 +485,9 @@ const META: React.CSSProperties = {
 
 function CaseDashboard({caseFileId}: {caseFileId: number}) {
   const nav = useNavigate();
+  const apollo = useApolloClient();
+  const [removeRelation] = useMutation(REMOVE_CASE_RELATION);
+  const [notice, setNotice] = useState("");
   // Which statement accounts the whole page describes. EMPTY = all of them.
   const [acctSel, setAcctSel] = useState<string[]>([]);
   // Босго дүн for the biggest-transactions card. Empty = show NOTHING: the
@@ -450,7 +495,7 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   // big means, and a top-10 guess answered it for him.
   const [minAmountText, setMinAmountText] = useState("");
   // Дарсан хүн. null = хаалттай. Гүйлгээ рүү шилжих нь энэ цонхны товчоор.
-  const [party, setParty] = useState<{r: Relation} | null>(null);
+  const [party, setParty] = useState<{r: Relation; accountIds: number[]} | null>(null);
   // «Нийт харьцаа»-ны өнгөний тайлбар нь өөрөө шүүлт (клиентийн хүсэлт,
   // 2026-09-14): «Хэрэгтэн» дарвал зөвхөн улаан, «Дундын» дарвал зөвхөн шар
   // мөрүүд үлдэнэ; хоёулаа асвал аль нэг нь. Хоёулаа унтраалттай = бүгд.
@@ -501,7 +546,7 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
     () => (data ? derive({...data, transactions: shownTxns}) : null),
     [data, shownTxns]);
 
-  if (loading || !data || !d) {
+  if (loading || !data || !d || data.activeCase?.id !== caseFileId) {
     return <Shell subtitle="ХЭРГИЙН ТОЙМ"><Loading /></Shell>;
   }
 
@@ -793,7 +838,7 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
           <DataTable columns={relCols} rows={mutual} scroll={SCROLL}
             rowKey={(r) => r.key} empty="Дундын харьцаа алга"
             pageSize={50}
-            onRowClick={(r) => setParty({r})} />
+            onRowClick={(r) => setParty({r, accountIds: sel.map(g => g.accountId)})} />
         )}
       </Card>
     );
@@ -816,7 +861,7 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
         <div style={{...SCROLL, display: "flex", overflowX: "auto"}}>
           {sel.map((col) => (
             <AcctColumn key={col.accountId} g={col} keep={relKeep}
-              onPick={(r) => setParty({r})} />
+              onPick={(r) => setParty({r, accountIds: [col.accountId]})} />
           ))}
         </div>
       </Card>
@@ -838,14 +883,15 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
               // Мөрөнд дарахад бас тухайн ХҮН нээгдэнэ — жагсаалт бүр
               // ижил аашилна. Нийт тоо нь харьцааны мөрөөс, олдохгүй бол
               // энэ хос дээрх тоо.
-              const hit = relations.find((x) => x.key === f.relKey);
+              const hit = groups.find(g => g.accountId === f.accountId)
+                ?.relations.find(x => x.key === f.relKey);
               setParty({r: hit ?? {
                 key: f.relKey, name: f.name, account: f.cpAccount,
                 txnCount: f.count, creditCount: f.creditN,
                 debitCount: f.debitN, creditTotal: f.credit,
                 debitTotal: f.debit, netTotal: f.net,
                 mutual: false, subjectMatch: false,
-              }});
+              }, accountIds: [f.accountId]});
             }} />
       </Card>
     );
@@ -885,6 +931,10 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
   return (
     <Shell subtitle={cf ? `${cf.caseId} · ${cf.caseName}` : "ХЭРГИЙН ТОЙМ"}>
       {meta}
+      {notice && <div role="status" style={{marginBottom: 16, fontSize: 13}}>
+        {notice}{" "}
+        <Link to="/transactions?view=removed">Хасагдсаныг сэргээх</Link>
+      </div>}
       {stats.length > 0 && (
         <div className="metrics-grid">
           {stats.map((c) => (
@@ -898,9 +948,26 @@ function CaseDashboard({caseFileId}: {caseFileId: number}) {
         {sections}
       </div>
       {party && (
-        <PartyModal r={party.r} groups={groups}
+        <PartyModal key={`${party.accountIds.join(",")}:${party.r.key}`}
+          r={party.r} groups={groups.filter(g => party.accountIds.includes(g.accountId))}
           txns={shownTxns} onClose={() => setParty(null)}
-          onOpenTxns={() => nav(relLink(party.r))} />
+          onOpenTxns={() => nav(relLink(party.r,
+            party.accountIds.length === 1 ? party.accountIds[0] : undefined))}
+          onRemove={async () => {
+            const result = await removeRelation({variables: {caseFileId,
+              relationKey: party.r.key, bankAccountIds: party.accountIds}});
+            const saved = result.data?.removeCaseRelation;
+            if (!saved) throw new Error("Устгасан үр дүн ирсэнгүй. Дахин шалгана уу.");
+            const active = apollo.readQuery<{activeCase: {id: number} | null}>({query: ACTIVE_CASE_QUERY});
+            if (active?.activeCase?.id !== caseFileId) return;
+            // The server saved the mark; mirror it without scheduling another
+            // whole-filter write. Removed view and graph now react immediately.
+            ignoredTxnsVar(new Set(saved.ignoredTxns as number[]));
+            setParty(null);
+            setNotice("Харьцааг устгалаа.");
+            try { await apollo.refetchQueries({include: "active"}); }
+            catch { setNotice("Харьцааг хадгалж устгасан. Жагсаалтаа шинэчилнэ үү."); }
+          }} />
       )}
     </Shell>
   );
@@ -914,5 +981,5 @@ export default function DashboardPage() {
   }
 
   const active = caseQ.data?.activeCase ?? null;
-  return active ? <CaseDashboard caseFileId={active.id} /> : <Overview />;
+  return active ? <CaseDashboard key={active.id} caseFileId={active.id} /> : <Overview />;
 }
