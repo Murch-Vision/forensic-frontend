@@ -49,12 +49,24 @@ const assert=require('node:assert/strict');
   await purge.getByRole('button',{name:'УСТГАХ',exact:true}).click();
   await purge.getByRole('button',{name:'БОЛИХ',exact:true}).click();
   assert.equal(deletes.length,0);
+  // Model an inactive page's cached account list. Refetching only mounted
+  // queries leaves this stale row available when the analyst navigates back.
+  await page.evaluate(async row=>{
+    const {client}=await import('/src/apollo.ts');
+    const {ACCOUNT_RECORDS}=await import('/src/graphql/queries.ts');
+    client.writeQuery({query:ACCOUNT_RECORDS,variables:{caseFileId:-991},data:{accountRecords:[row]}});
+  },account(99001,'deleted-cache-account'));
   await purge.getByRole('button',{name:'УСТГАХ',exact:true}).click();
   await purge.getByRole('button',{name:'УСТГАХЫГ БАТАЛГААЖУУЛАХ',exact:true}).click();
   await purge.getByText('Данс алга',{exact:true}).waitFor();
   assert.deepEqual(deletes,[{id:202,caseFileId:902}]);
   assert(requests.some(v=>v.caseFileId===901));assert(requests.some(v=>v.caseFileId===902));
+  assert.equal(await page.evaluate(async()=>{
+    const {client}=await import('/src/apollo.ts');
+    const {ACCOUNT_RECORDS}=await import('/src/graphql/queries.ts');
+    return client.readQuery({query:ACCOUNT_RECORDS,variables:{caseFileId:-991}});
+  }),null,'Deleting must clear inactive account caches as well');
   assert.deepEqual(errors,[]);
-  console.log('PASS: import account list scoped by case, confirmation resets on switch, cancel and deletion target exact case (mock API)');
+  console.log('PASS: import account scope, confirmation/cancel, exact deletion and inactive cache invalidation (mock API)');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

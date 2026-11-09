@@ -206,10 +206,9 @@ function AccountPurge() {
       const res = await deleteAccount({variables: {id: picked.id, caseFileId}});
       setDone(res.data?.deleteBankAccount ?? null);
       setAccountId(0);
-      // Every other screen holds this account in its cache — the dashboard,
-      // the transaction list, the analysis. Refetch what is open so nothing
-      // keeps showing rows that no longer exist.
-      await client.refetchQueries({include: "active"});
+      // Inactive screens also cache these accounts and their old owners.
+      // Clear them before refetching so navigation cannot revive deleted rows.
+      await client.resetStore();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Устгаж чадсангүй.");
     }
@@ -245,8 +244,9 @@ function AccountPurge() {
           </div>
           {confirming && picked && (
             <div role="alert" style={{marginTop: 12}}>
-              <p>{picked.accountNumber} дансны хуулгыг энэ хэргээс устгах уу?
-                Бусад хэрэгт бүртгэлтэй хуулга хадгалагдана.</p>
+              <p>{picked.accountNumber} дансны хуулгыг устгах уу?
+                Өөр хэрэгт ашиглаагүй хуулга, импортын үлдэгдэл бүр мөсөн устана.
+                Бусад хэрэгт ашиглаж буй мэдээлэл хадгалагдана.</p>
               <div style={{display: "flex", gap: 8}}>
                 <button className="btn btn-danger" onClick={run} disabled={delQ.loading}>
                   УСТГАХЫГ БАТАЛГААЖУУЛАХ
