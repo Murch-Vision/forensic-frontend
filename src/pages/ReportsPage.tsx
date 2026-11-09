@@ -150,9 +150,9 @@ export default function ReportsPage() {
       deliver(file, message);
     };
     try {
-      const upload = async (text: string) => {
+      const upload = async (text: string, kind: "IMAGE" | "ANALYSIS") => {
         const started = await client.mutate<{beginReportGraphUpload: string}>({
-          mutation: BEGIN_REPORT_GRAPH_UPLOAD, variables: {caseFileId}});
+          mutation: BEGIN_REPORT_GRAPH_UPLOAD, variables: {caseFileId, kind}});
         const uploadId = started.data?.beginReportGraphUpload ?? null;
         if (!uploadId) throw new Error("Зураг дамжуулж эхэлсэнгүй. Дахин оролдоно уу.");
         uploads.push(uploadId);
@@ -172,10 +172,10 @@ export default function ReportsPage() {
         analysisBase64: graph.analysis ? encodeAnalysis(graph.analysis) : "",
         analysisUploadId: null as string | null} : null;
       if (imageInput?.analysisBase64 && imageInput.imageBase64.length + imageInput.analysisBase64.length > 640_000) {
-        imageInput = {...imageInput, analysisUploadId: await upload(imageInput.analysisBase64), analysisBase64: ""};
+        imageInput = {...imageInput, analysisUploadId: await upload(imageInput.analysisBase64, "ANALYSIS"), analysisBase64: ""};
       }
       if (imageInput && imageInput.imageBase64.length > 640_000) {
-        imageInput = {...imageInput, imageBase64: "", imageUploadId: await upload(imageInput.imageBase64)};
+        imageInput = {...imageInput, imageBase64: "", imageUploadId: await upload(imageInput.imageBase64, "IMAGE")};
       }
       if (!mounted.current || caseFileId !== currentCase.current) return;
       const variables = {graph: imageInput};

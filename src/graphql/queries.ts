@@ -605,8 +605,8 @@ export const REPORT_EXCEL = gql`
 // ДАНСНЫ ДҮН ШИНЖИЛГЭЭ — the verdict document, in the shape of the client's
 // template. Figures are tables, not screenshots.
 export const BEGIN_REPORT_GRAPH_UPLOAD = gql`
-  mutation BeginReportGraphUpload($caseFileId: Int!) {
-    beginReportGraphUpload(caseFileId: $caseFileId)
+  mutation BeginReportGraphUpload($caseFileId: Int!, $kind: ReportGraphUploadKind) {
+    beginReportGraphUpload(caseFileId: $caseFileId, kind: $kind)
   }
 `;
 export const APPEND_REPORT_GRAPH_UPLOAD = gql`

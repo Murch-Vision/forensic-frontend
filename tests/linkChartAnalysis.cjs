@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
   try {
     const page = await browser.newPage({viewport:{width:1800,height:1100}});
     const errors = [], unexpected = [], mutations = [];
-    const staged=new Map(), exports=[];let nextUpload=0;
+    const staged=new Map(), uploadKinds=[], exports=[];let nextUpload=0;
     page.on('pageerror', e => errors.push(e.message));
     const initial = {'s:1':{x:-300,y:100},'s:2':{x:300,y:100}};
     await page.addInitScript(p => {
@@ -74,6 +74,7 @@ const assert = require('node:assert/strict');
         case 'Reports':data={activeCase:active,accountAnalyses:[],directTransfers:[],caseRelations:{
           mutualRelations:0,txnCount:0,creditTotal:0,debitTotal:0,netTotal:0,relations:[]}};break;
         case 'BeginReportGraphUpload':{
+          uploadKinds.push(op.variables.kind);
           const id=`upload-${++nextUpload}`;staged.set(id,'');data={beginReportGraphUpload:id};break;
         }
         case 'AppendReportGraphUpload':{
@@ -178,9 +179,12 @@ const assert = require('node:assert/strict');
       const b=document.querySelector('#graph-shared-relations .graph-analysis-diagram').getBoundingClientRect();
       return b.y>=a.bottom;
     });
-    const smallList=await shared.locator('.graph-analysis-list').boundingBox();
-    const smallDiagram=await shared.locator('.graph-analysis-diagram').boundingBox();
-    assert(smallDiagram.y>=smallList.y+smallList.height,'Narrow screen stacks list and diagram');
+    const stacked=await shared.evaluate(el=>{
+      const a=el.querySelector('.graph-analysis-list').getBoundingClientRect();
+      const b=el.querySelector('.graph-analysis-diagram').getBoundingClientRect();
+      return b.y>=a.bottom;
+    });
+    assert(stacked,'Narrow screen stacks list and diagram');
     const toggle=page.getByRole('button',{name:/^Гүйлгээ ·/});
     await toggle.click();
     await money.getByText('Харагдаж буй мөнгөн урсгал алга',{exact:true}).waitFor();
@@ -228,19 +232,22 @@ const assert = require('node:assert/strict');
     await page.evaluate(async()=>{
       const moduleUrl=performance.getEntriesByType('resource').map(r=>r.name).find(n=>n.includes('/src/lib/reportGraph.ts'));
       const {reportGraphDraft}=await import(moduleUrl||'/src/lib/reportGraph.ts');
-      const c=document.createElement('canvas');c.width=768;c.height=384;
+      const c=document.createElement('canvas');c.width=1600;c.height=1600;
       const ctx=c.getContext('2d'),pixels=ctx.createImageData(c.width,c.height);let seed=123;
       for(let i=0;i<pixels.data.length;i++){seed=(seed*1664525+1013904223)>>>0;pixels.data[i]=i%4===3?255:seed>>>24;}
       ctx.putImageData(pixels,0,0);const draft=reportGraphDraft();
       reportGraphDraft({...draft,analysis:{...draft.analysis,shared:{...draft.analysis.shared,
         image:{imageBase64:c.toDataURL('image/png').split(',')[1],width:c.width,height:c.height}}}});
     });
-    await page.waitForFunction(()=>document.querySelector('.report-analysis-image')?.getAttribute('width')==='768');
+    await page.waitForFunction(()=>document.querySelector('.report-analysis-image')?.getAttribute('width')==='1600');
     for(const name of ['ТАЙЛАН PDF','ТАЙЛАН WORD','ТАЙЛАН HTML']){
       const downloaded=page.waitForEvent('download');await page.getByRole('button',{name,exact:true}).click();await downloaded;
       await page.waitForFunction(()=>!document.querySelector('button[disabled].btn-primary'));
     }
     assert.equal(exports.length,3);
+    assert(uploadKinds.includes('ANALYSIS'),'The large multi-image payload requests the analysis quota');
+    assert(exports.every(e=>Buffer.byteLength(JSON.stringify(e.analysis))>8*1024*1024),
+      'Reproduce an analysis above the old single-image upload limit');
     for(const e of exports){
       assert(e.graph.analysisUploadId,'Large analysis gets its own case-bound chunk transport');
       assert.equal(e.analysis.flowImages.length,1);
