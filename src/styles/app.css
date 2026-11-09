@@ -2191,3 +2191,11 @@ input:-webkit-autofill:active {
   border-color: var(--accent-cyan);
   color: var(--text-primary);
 }
+
+.report-graph-preview {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #0b0e1a;
+}
+.report-graph-hint { color: var(--text-muted); font-size: 12px; margin-top: 12px; }

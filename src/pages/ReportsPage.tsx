@@ -6,14 +6,18 @@
  * Purpose     :
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
-import {useState} from "react";
-import {useLazyQuery, useQuery} from "@apollo/client";
+import {useEffect, useRef, useState} from "react";
+import {Link} from "react-router-dom";
+import {useApolloClient, useLazyQuery, useQuery, useReactiveVar} from "@apollo/client";
 import {
   REPORTS_QUERY,
   REPORT_MARKED_PDF,
   REPORT_VERDICT_DOCX,
   REPORT_VERDICT_HTML,
   REPORT_VERDICT_PDF,
+  BEGIN_REPORT_GRAPH_UPLOAD,
+  APPEND_REPORT_GRAPH_UPLOAD,
+  RELEASE_REPORT_GRAPH_UPLOAD,
 } from "../graphql/queries";
 import {
   Card,
@@ -23,8 +27,10 @@ import {
   PageHeader,
   StatCard,
 } from "../components/kit";
-import {formatDate, formatMoney, formatNum} from "../lib/format";
+import {formatDate, formatDateTime, formatMoney, formatNum} from "../lib/format";
 import {downloadBase64, type ReportFile} from "../lib/download";
+import {reportGraphDraft} from "../lib/reportGraph";
+import {useAuth} from "../lib/auth";
 
 interface ReportAccount {
   accountId: number;
@@ -81,20 +87,29 @@ interface RpData {
 }
 
 export default function ReportsPage() {
+  const client = useApolloClient();
+  const {user} = useAuth();
   const {data, loading} = useQuery<RpData>(REPORTS_QUERY);
+  const draft = useReactiveVar(reportGraphDraft);
+  const graph = draft?.caseFileId === data?.activeCase?.id && draft?.ownerUserId === user?.id ? draft : null;
+  const currentCase = useRef(data?.activeCase?.id);
+  currentCase.current = data?.activeCase?.id;
   const [getMarkedPdf, markedQ] =
     useLazyQuery<{reportMarkedSuspectsPdf: ReportFile}>(REPORT_MARKED_PDF,
       {fetchPolicy: "no-cache"});
-  const [getVerdictPdf, verdictPdfQ] =
+  const [getVerdictPdf] =
     useLazyQuery<{reportVerdictPdf: ReportFile}>(REPORT_VERDICT_PDF,
       {fetchPolicy: "no-cache"});
-  const [getVerdictDocx, verdictDocxQ] =
+  const [getVerdictDocx] =
     useLazyQuery<{reportVerdictDocx: ReportFile}>(REPORT_VERDICT_DOCX,
       {fetchPolicy: "no-cache"});
-  const [getVerdictHtml, verdictHtmlQ] =
+  const [getVerdictHtml] =
     useLazyQuery<{reportVerdictHtml: ReportFile}>(REPORT_VERDICT_HTML,
       {fetchPolicy: "no-cache"});
   const [reportError, setReportError] = useState("");
+  const [building, setBuilding] = useState<"pdf" | "docx" | "html" | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {mounted.current = true; return () => {mounted.current = false;};}, []);
   const [showThreshold, setShowThreshold] = useState(false);
   const [threshold, setThreshold] = useState("");
 
@@ -114,7 +129,8 @@ export default function ReportsPage() {
   }
 
   function deliver(file: ReportFile | undefined, message?: string) {
-    if (file) downloadBase64(file);
+    if (message) setReportError(message);
+    else if (file) downloadBase64(file);
     else setReportError(message ?? "Тайлан үүсгэж чадсангүй.");
   }
 
@@ -122,20 +138,55 @@ export default function ReportsPage() {
   // үүсдэг тул хоорондоо зөрөхгүй: PDF нь хэвлэх, Word нь засварлах, HTML нь
   // Word, PDF уншигчгүй компьютер дээр нээх зориулалттай.
   async function onVerdict(kind: "pdf" | "docx" | "html") {
+    if (building) return;
+    setBuilding(kind);
     setReportError("");
+    const caseFileId = data?.activeCase?.id;
+    let uploadId: string | null = null;
+    const deliverCurrent = (file: ReportFile | undefined, message?: string) => {
+      if (!mounted.current || caseFileId !== currentCase.current) return;
+      deliver(file, message);
+    };
     try {
+      let imageInput = graph ? {caseFileId: graph.caseFileId, title: graph.title,
+        imageBase64: graph.imageBase64, imageUploadId: null as string | null} : null;
+      if (imageInput && imageInput.imageBase64.length > 640_000) {
+        const started = await client.mutate<{beginReportGraphUpload: string}>({
+          mutation: BEGIN_REPORT_GRAPH_UPLOAD, variables: {caseFileId}});
+        uploadId = started.data?.beginReportGraphUpload ?? null;
+        if (!uploadId) throw new Error("Зураг дамжуулж эхэлсэнгүй. Дахин оролдоно уу.");
+        const text = imageInput.imageBase64;
+        for (let offset = 0; offset < text.length; offset += 480_000) {
+          if (!mounted.current || caseFileId !== currentCase.current) return;
+          const chunk = text.slice(offset, offset + 480_000);
+          const result = await client.mutate<{appendReportGraphUpload: number}>({
+            mutation: APPEND_REPORT_GRAPH_UPLOAD, variables: {uploadId, offset, chunk}});
+          if (result.data?.appendReportGraphUpload !== offset + chunk.length) {
+            throw new Error("Зураг бүрэн дамжсангүй. Дахин оролдоно уу.");
+          }
+        }
+        imageInput = {...imageInput, imageBase64: "", imageUploadId: uploadId};
+      }
+      if (!mounted.current || caseFileId !== currentCase.current) return;
+      const variables = {graph: imageInput};
       if (kind === "pdf") {
-        const r = await getVerdictPdf();
-        deliver(r.data?.reportVerdictPdf, r.error?.message);
+        const r = await getVerdictPdf({variables});
+        deliverCurrent(r.data?.reportVerdictPdf, r.error?.message);
       } else if (kind === "docx") {
-        const r = await getVerdictDocx();
-        deliver(r.data?.reportVerdictDocx, r.error?.message);
+        const r = await getVerdictDocx({variables});
+        deliverCurrent(r.data?.reportVerdictDocx, r.error?.message);
       } else {
-        const r = await getVerdictHtml();
-        deliver(r.data?.reportVerdictHtml, r.error?.message);
+        const r = await getVerdictHtml({variables});
+        deliverCurrent(r.data?.reportVerdictHtml, r.error?.message);
       }
     } catch (e) {
-      setReportError(e instanceof Error ? e.message : String(e));
+      if (mounted.current && caseFileId === currentCase.current) {
+        setReportError(e instanceof Error ? e.message : String(e));
+      }
+    } finally {
+      if (uploadId) await client.mutate({mutation: RELEASE_REPORT_GRAPH_UPLOAD,
+        variables: {uploadId}}).catch(() => undefined);
+      if (mounted.current) setBuilding(null);
     }
   }
 
@@ -176,16 +227,16 @@ export default function ReportsPage() {
         {markedQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ГҮЙЛГЭЭНИЙ ТАЙЛАН"}
       </button>
       <button className="btn btn-primary" onClick={() => void onVerdict("pdf")}
-        disabled={verdictPdfQ.loading}>
-        {verdictPdfQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН PDF"}
+        disabled={!data.activeCase || !!building}>
+        {building === "pdf" ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН PDF"}
       </button>
       <button className="btn btn-primary" onClick={() => void onVerdict("docx")}
-        disabled={verdictDocxQ.loading}>
-        {verdictDocxQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН WORD"}
+        disabled={!data.activeCase || !!building}>
+        {building === "docx" ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН WORD"}
       </button>
       <button className="btn btn-primary" onClick={() => void onVerdict("html")}
-        disabled={verdictHtmlQ.loading}>
-        {verdictHtmlQ.loading ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН HTML"}
+        disabled={!data.activeCase || !!building}>
+        {building === "html" ? "ҮҮСГЭЖ БАЙНА..." : "ТАЙЛАН HTML"}
       </button>
     </>
   );
@@ -194,6 +245,19 @@ export default function ReportsPage() {
     <div className="page-container">
       <PageHeader icon="📄" title="Тайлан"
         subtitle="ИДЭВХТЭЙ ХЭРГИЙН ДАНСНЫ ДҮН ШИНЖИЛГЭЭ" actions={actions} />
+
+      {data.activeCase && <Card title="Холбоосын зураглал" style={{marginBottom: 16}}
+        actions={<div style={{display: "flex", gap: 8, flexWrap: "wrap"}}>
+          <Link className="btn" to="/linkchart">{graph ? "Зураглал солих" : "Зураглал сонгох"}</Link>
+          {graph && <button className="btn" onClick={() => reportGraphDraft(null)}>Тайлангаас хасах</button>}
+        </div>}>
+        {graph ? <>
+          <p>{graph.title} · {formatDateTime(graph.capturedAt)}</p>
+          <img className="report-graph-preview" src={`data:image/png;base64,${graph.imageBase64}`}
+            width={graph.width} height={graph.height} alt={graph.title} />
+          <p className="report-graph-hint">PDF, Word, HTML тайланд энэ зураг орно. Хуудсыг дахин ачаалбал зургаа дахин сонгоно уу.</p>
+        </> : <p>Холбоосын зураглал дээр «Тайланд оруулах» товчийг дарж зураг нэмнэ үү.</p>}
+      </Card>}
 
       {!data.activeCase || accounts.length === 0 ? (
         <Empty message="Идэвхтэй хэрэгт шинжлэх дансны хуулга алга." />

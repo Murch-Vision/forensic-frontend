@@ -206,6 +206,8 @@ function tick(nodes: SimNode[], links: SimLink[], alpha: number): number {
 
 // Imperative surface for the hosting page — search-to-focus lives here.
 export interface NetworkGraphHandle {
+  // Full arranged scene at print resolution, independent of screen pan/zoom.
+  exportPng : () => Promise<{imageBase64: string; width: number; height: number}>;
   // Center the view on a node and mark it with a focus ring. The ring clears
   // as soon as the analyst pans/drags/clicks the canvas again.
   focusNode : (id: string) => void;
@@ -303,6 +305,21 @@ function NetworkGraph(props, ref) {
   }, [props.selectedId, props.showNames, props.showEdgeLabels]);
 
   useImperativeHandle(ref, () => ({
+    async exportPng() {
+      if (!nodesRef.current.length) throw new Error("Тайланд оруулах зураглал алга.");
+      await document.fonts.ready;
+      await Promise.all(nodesRef.current.flatMap(n => n.photoData
+        ? [getImage(n.photoData).decode().catch(() => undefined)] : []));
+      const output = document.createElement("canvas");
+      const ctx = output.getContext("2d");
+      if (!ctx) throw new Error("Зураглал үүсгэж чадсангүй.");
+      const bounds = sceneBounds(ctx);
+      output.width = 3200;
+      output.height = Math.round(clamp(3200 * bounds.h / bounds.w, 800, 2400));
+      draw(output);
+      return {imageBase64: output.toDataURL("image/png").split(",")[1],
+        width: output.width, height: output.height};
+    },
     getPositions() {
       return currentPositions();
     },
@@ -437,15 +454,31 @@ function NetworkGraph(props, ref) {
   }
 
   // Paint the whole scene to the canvas. Cheap enough to run every frame.
-  function draw() {
-    const canvas = canvasRef.current;
+  function sceneBounds(ctx: CanvasRenderingContext2D) {
+    ctx.font = LABEL_FONT;
+    let x = Infinity, y = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const n of nodesRef.current) {
+      const r = radiusOf(n);
+      const label = n.offender ? `ХЭРЭГТЭН · ${n.label}` : n.label;
+      const textWidth = namesRef.current ? Math.max(ctx.measureText(label).width,
+        ctx.measureText(n.sub ?? "").width) / 2 : 0;
+      const half = Math.max(r, textWidth) + 24;
+      x = Math.min(x, n.x - half); right = Math.max(right, n.x + half);
+      y = Math.min(y, n.y - r - 24);
+      bottom = Math.max(bottom, n.y + r + (namesRef.current ? 48 : 24));
+    }
+    return {x, y, w: Math.max(1, right - x), h: Math.max(1, bottom - y)};
+  }
+
+  function draw(output?: HTMLCanvasElement) {
+    const canvas = output ?? canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const cssW = canvas.clientWidth;
-    const cssH = canvas.clientHeight;
+    const dpr = output ? 1 : window.devicePixelRatio || 1;
+    const cssW = output ? canvas.width : canvas.clientWidth;
+    const cssH = output ? canvas.height : canvas.clientHeight;
     if (canvas.width !== Math.round(cssW * dpr)
       || canvas.height !== Math.round(cssH * dpr)) {
       canvas.width = Math.round(cssW * dpr);
@@ -455,14 +488,22 @@ function NetworkGraph(props, ref) {
     const fit = Math.min(cssW / WIDTH, cssH / HEIGHT);
     const offX = (cssW - WIDTH * fit) / 2;
     const offY = (cssH - HEIGHT * fit) / 2;
-    fitRef.current = {fit, offX, offY};
+    if (!output) fitRef.current = {fit, offX, offY};
 
     const v = viewRef.current;
-    const scale = fit * v.k;
+    let scale = fit * v.k;
+    let tx = v.tx + offX, ty = v.ty + offY;
+    if (output) {
+      const b = sceneBounds(ctx);
+      scale = Math.min((cssW - 64) / b.w, (cssH - 64) / b.h);
+      tx = (cssW - b.w * scale) / 2 - b.x * scale;
+      ty = (cssH - b.h * scale) / 2 - b.y * scale;
+    }
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
-    ctx.translate(v.tx + offX, v.ty + offY);
+    if (output) {ctx.fillStyle = "#0b0e1a"; ctx.fillRect(0, 0, cssW, cssH);}
+    ctx.translate(tx, ty);
     ctx.scale(scale, scale);
 
     const nodes = nodesRef.current;
@@ -470,7 +511,7 @@ function NetworkGraph(props, ref) {
     const hover = hoverRef.current;
     // Highlight source: transient hover wins, else the selected node keeps
     // its direct connections lit until deselection.
-    const hl = hover ?? selectedRef.current;
+    const hl = output ? null : hover ?? selectedRef.current;
     const neighbors = new Set<string>();
     if (hl) {
       for (const l of links) {
@@ -480,7 +521,7 @@ function NetworkGraph(props, ref) {
     }
 
     // Links, colored by evidence kind.
-    const hoverLink = hoverLinkRef.current;
+    const hoverLink = output ? null : hoverLinkRef.current;
     for (const l of links) {
       const active = (hl && (l.s.id === hl || l.t.id === hl))
         || l === hoverLink;
@@ -504,7 +545,7 @@ function NetworkGraph(props, ref) {
     ctx.globalAlpha = 1;
 
     // Nodes.
-    const showAll = v.k >= 1.3;
+    const showAll = !!output || v.k >= 1.3;
     for (const n of nodes) {
       const st = n.offender
         ? {...TYPE_STYLE[n.type], ring: OFFENDER_COLOR} : TYPE_STYLE[n.type];
@@ -616,7 +657,7 @@ function NetworkGraph(props, ref) {
 
     // Search-focus ring, drawn on top of everything so the found node is
     // unmistakable in a dense graph.
-    if (focusRef.current) {
+    if (!output && focusRef.current) {
       const n = nodes.find((x) => x.id === focusRef.current);
       if (n) {
         const r = radiusOf(n);

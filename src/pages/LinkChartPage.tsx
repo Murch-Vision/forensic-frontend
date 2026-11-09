@@ -7,7 +7,7 @@
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useEffect, useMemo, useRef, useState} from "react";
-import {useSearchParams} from "react-router-dom";
+import {useNavigate, useSearchParams} from "react-router-dom";
 import {gql, useApolloClient, useMutation, useQuery} from "@apollo/client";
 import {
   ACTIVE_CASE_QUERY,
@@ -45,6 +45,8 @@ import CaseGate from "../components/CaseGate";
 import LinkVerdictReport from "../components/LinkVerdictReport";
 import PersonFormModal, {type SavedPerson} from "../components/PersonFormModal";
 import {useDrilldown} from "../lib/drilldown";
+import {useAuth} from "../lib/auth";
+import {reportGraphDraft} from "../lib/reportGraph";
 import {
   ignorePairs,
   isBelowMin,
@@ -166,6 +168,13 @@ function resizeToDataUri(file: File): Promise<string> {
 }
 
 export default function LinkChartPage() {
+  const navigate = useNavigate();
+  const {user} = useAuth();
+  const [capturingReport, setCapturingReport] = useState(false);
+  const [reportCaptureError, setReportCaptureError] = useState("");
+  const reportCaptureMounted = useRef(true);
+  useEffect(() => {reportCaptureMounted.current = true;
+    return () => {reportCaptureMounted.current = false;};}, []);
   const caseQ = useQuery<{activeCase:
     {id: number; caseId: string; caseName: string} | null}>(ACTIVE_CASE_QUERY);
   const activeCaseId = caseQ.data?.activeCase?.id ?? null;
@@ -498,6 +507,24 @@ export default function LinkChartPage() {
   // Search-to-focus: find any node (name / account number / phone) in the
   // dense graph, jump the view to it and open its detail panel.
   const graphRef = useRef<NetworkGraphHandle>(null);
+  const currentCaseRef = useRef(activeCaseId);
+  currentCaseRef.current = activeCaseId;
+  async function addGraphToReport() {
+    if (!activeCaseId || !user || !graphRef.current || capturingReport) return;
+    const caseId = activeCaseId;
+    setCapturingReport(true); setReportCaptureError("");
+    try {
+      const image = await graphRef.current.exportPng();
+      if (!reportCaptureMounted.current) return;
+      if (currentCaseRef.current !== caseId) throw new Error("Идэвхтэй хэрэг солигдсон байна. Дахин оролдоно уу.");
+      reportGraphDraft({ownerUserId: user.id, caseFileId: caseId, ...image,
+        title: savedGraphs.find(g => g.id === activeGraphId)?.name ?? "Нотлох баримтын сүлжээ",
+        capturedAt: new Date().toISOString()});
+      navigate("/reports");
+    } catch (e) {
+      if (reportCaptureMounted.current) setReportCaptureError(e instanceof Error ? e.message : String(e));
+    } finally {if (reportCaptureMounted.current) setCapturingReport(false);}
+  }
   const [search, setSearch] = useState("");
   function focusSearchResult(node: NetworkNode) {
     setSelected(node);
@@ -1163,6 +1190,7 @@ export default function LinkChartPage() {
       <CaseGate>
 
       {generateError && <p role="alert">{generateError.message}</p>}
+      {reportCaptureError && <p role="alert">{reportCaptureError}</p>}
 
       {/* Shared hidden picker for setting a person's portrait from their node. */}
       <input ref={photoInputRef} type="file" accept="image/*"
@@ -1173,6 +1201,10 @@ export default function LinkChartPage() {
         actions={
           <div style={{display: "flex", gap: 8, alignItems: "center",
             flexWrap: "wrap"}}>
+            <button className="btn btn-primary" disabled={capturingReport || !network.nodes.length}
+              onClick={() => void addGraphToReport()}>
+              {capturingReport ? "Зураг үүсгэж байна…" : "Тайланд оруулах"}
+            </button>
             {graphNameDraft !== null ? (
               // Inline "save as new" name field.
               <>

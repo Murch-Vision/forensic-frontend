@@ -604,21 +604,37 @@ export const REPORT_EXCEL = gql`
 
 // ДАНСНЫ ДҮН ШИНЖИЛГЭЭ — the verdict document, in the shape of the client's
 // template. Figures are tables, not screenshots.
+export const BEGIN_REPORT_GRAPH_UPLOAD = gql`
+  mutation BeginReportGraphUpload($caseFileId: Int!) {
+    beginReportGraphUpload(caseFileId: $caseFileId)
+  }
+`;
+export const APPEND_REPORT_GRAPH_UPLOAD = gql`
+  mutation AppendReportGraphUpload($uploadId: String!, $offset: Int!, $chunk: String!) {
+    appendReportGraphUpload(uploadId: $uploadId, offset: $offset, chunk: $chunk)
+  }
+`;
+export const RELEASE_REPORT_GRAPH_UPLOAD = gql`
+  mutation ReleaseReportGraphUpload($uploadId: String!) {
+    releaseReportGraphUpload(uploadId: $uploadId)
+  }
+`;
+
 export const REPORT_VERDICT_DOCX = gql`
-  query ReportVerdictDocx {
-    reportVerdictDocx { filename mimeType base64 }
+  query ReportVerdictDocx($graph: ReportGraphInput) {
+    reportVerdictDocx(graph: $graph) { filename mimeType base64 }
   }
 `;
 
 export const REPORT_VERDICT_PDF = gql`
-  query ReportVerdictPdf {
-    reportVerdictPdf { filename mimeType base64 }
+  query ReportVerdictPdf($graph: ReportGraphInput) {
+    reportVerdictPdf(graph: $graph) { filename mimeType base64 }
   }
 `;
 
 export const REPORT_VERDICT_HTML = gql`
-  query ReportVerdictHtml {
-    reportVerdictHtml { filename mimeType base64 }
+  query ReportVerdictHtml($graph: ReportGraphInput) {
+    reportVerdictHtml(graph: $graph) { filename mimeType base64 }
   }
 `;
 
