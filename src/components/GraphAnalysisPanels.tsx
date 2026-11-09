@@ -67,15 +67,15 @@ function Identity({node, person = node}: {node: NetworkNode; person?: NetworkNod
   </span>;
 }
 
-function Section({id, title, note, empty, hasRows, list, diagram}: {
+function Section({id, title, note, empty, hasRows, list, diagram, wideDiagram}: {
   id: string; title: string; note: string; empty: string; hasRows: boolean;
-  list: ReactNode; diagram: ReactNode;
+  list: ReactNode; diagram: ReactNode; wideDiagram?: boolean;
 }) {
   return <section id={id} className="graph-analysis-section" aria-label={title}>
     <Card title={title}>
       <p className="graph-analysis-note">{note}</p>
-      {hasRows ? <div className="graph-analysis-grid">
-        {list}<div className="graph-analysis-diagram">{diagram}</div>
+      {hasRows ? <div className={`graph-analysis-grid${wideDiagram ? " graph-analysis-grid-wide" : ""}`}>
+        {!wideDiagram && list}<div className="graph-analysis-diagram">{diagram}</div>{wideDiagram && list}
       </div> : <Empty message={empty} />}
     </Card>
   </section>;
@@ -170,8 +170,8 @@ export default forwardRef<GraphAnalysisPanelsHandle, {
           selectedId={sharedFocus} onNodeClick={n => setSharedFocus(n?.id ?? null)} />
       </div>} />
 
-    <Section id="graph-red-relations" title={`Улаанаар тэмдэглэсэн этгээдийн харилцаа (${analysis.red.length})`}
-      note="Жагсаалтад хэрэгтний харилцаа, зураглалд зөвхөн хэрэгтэн гэж тэмдэглэгдсэн хүмүүс болон тэдний хоорондын холбоос харагдана."
+    <Section id="graph-red-relations" wideDiagram title={`Улаанаар тэмдэглэсэн этгээдийн харилцаа (${analysis.red.length})`}
+      note="Үндсэн данс эзэмшигчийг төвд нь, хэрэгтэн гэж тэмдэглэгдсэн харилцагчдыг тойруулан харуулав."
       hasRows={analysis.redScene.nodes.length > 0} empty="Улаанаар тэмдэглэсэн этгээдийн харагдаж буй харилцаа алга"
       list={<AnalysisTable rows={analysis.red} rowKey={r => r.id} pageKey="redPage" columns={[
         {header: "Этгээд", render: r => <Identity node={r.source} person={r.sourcePerson} />},
@@ -183,7 +183,8 @@ export default forwardRef<GraphAnalysisPanelsHandle, {
           focusRed(r.sourcePerson.offender ? r.sourcePerson.id : r.targetPerson.id)}>Зурагт харах</button>},
       ]} />}
       diagram={<div aria-label="Улаан этгээдийн харилцааны зураглал">
-        <NetworkGraph ref={redRef} {...analysis.redScene} height={460} minLabelPixels={11} showNames
+        <NetworkGraph ref={redRef} {...analysis.redScene} height={640} minLabelPixels={12} showNames
+          initialPositions={analysis.redScene.positions}
           selectedId={redFocus} onNodeClick={n => setRedFocus(n?.id ?? null)} />
       </div>} />
   </div>;

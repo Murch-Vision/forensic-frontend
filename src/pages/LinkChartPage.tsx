@@ -39,7 +39,7 @@ import {
 import {Select} from "../components/inputs";
 import NetworkGraph, {LINK_STYLE} from "../components/NetworkGraph";
 import type {NetworkGraphHandle} from "../components/NetworkGraph";
-import {offenderOnlyScene} from "../lib/graphAnalysis";
+import {offenderRelationsScene} from "../lib/graphAnalysis";
 import GraphAnalysisPanels from "../components/GraphAnalysisPanels";
 import type {GraphAnalysisPanelsHandle} from "../components/GraphAnalysisPanels";
 import CaseGate from "../components/CaseGate";
@@ -959,9 +959,10 @@ export default function LinkChartPage() {
   }, [data, txQ.data, callQ.data, ignoredPairs, ignoredTxns, descRules,
     minAmount, hidden, hiddenKinds, activeGraphId, graphSuspects,
     ownerRequest.needed, ownersQ.loading, ownersQ.data]);
-  const network = useMemo(() => baseNetwork && offendersOnly
-    ? {...baseNetwork, ...offenderOnlyScene(baseNetwork.nodes, baseNetwork.links)}
-    : baseNetwork, [baseNetwork, offendersOnly]);
+  const offenderScene = useMemo(() => baseNetwork
+    ? offenderRelationsScene(baseNetwork.nodes, baseNetwork.links) : null, [baseNetwork]);
+  const network = useMemo(() => baseNetwork && offendersOnly && offenderScene
+    ? {...baseNetwork, ...offenderScene} : baseNetwork, [baseNetwork, offendersOnly, offenderScene]);
   currentSceneRef.current = network;
 
   // Plain-language conclusions about the picture currently on screen — the
@@ -1429,15 +1430,17 @@ export default function LinkChartPage() {
               nodes={focusView ? focusView.nodes : network.nodes}
               links={focusView ? focusView.links : network.links}
               selectedId={connectFrom?.id ?? selected?.id ?? focusId}
-              initialPositions={focusView ? focusView.positions : offendersOnly ? null : casePositions}
+              initialPositions={focusView ? focusView.positions : offendersOnly ? offenderScene?.positions : casePositions}
+              radialRings={!focusView && offendersOnly ? offenderScene?.radialRings : undefined}
+              height={offendersOnly ? 760 : undefined}
               layoutKey={focusView ? `focus:${focusId}` : offendersOnly ? "offenders" : layout.key}
-              clusterRevision={clusterRequest.caseId === activeCaseId ? clusterRequest.revision : 0}
+              clusterRevision={!offendersOnly && clusterRequest.caseId === activeCaseId ? clusterRequest.revision : 0}
               // Dragging inside isolate mode rearranges the ring for viewing but
               // must NOT overwrite the real saved layout — only persist in the
               // normal full view.
               onLayoutChange={focusView || offendersOnly ? undefined : persistPositions}
               offendersOnly={offendersOnly} onToggleOffenders={toggleOffenders}
-              minLabelPixels={offendersOnly ? 11 : undefined}
+              minLabelPixels={offendersOnly ? 12 : undefined}
               showNames={showNames} showEdgeLabels={showEdgeLabels}
               onNodeClick={handleNodeClick} onLinkClick={setSelectedLink} />
             {offendersOnly && !network.nodes.length && <p className="graph-analysis-note">

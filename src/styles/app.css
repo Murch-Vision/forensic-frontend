@@ -684,6 +684,7 @@ body {
 .graph-analysis-note { color: var(--text-secondary); font-size: 12px; margin: 0 0 16px; line-height: 1.6; }
 .graph-analysis-panels > .graph-analysis-note { margin-top: 20px; }
 .graph-analysis-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.graph-analysis-grid.graph-analysis-grid-wide { grid-template-columns: minmax(0, 1fr); }
 .graph-analysis-list, .graph-analysis-diagram { min-width: 0; }
 .graph-analysis-list .data-grid { font-size: 12px; }
 .graph-analysis-list .data-grid td { white-space: normal; overflow-wrap: anywhere; }

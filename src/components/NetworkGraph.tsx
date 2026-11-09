@@ -247,6 +247,8 @@ interface NetworkGraphProps {
   // spawn exactly there and the simulation starts settled, so the arrangement
   // the detective saved comes back as-is. Bumping `layoutKey` re-applies it.
   initialPositions? : Record<string, {x: number; y: number; s?: number; sh?: "rect"}> | null;
+  // Muted circular guides group offender contacts around their statement owner.
+  radialRings? : {centerId: string; radius: number}[];
   layoutKey? : string | number;
   // Explicit regeneration re-groups the updated graph while preserving each
   // node's saved size/shape. Ordinary board loads keep their saved positions.
@@ -265,6 +267,8 @@ interface NetworkGraphProps {
 export default forwardRef<NetworkGraphHandle, NetworkGraphProps>(
 function NetworkGraph(props, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const legendRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
   const nodesRef = useRef<SimNode[]>([]);
   const linksRef = useRef<SimLink[]>([]);
   const alphaRef = useRef(1);
@@ -474,6 +478,12 @@ function NetworkGraph(props, ref) {
       y = Math.min(y, n.y - r - 24);
       bottom = Math.max(bottom, n.y + r + (namesRef.current ? 48 : 24));
     }
+    for (const ring of props.radialRings ?? []) {
+      const center = nodesRef.current.find(n => n.id === ring.centerId);
+      if (!center) continue;
+      x = Math.min(x, center.x - ring.radius - 24); right = Math.max(right, center.x + ring.radius + 24);
+      y = Math.min(y, center.y - ring.radius - 24); bottom = Math.max(bottom, center.y + ring.radius + 24);
+    }
     return {x, y, w: Math.max(1, right - x), h: Math.max(1, bottom - y)};
   }
 
@@ -515,6 +525,17 @@ function NetworkGraph(props, ref) {
 
     const nodes = nodesRef.current;
     const links = linksRef.current;
+    if (props.radialRings?.length) {
+      const byId = new Map(nodes.map(n => [n.id, n]));
+      ctx.strokeStyle = "#607799"; ctx.lineWidth = 1 / scale;
+      ctx.setLineDash([4 / scale, 6 / scale]); ctx.globalAlpha = 0.8;
+      for (const ring of props.radialRings) {
+        const center = byId.get(ring.centerId);
+        if (!center) continue;
+        ctx.beginPath(); ctx.arc(center.x, center.y, ring.radius, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+    }
     const hover = hoverRef.current;
     // Highlight source: transient hover wins, else the selected node keeps
     // its direct connections lit until deselection.
@@ -624,6 +645,13 @@ function NetworkGraph(props, ref) {
     // keep them inside the pane and avoid other labels, nodes and controls.
     // This affects neither the main chart nor its full-resolution export.
     const placedLabels: {x: number; y: number; w: number; h: number}[] = [];
+    const canvasBox = canvas.getBoundingClientRect();
+    const overlays = [legendRef.current, controlsRef.current].flatMap(el => {
+      if (!el || output) return [];
+      const b = el.getBoundingClientRect();
+      return [{x: b.left - canvasBox.left - 4, y: b.top - canvasBox.top - 4,
+        right: b.right - canvasBox.left + 4, bottom: b.bottom - canvasBox.top + 4}];
+    });
     const labelPaint: {node: SimNode; size: number; text: string;
       box: {x: number; y: number; w: number; h: number}; alpha: number}[] = [];
     compactLabels.sort((a, b) => Number(b.node.id === hl) - Number(a.node.id === hl)
@@ -643,8 +671,8 @@ function NetworkGraph(props, ref) {
         const box = {x: x - w / 2, y, w, h};
         const screenY = y * scale + ty, screenX = box.x * scale + tx;
         if (screenY < 8 || (y + h) * scale + ty > cssH - 8) continue;
-        if (screenY < 154 && screenX < 175) continue;
-        if (screenY < 48 && (box.x + w) * scale + tx > cssW - 210) continue;
+        if (overlays.some(o => screenX < o.right && (box.x + w) * scale + tx > o.x
+          && screenY < o.bottom && (y + h) * scale + ty > o.y)) continue;
         if (placedLabels.some(p => box.x < p.x + p.w && box.x + w > p.x
           && box.y < p.y + p.h && box.y + h > p.y)) continue;
         if (nodes.some(other => box.x < other.x + radiusOf(other)
@@ -1148,12 +1176,22 @@ function NetworkGraph(props, ref) {
       minY = Math.min(minY, n.y - r);
       maxY = Math.max(maxY, n.y + r);
     }
+    for (const ring of props.radialRings ?? []) {
+      const center = nodes.find(n => n.id === ring.centerId);
+      if (!center) continue;
+      minX = Math.min(minX, center.x - ring.radius - 18); maxX = Math.max(maxX, center.x + ring.radius + 18);
+      minY = Math.min(minY, center.y - ring.radius - 18); maxY = Math.max(maxY, center.y + ring.radius + 18);
+    }
     const width = Math.max(1, maxX - minX);
     const height = Math.max(1, maxY - minY);
     const padding = 56;
     const cssW = canvas.clientWidth;
     const cssH = canvas.clientHeight;
     if (cssW <= 0 || cssH <= 0) return false;
+    const canvasTop = canvas.getBoundingClientRect().top;
+    const topPadding = minLabelRef.current > 0 ? Math.max(padding,
+      ...[legendRef.current, controlsRef.current].map(el => el
+        ? el.getBoundingClientRect().bottom - canvasTop + 18 : 0)) : padding;
     // Derive these from the CURRENT canvas size. fitRef is populated by draw()
     // and can still describe the previous case/frame when this runs on load.
     const fit = Math.min(cssW / WIDTH, cssH / HEIGHT);
@@ -1161,7 +1199,7 @@ function NetworkGraph(props, ref) {
     const offY = (cssH - HEIGHT * fit) / 2;
     const screenScale = Math.min(
       Math.max(1, cssW - padding * 2) / width,
-      Math.max(1, cssH - padding * 2) / height,
+      Math.max(1, cssH - topPadding - padding) / height,
     );
     const k = clamp(screenScale / fit, 0.08, 5);
     const cx = (minX + maxX) / 2;
@@ -1169,7 +1207,7 @@ function NetworkGraph(props, ref) {
     viewRef.current = {
       k,
       tx: cssW / 2 - offX - cx * fit * k,
-      ty: cssH / 2 - offY - cy * fit * k,
+      ty: (topPadding + cssH - padding) / 2 - offY - cy * fit * k,
     };
     focusRef.current = null;
     return true;
@@ -1186,6 +1224,16 @@ function NetworkGraph(props, ref) {
     const nodes = nodesRef.current;
     const links = linksRef.current;
     if (!nodes.length) return;
+    if (props.radialRings?.length && props.initialPositions) {
+      for (const n of nodes) {
+        const p = props.initialPositions[n.id];
+        if (!p) continue;
+        n.x = n.fx = n.ax = p.x; n.y = n.fy = n.ay = p.y; n.vx = n.vy = 0;
+      }
+      fitAllNodes(); ensureRunning();
+      if (persist) emitLayout(currentPositions());
+      return;
+    }
 
     const {centers, claim} = graphClusterClaims(nodes, links.map(l => l.orig));
     if (!centers.length) return;
@@ -1364,7 +1412,7 @@ function NetworkGraph(props, ref) {
 
   return (
     <div style={{position: "relative"}}>
-      <div style={{
+      <div ref={controlsRef} style={{
         position: "absolute", top: 10, right: 10, zIndex: 2,
         display: "flex", gap: 6,
       }}>
@@ -1379,7 +1427,7 @@ function NetworkGraph(props, ref) {
           ✥ Бөөгнүүлэх
         </button>
       </div>
-      <div style={{
+      <div ref={legendRef} style={{
         position: "absolute", top: 10, left: 10, zIndex: 2,
         display: "flex", flexDirection: "column", gap: 4,
         background: "rgba(10,12,24,0.65)", padding: "8px 10px",
@@ -1399,7 +1447,7 @@ function NetworkGraph(props, ref) {
         ))}
         {(hasOffender || props.onToggleOffenders) && (
           <button type="button" className={props.onToggleOffenders ? "btn btn-sm graph-offender-legend" : "graph-offender-legend"}
-            aria-label={props.onToggleOffenders ? (props.offendersOnly ? "Бүгдийг харах" : "Зөвхөн хэрэгтнүүдийг харах") : undefined}
+            aria-label={props.onToggleOffenders ? (props.offendersOnly ? "Бүгдийг харах" : "Хэрэгтний харилцааг харах") : undefined}
             aria-pressed={props.onToggleOffenders ? !!props.offendersOnly : undefined}
             onClick={props.onToggleOffenders} disabled={!props.onToggleOffenders}
             style={{display: "flex", alignItems: "center", gap: 6,

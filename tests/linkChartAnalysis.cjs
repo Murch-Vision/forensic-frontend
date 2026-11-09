@@ -14,6 +14,23 @@ const assert = require('node:assert/strict');
       localStorage.setItem('forensic.authToken','mock-session');
       if (!localStorage.getItem('forensic.nodePositions:1'))
         localStorage.setItem('forensic.nodePositions:1',JSON.stringify(p));
+      const clear=CanvasRenderingContext2D.prototype.clearRect;
+      const text=CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.clearRect=function(...args){
+        this.canvas.qaNodes=[]; this.canvas.qaLabels=[]; return clear.apply(this,args);
+      };
+      CanvasRenderingContext2D.prototype.fillText=function(label,x,y,...args){
+        if(label==='👤'){
+          const matrix=this.getTransform();
+          (this.canvas.qaNodes??=[]).push({x,y,sx:matrix.a*x+matrix.e,sy:matrix.d*y+matrix.f});
+        }
+        if(/^((ХЭРЭГТЭН · )?QA Person)/.test(label)){
+          const m=this.getTransform(),w=this.measureText(label).width*m.a;
+          const h=Number(this.font.match(/([\d.]+)px/)?.[1]||0)*m.d;
+          (this.canvas.qaLabels??=[]).push({text:label,x:m.a*x+m.e-w/2,y:m.d*y+m.f-h/2,w,h});
+        }
+        return text.call(this,label,x,y,...args);
+      };
     },initial);
     const cases = [1,2].map(id => ({__typename:'CaseFile',id,caseId:`QA-${id}`,
       caseName:`Case ${id}`,status:'ACTIVE',priority:'MEDIUM'}));
@@ -86,6 +103,10 @@ const assert = require('node:assert/strict');
     assert.equal(await red.locator('tbody tr').count(),3,'Two surviving money pairs and one owned-phone call');
     assert((await red.innerText()).includes('88000003'));
     assert((await red.innerText()).includes('ХЭРЭГТЭН'));
+    const redDiagramBox=await red.locator('.graph-analysis-diagram').boundingBox();
+    const redListBox=await red.locator('.graph-analysis-list').boundingBox();
+    assert(redListBox.y>=redDiagramBox.y+redDiagramBox.height,
+      'Offender circles use the full card width with the relation list underneath');
     assert.equal(await money.locator('tbody tr').count(),20);
     const values=await money.locator('.js-plotly-plot').evaluate(el=>el.data[0].link.value);
     assert.equal(values.reduce((s,v)=>s+v,0),Array.from({length:20},(_,i)=>325-i).reduce((s,v)=>s+v,0),
@@ -94,24 +115,43 @@ const assert = require('node:assert/strict');
       'Dense flow charts keep readable label spacing inside a bounded scroll pane');
     const pos = () => page.evaluate(()=>JSON.parse(localStorage.getItem('forensic.nodePositions:1')));
     const before=await pos();
-    assert.equal(await page.getByRole('button',{name:'Зөвхөн хэрэгтнүүдийг харах',exact:true})
+    assert.equal(await page.getByRole('button',{name:'Хэрэгтний харилцааг харах',exact:true})
       .getAttribute('aria-pressed'),'false','Malformed people filter falls back to all');
-    await page.getByRole('button',{name:'Зөвхөн хэрэгтнүүдийг харах',exact:true}).click();
+    await page.getByRole('button',{name:'Хэрэгтний харилцааг харах',exact:true}).click();
     await page.waitForURL(url=>url.searchParams.get('people')==='offenders');
-    await money.getByText('Харагдаж буй мөнгөн урсгал алга',{exact:true}).waitFor();
-    assert.equal(await red.locator('tbody tr').count(),0,'Ordinary contacts disappear from the globally filtered scene');
+    await money.locator('.sankey').waitFor();
+    await page.waitForFunction(()=>document.querySelectorAll('#graph-red-relations tbody tr').length===2);
+    assert.equal(await money.locator('tbody tr').count(),2,'Primary owners retain the two red money relationships');
+    await page.waitForFunction(()=>document.querySelector('canvas')?.qaNodes?.length===3);
+    const radialCenters=await page.locator('canvas').first().evaluate(canvas=>canvas.qaNodes.map(n=>[n.x,n.y]));
+    assert(radialCenters.some(([x,y])=>x===640&&y===360),'Primary owner is pinned at its group center');
+    assert(radialCenters.some(([x,y])=>x===640&&y===183),'Red contact is pinned on the owner-centered ring');
+    for(const canvas of [page.locator('canvas').first(),red.locator('canvas')]){
+      const labels=await canvas.evaluate(c=>({labels:c.qaLabels,width:c.clientWidth,height:c.clientHeight}));
+      assert.equal(labels.labels.length,3,'All primary/red names are rendered');
+      for(const [i,a] of labels.labels.entries()){
+        assert(a.x>=0&&a.y>=0&&a.x+a.w<=labels.width&&a.y+a.h<=labels.height,'Name is inside the canvas');
+        for(const b of labels.labels.slice(i+1))
+          assert(!(a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y),'Rendered names must not overlap');
+      }
+    }
     assert.equal(await page.getByRole('button',{name:'Бүгдийг харах',exact:true}).getAttribute('aria-pressed'),'true');
     await page.getByRole('button',{name:'✥ Бөөгнүүлэх',exact:true}).first().click();
+    assert.deepEqual(await page.locator('canvas').first().evaluate(canvas=>canvas.qaNodes.map(n=>[n.x,n.y])),
+      radialCenters,'Clustering preserves the owner-centered offender circles');
     assert.deepEqual(await pos(),before,'Rearranging a red filter cannot overwrite the main layout');
     await page.reload();
     await page.getByRole('button',{name:'Бүгдийг харах',exact:true}).waitFor();
-    await money.getByText('Харагдаж буй мөнгөн урсгал алга',{exact:true}).waitFor();
+    await money.locator('.sankey').waitFor();
+    assert.equal(await red.locator('tbody tr').count(),2);
     assert.deepEqual(await pos(),before);
     await page.getByRole('button',{name:'Бүгдийг харах',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelectorAll('#graph-red-relations tbody tr').length===3);
     await money.locator('.sankey').waitFor();
     await page.goBack();
     await page.getByRole('button',{name:'Бүгдийг харах',exact:true}).waitFor();
     await page.getByRole('button',{name:'Бүгдийг харах',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelectorAll('#graph-red-relations tbody tr').length===3);
     await money.locator('.sankey').waitFor();
     assert.equal(await red.locator('tbody tr').count(),3,'Leaving the filter restores the full contact list');
     assert.deepEqual(await pos(),before);

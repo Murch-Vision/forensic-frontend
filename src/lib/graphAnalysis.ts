@@ -1,19 +1,82 @@
 import type {NetworkLink, NetworkNode} from "./networkGraph";
 
-/** Induced person-only scene: ordinary contacts never expand a red hub. */
-export function offenderOnlyScene(nodes: NetworkNode[], links: NetworkLink[]) {
-  const people = nodes.filter(n => n.type === "PERSON" && n.offender === true);
-  const ids = new Set(people.map(n => n.id));
-  const owner = new Map(links.filter(l => l.kind === "owns").map(l => [l.target, l.source]));
+/** Primary statement owners anchor the red people they actually relate to. */
+export function offenderRelationsScene(nodes: NetworkNode[], links: NetworkLink[]) {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const red = new Set(nodes.filter(n => n.type === "PERSON" && n.offender === true).map(n => n.id));
+  const primary = new Set(nodes.filter(n => n.type === "PERSON"
+    && n.stats.some(([label]) => label === "Гүйлгээ")).map(n => n.id));
+  const owner = new Map(links.filter(l => l.kind === "owns"
+    && byId.get(l.source)?.type === "PERSON").map(l => [l.target, l.source]));
   const edges = links.filter(l => l.kind !== "owns").flatMap(l => {
     const source = owner.get(l.source) ?? l.source;
     const target = owner.get(l.target) ?? l.target;
-    return source !== target && ids.has(source) && ids.has(target)
+    return source !== target && (red.has(source) || red.has(target))
+      && (red.has(source) || primary.has(source)) && (red.has(target) || primary.has(target))
       ? [{...l, source, target}] : [];
   });
-  // Isolated offenders still belong in this view. Phone/account evidence
-  // between two offenders is drawn between their owners; the list keeps IDs.
-  return {nodes: people, links: edges};
+  const keep = new Set([...red, ...edges.flatMap(l => [l.source, l.target])]);
+  const people = nodes.filter(n => keep.has(n.id));
+  // Keep isolated red people without manufacturing an owner or relationship.
+  // Phone/account evidence projects to its owner; original facts stay intact.
+  return {nodes: people, links: edges, ...radialRelationsLayout(people, edges, primary)};
+}
+
+function radialRelationsLayout(nodes: NetworkNode[], links: NetworkLink[], primary: Set<string>) {
+  const adjacency = new Map(nodes.map(n => [n.id, new Set<string>()]));
+  for (const l of links) {
+    adjacency.get(l.source)!.add(l.target); adjacency.get(l.target)!.add(l.source);
+  }
+  const order = (a: NetworkNode, b: NetworkNode) =>
+    adjacency.get(b.id)!.size - adjacency.get(a.id)!.size
+    || a.label.localeCompare(b.label) || a.id.localeCompare(b.id);
+  const hubs = nodes.filter(n => primary.has(n.id)).sort(order);
+  const claim = new Map(hubs.map(n => [n.id, n.id]));
+  const queue = hubs.map(n => n.id);
+  const spread = () => {
+    for (let i = 0; i < queue.length; i++) {
+      for (const next of [...adjacency.get(queue[i])!].sort()) {
+        if (claim.has(next)) continue;
+        claim.set(next, claim.get(queue[i])!); queue.push(next);
+      }
+    }
+  };
+  spread();
+  // A component with no statement owner remains a separate group. Its most
+  // connected red person anchors it, rather than inventing a line to a root.
+  for (const n of [...nodes].sort(order)) {
+    if (claim.has(n.id)) continue;
+    hubs.push(n); claim.set(n.id, n.id); queue.length = 0; queue.push(n.id); spread();
+  }
+  const groups = hubs.map(hub => ({hub, members: nodes.filter(n => n.id !== hub.id
+    && claim.get(n.id) === hub.id).sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id))}));
+  const local = new Map<string, {x: number; y: number}>();
+  const radialRings: {centerId: string; radius: number}[] = [];
+  let outerRadius = 0;
+  for (const {hub, members} of groups) {
+    local.set(hub.id, {x: 0, y: 0});
+    let offset = 0, radius = Math.min(300, 170 + members.length * 7);
+    while (offset < members.length) {
+      radialRings.push({centerId: hub.id, radius});
+      const count = Math.min(members.length - offset, Math.max(12, Math.floor(2 * Math.PI * radius / 115)));
+      for (let i = 0; i < count; i++) {
+        const angle = -Math.PI / 2 + i * 2 * Math.PI / count;
+        local.set(members[offset + i].id, {x: Math.cos(angle) * radius, y: Math.sin(angle) * radius});
+      }
+      outerRadius = Math.max(outerRadius, radius); offset += count; radius += 180;
+    }
+  }
+  const columns = Math.max(1, Math.ceil(Math.sqrt(groups.length)));
+  const spacing = Math.max(500, outerRadius * 2 + 300);
+  const positions: Record<string, {x: number; y: number}> = {};
+  groups.forEach(({hub, members}, i) => {
+    for (const n of [hub, ...members]) {
+      const p = local.get(n.id)!;
+      positions[n.id] = {x: 640 + (i % columns) * spacing + p.x,
+        y: 360 + Math.floor(i / columns) * spacing + p.y};
+    }
+  });
+  return {positions, radialRings};
 }
 
 /** Same shared bridge definition as the on-screen and printed conclusions. */
@@ -171,7 +234,7 @@ export function analyseGraph(nodes: NetworkNode[], input: NetworkLink[]) {
   const unknownPairs = new Set(flow.filter(r => !r.directed)
     .map(r => JSON.stringify([r.source.id, r.target.id])));
   return {flow, shared, red, sharedScene: scene([...sharedEdges]),
-    redScene: offenderOnlyScene(nodes, links),
+    redScene: offenderRelationsScene(nodes, links),
     undirectedScene: scene(links.filter(l => l.kind === "txn"
       && unknownPairs.has(JSON.stringify([l.source, l.target]))))};
 }

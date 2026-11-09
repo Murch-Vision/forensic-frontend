@@ -14,7 +14,7 @@ function load(name) {
     dep => dep.startsWith('.') ? load(dep.slice(2)) : require(dep), mod);
   return mod.exports;
 }
-const {analyseGraph, sharedGraphRelations, offenderOnlyScene} = load('graphAnalysis');
+const {analyseGraph, sharedGraphRelations, offenderRelationsScene} = load('graphAnalysis');
 const {graphVerdict} = load('linkVerdict');
 const node = (id, extra = {}) => ({id, label:id, type:'PERSON', cluster:id,
   weight:1, stats:[], ...extra});
@@ -45,13 +45,14 @@ assert.equal(a.sharedScene.links.length,6);
 assert(a.red.some(r => r.link.kind === 'call' && r.sourcePerson.id === 'A'), 'Owned-phone calls included');
 assert(!a.red.some(r => r.link.kind === 'owns'), 'Ownership is context, not evidence');
 assert(!a.red.some(r => r.source.id === 'unrelated' || r.target.id === 'unrelated'), 'Risk alone is not a red flag');
-assert.deepEqual(a.redScene.nodes.map(n => n.id), ['A']);
-assert.deepEqual(a.redScene.links, [], 'Ordinary contacts stay in the list but outside the red diagram');
-const bothRed = offenderOnlyScene(nodes.map(n => n.id === 'B' ? {...n, offender:true} : n), links);
+assert.deepEqual(a.redScene.nodes.map(n => n.id), ['A','B']);
+assert.deepEqual(a.redScene.links.map(l=>[l.source,l.target,l.kind]), [['A','B','call']],
+  'Primary owners remain as context, while ordinary contacts stay outside the red diagram');
+const bothRed = offenderRelationsScene(nodes.map(n => n.id === 'B' ? {...n, offender:true} : n), links);
 assert.deepEqual(bothRed.nodes.map(n => n.id), ['A','B']);
 assert.deepEqual(bothRed.links.map(l => [l.source,l.target,l.kind]), [['A','B','call']],
   'Owned-phone evidence between offenders is projected onto their people');
-assert.deepEqual(offenderOnlyScene([],[]), {nodes:[],links:[]});
+assert.deepEqual(offenderRelationsScene([],[]), {nodes:[],links:[],positions:{},radialRings:[]});
 assert(!a.redScene.nodes.some(n => n.id === 'unrelated'));
 assert.equal(a.undirectedScene.links.filter(l => l.kind !== 'owns').length,1);
 const verdictRows = graphVerdict(nodes,links).find(v => v.rows).rows;
@@ -80,7 +81,25 @@ assert.equal(snapshot.shared.rows.length,20);
 assert.deepEqual(snapshot.shared.amounts,Array.from({length:20},(_,i)=>(27-i)*2));
 assert.equal(snapshot.shared.rows[0][0],'bridge-26');
 assert.equal(snapshot.shared.rows.at(-1)[0],'bridge-07');
-console.log('PASS: red-only people including isolates, projected offender phone calls, report top20 by raw money');
+console.log('PASS: red people with primary owner context, projected phone calls, report top20 by raw money');
+
+const hub = node('owner',{stats:[['Гүйлгээ','30']]});
+const redPeople = Array.from({length:45},(_,i)=>node(`red-${String(i).padStart(2,'0')}`,{offender:true}));
+const radialLinks = redPeople.map(n=>edge(hub.id,n.id,'txn',{txnTotal:50,moneyOut:50}));
+const radial = offenderRelationsScene([hub,...redPeople,node('ordinary'),node('isolate',{offender:true})],
+  [...radialLinks,edge(hub.id,'ordinary')]);
+assert.equal(radial.nodes.length,47,'All red people and their primary owner remain; ordinary peers are excluded');
+assert.equal(radial.links.length,45,'No invented edges to isolated offenders');
+assert.deepEqual(radial.positions.owner,{x:640,y:360});
+const distances = redPeople.map(n=>Math.hypot(radial.positions[n.id].x-640,radial.positions[n.id].y-360));
+assert(new Set(distances.map(n=>Math.round(n))).size>1,'Dense relations use concentric circles');
+const locations=Object.values(radial.positions).map(p=>`${Math.round(p.x)},${Math.round(p.y)}`);
+assert.equal(new Set(locations).size,radial.nodes.length,'Every node has a distinct pinned position');
+assert.deepEqual(offenderRelationsScene([...radial.nodes].reverse(),[...radial.links].reverse()).positions,
+  radial.positions,'Layout remains deterministic across reordered query results');
+assert.deepEqual(offenderRelationsScene([hub,node('ordinary')],[edge(hub.id,'ordinary')]).nodes,[],
+  'A primary owner alone never makes a red relation');
+console.log('PASS: owner-centered radial layout, multiple rings, isolated people, stable ordering and no ordinary expansion');
 
 const printedShared = graphVerdict([...roots,...many],manyLinks,{sharedLimit:20}).find(v=>v.rows);
 assert.equal(printedShared.rows.length,20,'Browser print report also limits shared findings');
