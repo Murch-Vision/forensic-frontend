@@ -86,6 +86,7 @@ const BANK_FIELDS: {key: string; label: string}[] = [
   {key: "description", label: "Тайлбар"},
   {key: "reference", label: "Гүйлгээний дугаар"},
   {key: "counterpartyName", label: "Харьцсан харилцагчийн нэр"},
+  {key: "counterpartyName2", label: "Харьцсан харилцагчийн нэр 2"},
   {key: "counterpartyAccount", label: "Харьцсан данс"},
   {key: "counterpartyNationalId", label: "Харьцсан регистрийн дугаар"},
   {key: "balance", label: "Гүйлгээний дараах үлдэгдэл"},
@@ -472,7 +473,7 @@ export default function ImportPage() {
     importQ.reset();
     setError(null);
     const mappingArg = Object.entries(mapping)
-      .filter(([, col]) => col && col.trim())
+      .filter(([field, col]) => field === "counterpartyName2" || (col && col.trim()))
       .map(([field, column]) => ({field, column}));
     const large = content.length > UPLOAD_THRESHOLD;
     const runWith = (upId: string | null) => runImport({
@@ -649,6 +650,8 @@ export default function ImportPage() {
               ороогүй.
             </div>
           )}
+          {summary.messages.map((message, i) => <div key={i}
+            style={{fontSize: 12, marginTop: 6}}>{message}</div>)}
           <div className="import-result-errors">
           {summary.errors.map((e, i) => (
             <div key={i} style={{fontSize: 11, color: "var(--risk-high)"}}>
@@ -740,6 +743,10 @@ export default function ImportPage() {
           <div style={{fontSize: 11, color: "var(--text-muted)",
             marginBottom: 12}}>
             Автоматаар тааруулсан баганууд. Шаардлагатай бол гараар засна уу.
+            {kind === "BANK" && <p style={{margin: "6px 0 0"}}>
+              Эхний нэр субъекттэй таарахгүй бол хоёр дахь нэрийг шалгана.
+              Нэр нь нэг регистртэй таарвал регистргүй дансанд нөхнө.
+            </p>}
           </div>
           <div className="import-mapping">
             {mapFields.map((f) => (

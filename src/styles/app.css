@@ -338,7 +338,7 @@ body {
 .import-settings { border: 0; padding: 0; margin: 0; min-width: 0; }
 .import-workspace { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
 .import-workspace > .card { min-width: 0; }
-.import-mapping { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; max-height: 420px; overflow: auto; padding-right: 6px; }
+.import-mapping { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 .import-mapping > div { display: flex; flex-direction: column; justify-content: flex-end; }
 .import-result { border-top: 1px solid var(--border-primary); margin-top: 12px; padding-top: 12px; }
 .import-result > strong { color: var(--accent-cyan); }
