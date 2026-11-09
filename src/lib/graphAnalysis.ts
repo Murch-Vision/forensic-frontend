@@ -1,5 +1,21 @@
 import type {NetworkLink, NetworkNode} from "./networkGraph";
 
+/** Induced person-only scene: ordinary contacts never expand a red hub. */
+export function offenderOnlyScene(nodes: NetworkNode[], links: NetworkLink[]) {
+  const people = nodes.filter(n => n.type === "PERSON" && n.offender === true);
+  const ids = new Set(people.map(n => n.id));
+  const owner = new Map(links.filter(l => l.kind === "owns").map(l => [l.target, l.source]));
+  const edges = links.filter(l => l.kind !== "owns").flatMap(l => {
+    const source = owner.get(l.source) ?? l.source;
+    const target = owner.get(l.target) ?? l.target;
+    return source !== target && ids.has(source) && ids.has(target)
+      ? [{...l, source, target}] : [];
+  });
+  // Isolated offenders still belong in this view. Phone/account evidence
+  // between two offenders is drawn between their owners; the list keeps IDs.
+  return {nodes: people, links: edges};
+}
+
 /** Same shared bridge definition as the on-screen and printed conclusions. */
 export function sharedGraphRelations(nodes: NetworkNode[], links: NetworkLink[]) {
   // "Primary people" are the people whose OWN statements are loaded: the
@@ -155,7 +171,7 @@ export function analyseGraph(nodes: NetworkNode[], input: NetworkLink[]) {
   const unknownPairs = new Set(flow.filter(r => !r.directed)
     .map(r => JSON.stringify([r.source.id, r.target.id])));
   return {flow, shared, red, sharedScene: scene([...sharedEdges]),
-    redScene: scene(red.map(r => r.link)),
+    redScene: offenderOnlyScene(nodes, links),
     undirectedScene: scene(links.filter(l => l.kind === "txn"
       && unknownPairs.has(JSON.stringify([l.source, l.target]))))};
 }

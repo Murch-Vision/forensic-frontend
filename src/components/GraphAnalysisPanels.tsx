@@ -106,7 +106,7 @@ export default forwardRef<GraphAnalysisPanelsHandle, {
       if (!sharedRef.current) throw Error("Дундын харилцааны зураглал бэлэн болоогүй байна.");
       snapshot.shared.image = await sharedRef.current.exportPng();
     }
-    if (snapshot.red.rows.length) {
+    if (analysis.redScene.nodes.length) {
       if (!redRef.current) throw Error("Улаан этгээдийн зураглал бэлэн болоогүй байна.");
       snapshot.red.image = await redRef.current.exportPng();
     }
@@ -171,8 +171,8 @@ export default forwardRef<GraphAnalysisPanelsHandle, {
       </div>} />
 
     <Section id="graph-red-relations" title={`Улаанаар тэмдэглэсэн этгээдийн харилцаа (${analysis.red.length})`}
-      note="Хэрэгтний бүртгэлд таарсан улаан тэмдэглэгээтэй этгээдийн гүйлгээ, утасны дуудлага, гар холбоос."
-      hasRows={analysis.red.length > 0} empty="Улаанаар тэмдэглэсэн этгээдийн харагдаж буй харилцаа алга"
+      note="Жагсаалтад хэрэгтний харилцаа, зураглалд зөвхөн хэрэгтэн гэж тэмдэглэгдсэн хүмүүс болон тэдний хоорондын холбоос харагдана."
+      hasRows={analysis.redScene.nodes.length > 0} empty="Улаанаар тэмдэглэсэн этгээдийн харагдаж буй харилцаа алга"
       list={<AnalysisTable rows={analysis.red} rowKey={r => r.id} pageKey="redPage" columns={[
         {header: "Этгээд", render: r => <Identity node={r.source} person={r.sourcePerson} />},
         {header: "Харилцагч", render: r => <Identity node={r.target} person={r.targetPerson} />},
@@ -180,7 +180,7 @@ export default forwardRef<GraphAnalysisPanelsHandle, {
           <span>{LINK_STYLE[r.link.kind].label}</span><small>{r.link.label ?? "—"}</small>
         </span>},
         {header: "Зураглал", render: r => <button className="btn btn-sm" onClick={() =>
-          focusRed(r.sourcePerson.offender ? r.source.id : r.target.id)}>Зурагт харах</button>},
+          focusRed(r.sourcePerson.offender ? r.sourcePerson.id : r.targetPerson.id)}>Зурагт харах</button>},
       ]} />}
       diagram={<div aria-label="Улаан этгээдийн харилцааны зураглал">
         <NetworkGraph ref={redRef} {...analysis.redScene} height={460} minLabelPixels={11} showNames

@@ -232,6 +232,8 @@ interface NetworkGraphProps {
   nodes : NetworkNode[];
   links : NetworkLink[];
   height? : number;
+  offendersOnly? : boolean;
+  onToggleOffenders? : () => void;
   // Compact analysis panels keep names readable while fitting a whole scene.
   minLabelPixels? : number;
   // Selected node — its direct connections stay highlighted (everything else
@@ -1384,7 +1386,8 @@ function NetworkGraph(props, ref) {
         borderRadius: 8, fontSize: 11,
       }}>
         {(Object.keys(TYPE_STYLE) as NetworkNodeType[])
-          .filter((t) => presentTypes.has(t)).map((t) => (
+          .filter((t) => presentTypes.has(t) && !(t === "PERSON"
+            && props.nodes.every(n => n.type !== "PERSON" || n.offender))).map((t) => (
           <div key={t} style={{display: "flex", alignItems: "center", gap: 6}}>
             <span style={{
               width: 12, height: 12, borderRadius: "50%",
@@ -1394,15 +1397,22 @@ function NetworkGraph(props, ref) {
             <span style={{color: "#9aa0b5"}}>{TYPE_LABEL[t]}</span>
           </div>
         ))}
-        {hasOffender && (
-          <div style={{display: "flex", alignItems: "center", gap: 6}}>
-            <span style={{
-              width: 12, height: 12, borderRadius: "50%",
-              border: `2px solid ${OFFENDER_COLOR}`,
-              background: "#0b0e1a", display: "inline-block",
-            }} />
-            <span style={{color: OFFENDER_COLOR, fontWeight: 700}}>Хэрэгтэн</span>
-          </div>
+        {(hasOffender || props.onToggleOffenders) && (
+          <button type="button" className={props.onToggleOffenders ? "btn btn-sm graph-offender-legend" : "graph-offender-legend"}
+            aria-label={props.onToggleOffenders ? (props.offendersOnly ? "Бүгдийг харах" : "Зөвхөн хэрэгтнүүдийг харах") : undefined}
+            aria-pressed={props.onToggleOffenders ? !!props.offendersOnly : undefined}
+            onClick={props.onToggleOffenders} disabled={!props.onToggleOffenders}
+            style={{display: "flex", alignItems: "center", gap: 6,
+              padding: props.onToggleOffenders ? "4px 6px" : 0,
+              background: props.offendersOnly ? "rgba(255,23,68,0.12)" : "transparent",
+              border: props.onToggleOffenders ? "1px solid rgba(255,23,68,0.55)" : 0,
+              font: "inherit", opacity: 1,
+              cursor: props.onToggleOffenders ? "pointer" : "default"}}>
+            <span style={{width: 12, height: 12, borderRadius: "50%",
+              border: `2px solid ${OFFENDER_COLOR}`, background: "#0b0e1a", display: "inline-block"}} />
+            <span style={{color: OFFENDER_COLOR, fontWeight: 700}}>Хэрэгтэн
+              {props.offendersOnly && " · Бүгдийг харах"}</span>
+          </button>
         )}
         <div style={{height: 1, background: "#252a45", margin: "3px 0"}} />
         {(Object.keys(LINK_STYLE) as NetworkLinkKind[])

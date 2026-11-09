@@ -8,7 +8,7 @@ export interface ReportGraphAnalysis {
   flow: {from: string; to: string; amount: number; directed: boolean; soft: boolean;
     fromRed: boolean; toRed: boolean}[];
   flowImages: ReportAnalysisImage[];
-  shared: {rows: string[][]; image?: ReportAnalysisImage};
+  shared: {rows: string[][]; amounts?: number[]; image?: ReportAnalysisImage};
   red: {rows: string[][]; image?: ReportAnalysisImage};
 }
 const identity = (node: NetworkNode, owner = node) =>
@@ -19,11 +19,13 @@ const identity = (node: NetworkNode, owner = node) =>
 // Full filtered scene, independent of the page currently open in each table.
 export function buildReportGraphAnalysis(nodes: NetworkNode[], links: NetworkLink[]): ReportGraphAnalysis {
   const a = analyseGraph(nodes, links);
+  const topShared = [...a.shared].sort((x, y) => y.money - x.money
+    || x.node.id.localeCompare(y.node.id)).slice(0, 20);
   return {version: 1, flowImages: [],
     flow: a.flow.map(r => ({from: identity(r.source), to: identity(r.target),
       amount: r.amount, directed: r.directed, soft: r.soft,
       fromRed: !!r.source.offender, toRed: !!r.target.offender})),
-    shared: {rows: a.shared.map(r => [identity(r.node), r.roots.map(n => n.label).join(" ↔ "),
+    shared: {amounts: topShared.map(r => r.money), rows: topShared.map(r => [identity(r.node), r.roots.map(n => n.label).join(" ↔ "),
       `${r.distance} дамжлага`, [r.money > 0 && formatMoney(r.money),
         r.txns > 0 && `${formatNum(r.txns)} гүйлгээ`, r.calls > 0 && `${formatNum(r.calls)} дуудлага`]
         .filter(Boolean).join(" · ") || "Холбоос"])},

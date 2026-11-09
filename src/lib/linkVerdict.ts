@@ -122,6 +122,7 @@ export interface GraphVerdictItem {
 export function graphVerdict(
   nodes: NetworkNode[],
   links: NetworkLink[],
+  options?: {sharedLimit: number},
 ): GraphVerdictItem[] {
   const out: GraphVerdictItem[] = [];
   if (!nodes.length) return out;
@@ -206,7 +207,10 @@ export function graphVerdict(
   }
   const shared = sharedGraphRelations(nodes, links);
 
-  const sharedRows = shared.map((item) => {
+  const listedShared = options
+    ? [...shared].sort((a, b) => b.money - a.money || a.node.id.localeCompare(b.node.id))
+      .slice(0, options.sharedLimit) : shared;
+  const sharedRows = listedShared.map((item) => {
     const identity = item.node.type === "ACCOUNT"
       ? item.node.sub || item.node.label : item.node.label;
     const evidence = item.txns > 0
@@ -229,7 +233,8 @@ export function graphVerdict(
     out.push({
       title: `Дундын холбоосууд · ${formatNum(shared.length)}`,
       tone: "info",
-      text: "Хоёр ба түүнээс олон шалгаж буй хүнийг холбосон данс, харилцагчид.",
+      text: "Хоёр ба түүнээс олон шалгаж буй хүнийг холбосон данс, харилцагчид."
+        + (options ? ` Нийт ${formatNum(shared.length)} харилцагчаас мөнгөн дүнгээр топ ${options.sharedLimit}-ийг жагсаав.` : ""),
       rows: sharedRows,
     });
   }

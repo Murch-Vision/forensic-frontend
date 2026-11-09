@@ -109,6 +109,9 @@ export async function exportPlotPng(data: unknown[], height: number, layout?: Re
 }
 
 export default function Plot({data, layout, height, onClick}: PlotProps) {
+  // Plotly's responsive config already owns the resize listener. The React
+  // wrapper's duplicate useResizeHandler can outlive its DOM ref during fast
+  // filter changes and try to resize a null element.
   // react-plotly measures its container on mount; inside a flex/grid card the
   // width often isn't settled yet, so the chart paints blank at width 0 and no
   // window-resize ever fires to correct it. Nudge a resize on the next frames
@@ -126,7 +129,6 @@ export default function Plot({data, layout, height, onClick}: PlotProps) {
       config={{displayModeBar: false, responsive: true}}
       style={{width: "100%", height: height ?? 240}}
       onClick={onClick}
-      useResizeHandler
     />
   );
 }

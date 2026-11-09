@@ -12,7 +12,8 @@ const assert = require('node:assert/strict');
     const initial = {'s:1':{x:-300,y:100},'s:2':{x:300,y:100}};
     await page.addInitScript(p => {
       localStorage.setItem('forensic.authToken','mock-session');
-      localStorage.setItem('forensic.nodePositions:1',JSON.stringify(p));
+      if (!localStorage.getItem('forensic.nodePositions:1'))
+        localStorage.setItem('forensic.nodePositions:1',JSON.stringify(p));
     },initial);
     const cases = [1,2].map(id => ({__typename:'CaseFile',id,caseId:`QA-${id}`,
       caseName:`Case ${id}`,status:'ACTIVE',priority:'MEDIUM'}));
@@ -75,7 +76,7 @@ const assert = require('node:assert/strict');
       return route.fulfill({json:{data}});
     });
     const base = process.env.FORENSIC_TEST_URL || 'https://forensic.dev.sea.maestro.living';
-    await page.goto(`${base}/linkchart`);
+    await page.goto(`${base}/linkchart?people=invalid`);
     const money=page.locator('#graph-money-flow'), shared=page.locator('#graph-shared-relations'), red=page.locator('#graph-red-relations');
     await money.locator('.sankey').waitFor();
     await shared.locator('canvas').waitFor();await red.locator('canvas').waitFor();
@@ -93,6 +94,27 @@ const assert = require('node:assert/strict');
       'Dense flow charts keep readable label spacing inside a bounded scroll pane');
     const pos = () => page.evaluate(()=>JSON.parse(localStorage.getItem('forensic.nodePositions:1')));
     const before=await pos();
+    assert.equal(await page.getByRole('button',{name:'Зөвхөн хэрэгтнүүдийг харах',exact:true})
+      .getAttribute('aria-pressed'),'false','Malformed people filter falls back to all');
+    await page.getByRole('button',{name:'Зөвхөн хэрэгтнүүдийг харах',exact:true}).click();
+    await page.waitForURL(url=>url.searchParams.get('people')==='offenders');
+    await money.getByText('Харагдаж буй мөнгөн урсгал алга',{exact:true}).waitFor();
+    assert.equal(await red.locator('tbody tr').count(),0,'Ordinary contacts disappear from the globally filtered scene');
+    assert.equal(await page.getByRole('button',{name:'Бүгдийг харах',exact:true}).getAttribute('aria-pressed'),'true');
+    await page.getByRole('button',{name:'✥ Бөөгнүүлэх',exact:true}).first().click();
+    assert.deepEqual(await pos(),before,'Rearranging a red filter cannot overwrite the main layout');
+    await page.reload();
+    await page.getByRole('button',{name:'Бүгдийг харах',exact:true}).waitFor();
+    await money.getByText('Харагдаж буй мөнгөн урсгал алга',{exact:true}).waitFor();
+    assert.deepEqual(await pos(),before);
+    await page.getByRole('button',{name:'Бүгдийг харах',exact:true}).click();
+    await money.locator('.sankey').waitFor();
+    await page.goBack();
+    await page.getByRole('button',{name:'Бүгдийг харах',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Бүгдийг харах',exact:true}).click();
+    await money.locator('.sankey').waitFor();
+    assert.equal(await red.locator('tbody tr').count(),3,'Leaving the filter restores the full contact list');
+    assert.deepEqual(await pos(),before);
     await shared.getByRole('button',{name:'Зурагт харах'}).click();
     assert.deepEqual(await pos(),before,'Lower graph focus cannot move the main arrangement');
     const list=await shared.locator('.graph-analysis-list').boundingBox();
@@ -111,6 +133,11 @@ const assert = require('node:assert/strict');
     await page.goBack();
     assert.equal(new URL(page.url()).searchParams.get('flowPage'),'2','Paging supports browser Back');
     await page.setViewportSize({width:900,height:1000});
+    await page.waitForFunction(()=>{
+      const a=document.querySelector('#graph-shared-relations .graph-analysis-list').getBoundingClientRect();
+      const b=document.querySelector('#graph-shared-relations .graph-analysis-diagram').getBoundingClientRect();
+      return b.y>=a.bottom;
+    });
     const smallList=await shared.locator('.graph-analysis-list').boundingBox();
     const smallDiagram=await shared.locator('.graph-analysis-diagram').boundingBox();
     assert(smallDiagram.y>=smallList.y+smallList.height,'Narrow screen stacks list and diagram');

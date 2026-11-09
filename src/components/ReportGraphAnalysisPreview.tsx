@@ -8,7 +8,7 @@ export default function ReportGraphAnalysisPreview({analysis}: {analysis: Report
       alt="Мөнгөн урсгалын нийт зураглал" src={`data:image/png;base64,${image.imageBase64}`}
       width={image.width} height={image.height}
       style={{display: "block", width: "100%", height: "auto", marginBottom: 12}} />)}
-    {([['Дундын харилцаа', analysis.shared, ['Дундын харилцагч', 'Холбогдох хүмүүс', 'Дамжлага', 'Баримт']],
+    {([['Дундын харилцаа · Дүнгээр топ 20', analysis.shared, ['Дундын харилцагч', 'Холбогдох хүмүүс', 'Дамжлага', 'Баримт']],
       ['Улаанаар тэмдэглэсэн этгээдийн харилцаа', analysis.red, ['Этгээд', 'Харилцагч', 'Харилцаа']]] as const)
       .map(([title, section, headers]) => <div key={title}>
         <h3>{title} ({section.rows.length})</h3>

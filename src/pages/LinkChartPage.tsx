@@ -39,6 +39,7 @@ import {
 import {Select} from "../components/inputs";
 import NetworkGraph, {LINK_STYLE} from "../components/NetworkGraph";
 import type {NetworkGraphHandle} from "../components/NetworkGraph";
+import {offenderOnlyScene} from "../lib/graphAnalysis";
 import GraphAnalysisPanels from "../components/GraphAnalysisPanels";
 import type {GraphAnalysisPanelsHandle} from "../components/GraphAnalysisPanels";
 import CaseGate from "../components/CaseGate";
@@ -619,7 +620,9 @@ export default function LinkChartPage() {
     return JSON.stringify({
       hiddenKinds: [...hiddenKinds],
       hidden: [...hidden],
-      positions: graphRef.current?.getPositions() ?? {},
+      // A person filter is a view; saving it must retain the full board's
+      // arrangement rather than replacing it with just the red subset.
+      positions: offendersOnly ? casePositions ?? {} : graphRef.current?.getPositions() ?? {},
     });
   }
 
@@ -675,6 +678,16 @@ export default function LinkChartPage() {
   // value CAPTURED AT MOUNT (the refs below), so the reflect effects — which may
   // momentarily strip a param before state catches up — can't defeat it.
   const [searchParams, setSearchParams] = useSearchParams();
+  const offendersOnly = searchParams.get("people") === "offenders";
+  function toggleOffenders() {
+    setFocusId(null); setSelected(null); setSelectedLink(null); setConnectFrom(null);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.get("people") === "offenders" ? next.delete("people") : next.set("people", "offenders");
+      for (const key of ["flowPage", "sharedPage", "redPage"]) next.delete(key);
+      return next;
+    }, {preventScrollReset: true});
+  }
   const apollo = useApolloClient();
   const [setActiveCaseMut] = useMutation(SET_ACTIVE_CASE);
   const wantCaseId = useRef<number | null>(
@@ -817,7 +830,7 @@ export default function LinkChartPage() {
     setSelectedLink(null);
   }
 
-  const network = useMemo(() => {
+  const baseNetwork = useMemo(() => {
     if (!data || !txQ.data || !callQ.data) return null;
     if (ownerRequest.needed && (ownersQ.loading || !ownersQ.data)) return null;
     const accounts = txQ.data.bankAccounts;
@@ -946,6 +959,9 @@ export default function LinkChartPage() {
   }, [data, txQ.data, callQ.data, ignoredPairs, ignoredTxns, descRules,
     minAmount, hidden, hiddenKinds, activeGraphId, graphSuspects,
     ownerRequest.needed, ownersQ.loading, ownersQ.data]);
+  const network = useMemo(() => baseNetwork && offendersOnly
+    ? {...baseNetwork, ...offenderOnlyScene(baseNetwork.nodes, baseNetwork.links)}
+    : baseNetwork, [baseNetwork, offendersOnly]);
   currentSceneRef.current = network;
 
   // Plain-language conclusions about the picture currently on screen — the
@@ -1407,21 +1423,26 @@ export default function LinkChartPage() {
             </div>
           </div>
         )}
-        {network.nodes.length > 0 ? (
+        {(baseNetwork?.nodes.length ?? 0) > 0 ? (
           <div style={{position: "relative"}}>
             <NetworkGraph key={activeCaseId} ref={graphRef}
               nodes={focusView ? focusView.nodes : network.nodes}
               links={focusView ? focusView.links : network.links}
               selectedId={connectFrom?.id ?? selected?.id ?? focusId}
-              initialPositions={focusView ? focusView.positions : casePositions}
-              layoutKey={focusView ? `focus:${focusId}` : layout.key}
+              initialPositions={focusView ? focusView.positions : offendersOnly ? null : casePositions}
+              layoutKey={focusView ? `focus:${focusId}` : offendersOnly ? "offenders" : layout.key}
               clusterRevision={clusterRequest.caseId === activeCaseId ? clusterRequest.revision : 0}
               // Dragging inside isolate mode rearranges the ring for viewing but
               // must NOT overwrite the real saved layout — only persist in the
               // normal full view.
-              onLayoutChange={focusView ? undefined : persistPositions}
+              onLayoutChange={focusView || offendersOnly ? undefined : persistPositions}
+              offendersOnly={offendersOnly} onToggleOffenders={toggleOffenders}
+              minLabelPixels={offendersOnly ? 11 : undefined}
               showNames={showNames} showEdgeLabels={showEdgeLabels}
               onNodeClick={handleNodeClick} onLinkClick={setSelectedLink} />
+            {offendersOnly && !network.nodes.length && <p className="graph-analysis-note">
+              Харагдаж буй хэрэгтэн гэж тэмдэглэгдсэн этгээд алга.
+            </p>}
             {focusView && (
               <div style={{
                 position: "absolute", top: 10, left: "50%",
@@ -1872,7 +1893,7 @@ export default function LinkChartPage() {
         caseCode={caseQ.data?.activeCase?.caseId ?? ""}
         nodes={network.nodes}
         links={network.links}
-        verdict={verdict}
+        verdict={reportOpen ? graphVerdict(network.nodes, network.links, {sharedLimit: 20}) : []}
       />
     </div>
   );
