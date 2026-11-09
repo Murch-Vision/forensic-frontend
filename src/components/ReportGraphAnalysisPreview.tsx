@@ -5,7 +5,7 @@ export default function ReportGraphAnalysisPreview({analysis}: {analysis: Report
   return <div className="report-analysis-preview">
     <h3>Мөнгөн урсгал ({analysis.flow.length})</h3>
     {analysis.flowImages.map((image, i) => <img key={i} className="report-flow-image"
-      alt={`Мөнгөн урсгалын зураглал ${i + 1}`} src={`data:image/png;base64,${image.imageBase64}`}
+      alt="Мөнгөн урсгалын нийт зураглал" src={`data:image/png;base64,${image.imageBase64}`}
       width={image.width} height={image.height}
       style={{display: "block", width: "100%", height: "auto", marginBottom: 12}} />)}
     {([['Дундын харилцаа', analysis.shared, ['Дундын харилцагч', 'Холбогдох хүмүүс', 'Дамжлага', 'Баримт']],

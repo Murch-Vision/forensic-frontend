@@ -95,14 +95,12 @@ export default forwardRef<GraphAnalysisPanelsHandle, {
   const [redFocus, setRedFocus] = useState<string | null>(null);
   useImperativeHandle(ref, () => ({async exportReport() {
     const snapshot = buildReportGraphAnalysis(nodes, links);
-    // Use the same Sankey as the page, but capture every filtered flow in
-    // readable batches instead of exporting only the currently visible page.
-    for (const directed of [true, false]) {
-      const rows = analysis.flow.filter(r => r.directed === directed);
-      for (let offset = 0; offset < rows.length; offset += PAGE_SIZE) {
-        snapshot.flowImages.push(await exportSankeyPng(flowChart(rows.slice(offset, offset + PAGE_SIZE), directed),
-          directed ? undefined : "Чиглэл тодорхойгүй · Нэрээр холбосон · Тал А ↔ Тал Б"));
-      }
+    // One complete chart, independent of the table page. Unknown directions
+    // occupy a labelled area of that same image rather than another image.
+    if (analysis.flow.length) {
+      snapshot.flowImages.push(await exportSankeyPng(
+        flowChart(analysis.flow.filter(r => r.directed)),
+        flowChart(analysis.flow.filter(r => !r.directed), false)));
     }
     if (snapshot.shared.rows.length) {
       if (!sharedRef.current) throw Error("Дундын харилцааны зураглал бэлэн болоогүй байна.");

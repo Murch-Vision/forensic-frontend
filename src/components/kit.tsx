@@ -425,14 +425,33 @@ function sankeyData(props: SankeyProps, pad = 14) {
 export function SankeyChart(props: SankeyProps) {
   return <Plot height={props.height ?? 420} data={sankeyData(props)} />;
 }
-export function exportSankeyPng(props: SankeyProps, note?: string) {
-  const nodes = Math.max(new Set(props.source).size, new Set(props.target).size);
-  const height = Math.max(460, nodes * 36 + 64);
-  return exportPlotPng(sankeyData({...props,
-    linkColors: props.linkColors?.map(color => color.replace("0.25)", "0.6)")),
-  }, 30), height, {
-    font: {size: 24, color: "#DADAE8"}, margin: {l: 24, r: 24, t: note ? 54 : 24, b: 24},
-    ...(note ? {annotations: [{text: note, x: 0, y: 1.08, xref: "paper", yref: "paper", showarrow: false, xanchor: "left"}]} : {}),
+export function exportSankeyPng(props: SankeyProps, unknown?: SankeyProps) {
+  const groups = [props, unknown].filter((p): p is SankeyProps => !!p?.value.length);
+  const heights = groups.map(p => Math.max(360,
+    Math.max(new Set(p.source).size, new Set(p.target).size) * 36 + 64));
+  const gap = groups.length > 1 ? 96 : 0;
+  const natural = heights.reduce((sum, h) => sum + h, gap);
+  // One canvas, bounded at 32 MP after export. No rows are discarded when
+  // very large scenes need a smaller scale within that canvas.
+  const innerHeight = Math.min(12_704, Math.max(396, natural));
+  const ratio = innerHeight / natural;
+  const annotations: Record<string, unknown>[] = [];
+  let top = 1;
+  const data = groups.flatMap((p, i) => {
+    const domainHeight = heights[i] * ratio / innerHeight;
+    const nodes = Math.max(new Set(p.source).size, new Set(p.target).size);
+    const pad = Math.min(30, Math.max(1, heights[i] * ratio / (nodes * 1.5)));
+    const traces = sankeyData({...p,
+      linkColors: p.linkColors?.map(color => color.replace("0.25)", "0.6)")),
+    }, pad).map(trace => ({...trace, domain: {y: [Math.max(0, top - domainHeight), Math.min(1, top)]},
+      textfont: {size: Math.min(24, pad * 0.8), color: "#DADAE8"}}));
+    if (p === unknown) annotations.push({text: "Чиглэл тодорхойгүй · Тал А ↔ Тал Б",
+      x: 0, y: top, yshift: 24, xref: "paper", yref: "paper", showarrow: false, xanchor: "left"});
+    top -= domainHeight + (i === 0 ? gap * ratio / innerHeight : 0);
+    return traces;
+  });
+  return exportPlotPng(data, innerHeight + 96, {
+    font: {size: 24, color: "#DADAE8"}, margin: {l: 24, r: 24, t: 64, b: 32}, annotations,
   });
 }
 

@@ -103,6 +103,7 @@ const assert = require('node:assert/strict');
     await page.waitForFunction(()=>document.querySelectorAll('#graph-money-flow tbody tr').length===8);
     const second=await money.locator('tbody').innerText();
     await page.reload();await money.locator('.sankey').waitFor();
+    await page.waitForFunction(()=>document.querySelectorAll('#graph-money-flow tbody tr').length===8);
     assert.equal(await money.locator('tbody').innerText(),second,'Paging survives reload');
     const secondValues=await money.locator('.js-plotly-plot').evaluate(el=>el.data[0].link.value);
     assert.equal(secondValues.reduce((s,v)=>s+v,0),25+200+Array.from({length:6},(_,i)=>300+i).reduce((s,v)=>s+v,0));
@@ -119,11 +120,19 @@ const assert = require('node:assert/strict');
     await shared.getByText('Харагдаж буй дундын харилцаа алга',{exact:true}).waitFor();
     assert.equal(await red.locator('tbody tr').count(),1,'Money visibility applies to red relationships too');
     await toggle.click();await money.locator('.sankey').waitFor();
+    await page.evaluate(()=>{
+      const encode=HTMLCanvasElement.prototype.toDataURL;
+      HTMLCanvasElement.prototype.toDataURL=function(...args){
+        const plot=[...document.body.children].find(el=>el.style?.left==='-10000px'&&el.data);
+        if(plot) window.reportTraces=plot.data.map(t=>({labels:[...t.node.label],values:[...t.link.value]}));
+        return encode.apply(this,args);
+      };
+    });
     const mainBefore=await pos();
     await page.getByRole('button',{name:'Тайланд оруулах',exact:true}).click();
     await page.waitForURL('**/reports');await page.locator('.report-analysis-preview').waitFor();
-    assert.equal(await page.locator('.report-flow-image').count(),2,
-      'Report captures all Sankey pages even when chart table page 2 is open');
+    assert.equal(await page.locator('.report-flow-image').count(),1,
+      'Report captures ONE complete Sankey even when chart table page 2 is open');
     assert.equal(await page.locator('.report-analysis-preview table').count(),2,'Money has images only; relation lists remain');
     assert.equal(await page.locator('.report-analysis-preview table').nth(0).locator('tbody tr').count(),1);
     for(const section of await page.locator('.report-analysis-image').all()){
@@ -132,6 +141,22 @@ const assert = require('node:assert/strict');
     }
     assert.equal(await page.locator('.report-analysis-image').count(),2,'Shared and red arranged scenes are captured');
     assert.deepEqual(await pos(),mainBefore);
+    const traces=await page.evaluate(()=>window.reportTraces);
+    assert.equal(traces.length,1);
+    assert.equal(traces[0].values.length,28,'The actual image includes all filtered flows, beyond screen page 20');
+    assert.equal(traces[0].values.reduce((s,n)=>s+n,0),25+200+Array.from({length:26},(_,i)=>300+i).reduce((s,v)=>s+v,0));
+    assert.equal(traces[0].labels.filter(n=>n==='Илгээсэн · QA Person 01').length,1,
+      'A sender appears once in the global diagram, rather than once in each page');
+    const mixed=await page.evaluate(async()=>{
+      const moduleUrl=performance.getEntriesByType('resource').map(r=>r.name).find(n=>n.includes('/src/components/kit.tsx'));
+      const {exportSankeyPng}=await import(moduleUrl||'/src/components/kit.tsx');
+      const chart=await exportSankeyPng({labels:['Илгээсэн · A','Хүлээн авсан · B'],source:[0],target:[1],value:[30]},
+        {labels:['Тал А · C','Тал Б · D'],source:[0],target:[1],value:[40]});
+      return {width:chart.width,height:chart.height,traces:window.reportTraces};
+    });
+    assert.equal(mixed.traces.length,2,'Unknown direction remains a distinct labelled area of the same image');
+    assert.deepEqual(mixed.traces.map(t=>t.values),[[30],[40]]);
+    assert(mixed.width===2000&&mixed.height>900);
     // Exercise analysis chunking independently of the main chart image.
     await page.evaluate(async()=>{
       const moduleUrl=performance.getEntriesByType('resource').map(r=>r.name).find(n=>n.includes('/src/lib/reportGraph.ts'));
@@ -151,8 +176,8 @@ const assert = require('node:assert/strict');
     assert.equal(exports.length,3);
     for(const e of exports){
       assert(e.graph.analysisUploadId,'Large analysis gets its own case-bound chunk transport');
-      assert.equal(e.analysis.flowImages.length,2);
-      assert(e.analysis.flowImages.every(image=>image.width===2000&&image.height>=575));
+      assert.equal(e.analysis.flowImages.length,1);
+      assert(e.analysis.flowImages.every(image=>image.width===2000&&image.height>1000));
       assert.equal(e.analysis.flow.length,28);assert.equal(e.analysis.shared.rows.length,1);assert.equal(e.analysis.red.rows.length,3);
       assert.equal(e.analysis.flow.reduce((s,r)=>s+r.amount,0),25+200+Array.from({length:26},(_,i)=>300+i).reduce((s,v)=>s+v,0));
     }
