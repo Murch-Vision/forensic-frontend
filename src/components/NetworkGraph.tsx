@@ -231,6 +231,9 @@ export interface NetworkGraphHandle {
 interface NetworkGraphProps {
   nodes : NetworkNode[];
   links : NetworkLink[];
+  height? : number;
+  // Compact analysis panels keep names readable while fitting a whole scene.
+  minLabelPixels? : number;
   // Selected node — its direct connections stay highlighted (everything else
   // dimmed) until deselection, independent of the transient hover.
   selectedId? : string | null;
@@ -299,6 +302,8 @@ function NetworkGraph(props, ref) {
   namesRef.current = props.showNames ?? true;
   const edgeLabelsRef = useRef(true);
   edgeLabelsRef.current = props.showEdgeLabels ?? true;
+  const minLabelRef = useRef(0);
+  minLabelRef.current = props.minLabelPixels ?? 0;
   useEffect(() => {
     ensureRunning();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -546,6 +551,7 @@ function NetworkGraph(props, ref) {
 
     // Nodes.
     const showAll = !!output || v.k >= 1.3;
+    const compactLabels: {node: SimNode; radius: number; size: number}[] = [];
     for (const n of nodes) {
       const st = n.offender
         ? {...TYPE_STYLE[n.type], ring: OFFENDER_COLOR} : TYPE_STYLE[n.type];
@@ -593,19 +599,78 @@ function NetworkGraph(props, ref) {
       ctx.stroke();
 
       const showLabel = namesRef.current
-        && (n.weight >= 1 || showAll || hl === n.id || neighbors.has(n.id));
+        && (minLabelRef.current > 0 || n.weight >= 1 || showAll || hl === n.id || neighbors.has(n.id));
       if (showLabel) {
-        ctx.font = LABEL_FONT;
+        const labelSize = output ? 10 : Math.max(10, minLabelRef.current / Math.max(scale, 0.01));
+        if (!output && minLabelRef.current > 0) {
+          compactLabels.push({node: n, radius: r, size: labelSize});
+          continue;
+        }
+        ctx.font = labelSize === 10 ? LABEL_FONT : `bold ${labelSize}px -apple-system, system-ui, sans-serif`;
         ctx.textBaseline = "top";
         ctx.fillStyle = n.offender ? OFFENDER_COLOR : "#c8cce0";
         ctx.fillText(n.offender ? `ХЭРЭГТЭН · ${n.label}` : n.label,
           n.x, n.y + r + 3);
         if (n.sub && (showAll || hl === n.id)) {
           ctx.fillStyle = "#7a7fa0";
-          ctx.fillText(n.sub, n.x, n.y + r + 15);
+          ctx.fillText(n.sub, n.x, n.y + r + labelSize + 5);
         }
       }
     }
+
+    // Small analysis panes use readable callouts. Place them after all bodies,
+    // keep them inside the pane and avoid other labels, nodes and controls.
+    // This affects neither the main chart nor its full-resolution export.
+    const placedLabels: {x: number; y: number; w: number; h: number}[] = [];
+    const labelPaint: {node: SimNode; size: number; text: string;
+      box: {x: number; y: number; w: number; h: number}; alpha: number}[] = [];
+    compactLabels.sort((a, b) => Number(b.node.id === hl) - Number(a.node.id === hl)
+      || Number(!!b.node.offender) - Number(!!a.node.offender));
+    for (const {node: n, radius: r, size} of compactLabels) {
+      ctx.font = `bold ${size}px -apple-system, system-ui, sans-serif`;
+      let text = (n.offender ? "ХЭРЭГТЭН · " : "")
+        + (n.type === "ACCOUNT" ? n.sub || n.label : n.label);
+      const maxWidth = Math.max(1, (cssW - 24) / scale);
+      while (text.length > 4 && ctx.measureText(text).width > maxWidth) text = text.slice(0, -2) + "…";
+      const w = ctx.measureText(text).width + size, h = size * 1.5;
+      const x = clamp(n.x, (8 - tx) / scale + w / 2, (cssW - 8 - tx) / scale - w / 2);
+      let spot: {x: number; y: number; w: number; h: number} | null = null;
+      for (let i = 0; i < 70; i++) {
+        const offset = i === 0 ? 0 : Math.ceil(i / 2) * h * (i % 2 ? -1 : 1);
+        const y = n.y + r + size * 0.4 + offset;
+        const box = {x: x - w / 2, y, w, h};
+        const screenY = y * scale + ty, screenX = box.x * scale + tx;
+        if (screenY < 8 || (y + h) * scale + ty > cssH - 8) continue;
+        if (screenY < 154 && screenX < 175) continue;
+        if (screenY < 48 && (box.x + w) * scale + tx > cssW - 210) continue;
+        if (placedLabels.some(p => box.x < p.x + p.w && box.x + w > p.x
+          && box.y < p.y + p.h && box.y + h > p.y)) continue;
+        if (nodes.some(other => box.x < other.x + radiusOf(other)
+          && box.x + w > other.x - radiusOf(other)
+          && box.y < other.y + radiusOf(other) && box.y + h > other.y - radiusOf(other))) continue;
+        spot = box; break;
+      }
+      if (!spot) continue; // Zoom/focus exposes labels that cannot fit together.
+      placedLabels.push(spot);
+      ctx.globalAlpha = hl && hl !== n.id && !neighbors.has(n.id) ? 0.3 : 1;
+      ctx.beginPath(); ctx.moveTo(n.x, n.y);
+      ctx.lineTo(x, spot.y + h / 2);
+      ctx.strokeStyle = n.offender ? OFFENDER_COLOR : "#536480";
+      ctx.lineWidth = 0.7 / scale; ctx.stroke();
+      labelPaint.push({node: n, size, text, box: spot, alpha: ctx.globalAlpha});
+    }
+    // Paint every label above every connector, so a later callout cannot run
+    // through the text of a label that was placed earlier.
+    for (const {node: n, size, text, box, alpha} of labelPaint) {
+      ctx.font = `bold ${size}px -apple-system, system-ui, sans-serif`;
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#0b0e1a"; ctx.fillRect(box.x, box.y, box.w, box.h);
+      ctx.globalAlpha = alpha;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = n.offender ? OFFENDER_COLOR : "#e1e5f0";
+      ctx.fillText(text, box.x + box.w / 2, box.y + box.h / 2);
+    }
+    ctx.globalAlpha = 1;
 
     // Edge labels on the highlighted node's edges / the hovered edge — drawn
     // AFTER the nodes so the value tag always sits on top and is never buried
@@ -1355,7 +1420,7 @@ function NetworkGraph(props, ref) {
       <canvas
         ref={canvasRef}
         style={{
-          width: "100%", height: RENDER_HEIGHT, cursor: "grab",
+          width: "100%", height: props.height ?? RENDER_HEIGHT, cursor: "grab",
           borderRadius: 8, touchAction: "none", display: "block",
           background:
             "radial-gradient(circle at 50% 40%, #131726 0%, #0a0c16 100%)",

@@ -20,7 +20,6 @@ import {
   GENERATE_LINKS,
   LINKCHART_QUERY,
   LINKCHART_COMPAT_QUERY,
-  NETWORK_FLOW_QUERY,
   SET_ACTIVE_CASE,
   SET_SUSPECT_PHOTO,
   TAG_EVIDENCE,
@@ -35,12 +34,12 @@ import {
   Loading,
   OffenderTag,
   PageHeader,
-  SankeyChart,
   ToggleChip,
 } from "../components/kit";
 import {Select} from "../components/inputs";
 import NetworkGraph, {LINK_STYLE} from "../components/NetworkGraph";
 import type {NetworkGraphHandle} from "../components/NetworkGraph";
+import GraphAnalysisPanels from "../components/GraphAnalysisPanels";
 import CaseGate from "../components/CaseGate";
 import LinkVerdictReport from "../components/LinkVerdictReport";
 import PersonFormModal, {type SavedPerson} from "../components/PersonFormModal";
@@ -225,13 +224,6 @@ export default function LinkChartPage() {
     return [...people.values()];
   }, [data, ownerRequest.needed, ownersQ.data]);
   const callQ = useQuery<CallData>(CALL_RECORDS_QUERY);
-  const flowQ = useQuery<{networkFlow: {
-    nodeLabels: string[]; nodeColors: string[]; sourceIndices: number[];
-    targetIndices: number[]; values: number[]; linkColors: string[];
-  }}>(NETWORK_FLOW_QUERY, {
-    variables: {caseFileId: activeCaseId},
-    skip: caseQ.loading || activeCaseId == null,
-  });
   const [generate, {loading: generating, error: generateError}] = useMutation(GENERATE_LINKS);
   const [selected, setSelected] = useState<NetworkNode | null>(null);
   // Clicked EDGE — the noise-removal target (a whole connection at once).
@@ -1813,33 +1805,13 @@ export default function LinkChartPage() {
       <Card title="Дүгнэлт" style={{marginBottom: 16}}>
         {verdict.length > 0 ? (
           <div className="graph-verdict-grid">
-            {verdict.map((v, i) => (
-                <div key={i} className={`graph-verdict-item ${v.tone}`
-                  + (v.rows ? " graph-verdict-item-wide" : "")}>
+            {verdict.filter(v => !v.rows).map((v, i) => (
+                <div key={i} className={`graph-verdict-item ${v.tone}`}>
                   <div className="graph-verdict-heading">
                     <span className="graph-verdict-dot" />
                     {v.title}
                   </div>
                   <div className="graph-verdict-text">{v.text}</div>
-                  {v.rows && (
-                    <div className="graph-verdict-list">
-                      <div className="graph-verdict-list-head">
-                        <span>Төрөл</span><span>Данс / харилцагч</span>
-                        <span>Холбосон шалгаж буй хүмүүс</span><span>Баримт</span>
-                      </div>
-                      {v.rows.map((row, rowIndex) => (
-                        <div className="graph-verdict-list-row" key={rowIndex}>
-                          <span className="graph-verdict-kind">{row.kind}</span>
-                          <strong>{row.identity}</strong>
-                          <span>{row.connects}</span>
-                          <span className="graph-verdict-evidence">
-                            <span>{row.bridge}</span>
-                            <span>{row.evidence}</span>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               ))}
           </div>
@@ -1873,20 +1845,7 @@ export default function LinkChartPage() {
         </div>
       </Card>
 
-      <Card title="Мөнгөн урсгал" style={{marginTop: 16}}>
-        {flowQ.data && flowQ.data.networkFlow.nodeLabels.length > 0 ? (
-          <SankeyChart
-            labels={flowQ.data.networkFlow.nodeLabels}
-            source={flowQ.data.networkFlow.sourceIndices}
-            target={flowQ.data.networkFlow.targetIndices}
-            value={flowQ.data.networkFlow.values}
-            nodeColors={flowQ.data.networkFlow.nodeColors}
-            linkColors={flowQ.data.networkFlow.linkColors}
-          />
-        ) : (
-          <Empty message="Мөнгөн урсгал илрээгүй" />
-        )}
-      </Card>
+      <GraphAnalysisPanels key={activeCaseId} nodes={network.nodes} links={network.links} />
 
       </CaseGate>
 

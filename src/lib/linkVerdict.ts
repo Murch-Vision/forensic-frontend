@@ -8,6 +8,7 @@
  *               instead of decoding colors and thicknesses.
  * Description :
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
+import {sharedGraphRelations} from "./graphAnalysis";
 import {formatMoney, formatNum} from "./format";
 import type {NetworkLink, NetworkNode} from "./networkGraph";
 
@@ -195,79 +196,15 @@ export function graphVerdict(
     }
   }
 
-  // "Primary people" are the people whose OWN statements are loaded: the
-  // builder adds a Гүйлгээ summary only to an endpoint that owns imported
-  // statement rows. They are the investigation centers, never intermediaries.
   const primary = persons.filter((p) =>
     p.stats.some(([label]) => label === "Гүйлгээ"));
-  const primaryIds = new Set(primary.map((p) => p.id));
   if (primary.length) {
-    out.push({
-      title: "Шалгаж буй хүмүүс",
-      tone: "info",
+    out.push({title: "Шалгаж буй хүмүүс", tone: "info",
       text: primary.slice(0, 5).map((p) => p.label).join(", ")
         + (primary.length > 5 ? ` болон өөр ${formatNum(primary.length - 5)} хүн` : "")
-        + ". Эдгээрийн дансны хуулгыг сүлжээний төв болгон харьцуулсан.",
-    });
+        + ". Эдгээрийн дансны хуулгыг сүлжээний төв болгон харьцуулсан."});
   }
-
-  // A real intermediary is a NON-primary node sitting equally close (within
-  // two hops) to two or more primary people. Keep account nodes intact: one
-  // unknown bank account
-  // used by several investigated people is exactly the signal this page must
-  // surface, not project away as generic person centrality.
-  const incident = new Map<string, NetworkLink[]>();
-  const adjacency = new Map(nodes.map((n) => [n.id, new Set<string>()]));
-  const addIncident = (id: string, link: NetworkLink) => {
-    const list = incident.get(id) ?? [];
-    list.push(link);
-    incident.set(id, list);
-  };
-  for (const l of links) {
-    if (l.kind === "owns") continue;
-    addIncident(l.source, l);
-    addIncident(l.target, l);
-    adjacency.get(l.source)?.add(l.target);
-    adjacency.get(l.target)?.add(l.source);
-  }
-  const distances = new Map<string, Map<string, number>>();
-  for (const root of primary) {
-    const dist = new Map([[root.id, 0]]);
-    const queue = [root.id];
-    for (let i = 0; i < queue.length; i += 1) {
-      const current = queue[i];
-      for (const next of adjacency.get(current) ?? []) {
-        if (dist.has(next)) continue;
-        dist.set(next, (dist.get(current) ?? 0) + 1);
-        queue.push(next);
-      }
-    }
-    distances.set(root.id, dist);
-  }
-  const shared = nodes.flatMap((node) => {
-    if (primaryIds.has(node.id)) return [];
-    const edges = incident.get(node.id) ?? [];
-    const reached = primary.flatMap((root) => {
-      const distance = distances.get(root.id)?.get(node.id);
-      return distance == null ? [] : [{root, distance}];
-    });
-    const minDistance = Math.min(...reached.map((x) => x.distance));
-    const roots = reached.filter((x) => x.distance === minDistance)
-      .map((x) => x.root);
-    // One or two hops catches the visible bridge band without declaring every
-    // distant boundary in a large component an intermediary.
-    if (roots.length < 2 || minDistance > 2) return [];
-    let money = 0;
-    let txns = 0;
-    let calls = 0;
-    for (const l of edges) {
-      money += l.facts?.txnTotal ?? 0;
-      txns += l.facts?.txnCount ?? 0;
-      calls += l.facts?.callCount ?? 0;
-    }
-    return [{node, roots, distance: minDistance, money, txns, calls}];
-  }).sort((a, b) => b.roots.length - a.roots.length
-    || b.money - a.money || b.txns - a.txns || b.calls - a.calls);
+  const shared = sharedGraphRelations(nodes, links);
 
   const sharedRows = shared.map((item) => {
     const identity = item.node.type === "ACCOUNT"
