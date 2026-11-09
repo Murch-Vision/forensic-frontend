@@ -10,7 +10,7 @@ const assert=require('node:assert/strict');
   page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>localStorage.setItem('forensic.authToken','mock-session'));
   const headers=['Огноо','Данс','Дүн','Харьцсан данс','Эхний нэр','Хоёр дахь нэр'];
-  const sample=['2026-11-01','1001','100','2001','Банкны нэр','САРАН БОЛД'];
+  const sample=['2026-11-01','1001','100','2001','Авизын түр данс','САРАН БОЛД'];
   await page.route('**/*',async route=>{
     let op; if(route.request().method()==='POST'){try{op=route.request().postDataJSON();}catch{}}
     if(!op?.query) return route.continue();
@@ -39,6 +39,7 @@ const assert=require('node:assert/strict');
   const field=label=>page.locator('.import-mapping > div').filter({has:page.locator('label').filter({hasText:new RegExp('^'+label+'$')})});
   const primary=field('Харьцсан харилцагчийн нэр'),secondary=field('Харьцсан харилцагчийн нэр 2');
   await secondary.locator('.select-trigger').waitFor();
+  await page.getByText('Эхний нэр «Авизын түр данс» бол хоёр дахь нэрийг авна.', {exact:false}).waitFor();
   assert.equal((await primary.locator('.select-trigger').innerText()).split('\n')[0],'Эхний нэр');
   await secondary.locator('.select-trigger').scrollIntoViewIfNeeded();
   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
