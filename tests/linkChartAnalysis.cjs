@@ -122,8 +122,14 @@ const assert = require('node:assert/strict');
     const mainBefore=await pos();
     await page.getByRole('button',{name:'Тайланд оруулах',exact:true}).click();
     await page.waitForURL('**/reports');await page.locator('.report-analysis-preview').waitFor();
-    assert.equal(await page.locator('.report-analysis-preview table').nth(0).locator('tbody tr').count(),28,
-      'Report captures every filtered row even when chart table page 2 is open');
+    assert.equal(await page.locator('.report-flow-image').count(),2,
+      'Report captures all Sankey pages even when chart table page 2 is open');
+    assert.equal(await page.locator('.report-analysis-preview table').count(),2,'Money has images only; relation lists remain');
+    assert.equal(await page.locator('.report-analysis-preview table').nth(0).locator('tbody tr').count(),1);
+    for(const section of await page.locator('.report-analysis-image').all()){
+      assert(await section.evaluate(el=>!!el.nextElementSibling?.querySelector('table')),
+        'Each relation list follows its diagram');
+    }
     assert.equal(await page.locator('.report-analysis-image').count(),2,'Shared and red arranged scenes are captured');
     assert.deepEqual(await pos(),mainBefore);
     // Exercise analysis chunking independently of the main chart image.
@@ -145,6 +151,8 @@ const assert = require('node:assert/strict');
     assert.equal(exports.length,3);
     for(const e of exports){
       assert(e.graph.analysisUploadId,'Large analysis gets its own case-bound chunk transport');
+      assert.equal(e.analysis.flowImages.length,2);
+      assert(e.analysis.flowImages.every(image=>image.width===2000&&image.height>=575));
       assert.equal(e.analysis.flow.length,28);assert.equal(e.analysis.shared.rows.length,1);assert.equal(e.analysis.red.rows.length,3);
       assert.equal(e.analysis.flow.reduce((s,r)=>s+r.amount,0),25+200+Array.from({length:26},(_,i)=>300+i).reduce((s,v)=>s+v,0));
     }

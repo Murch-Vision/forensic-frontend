@@ -3,7 +3,7 @@ import type {ReactNode} from "react";
 import {useSearchParams} from "react-router-dom";
 import NetworkGraph, {LINK_STYLE} from "./NetworkGraph";
 import type {NetworkGraphHandle} from "./NetworkGraph";
-import {Card, DataTable, Empty, OffenderTag, SankeyChart} from "./kit";
+import {Card, DataTable, Empty, OffenderTag, SankeyChart, exportSankeyPng} from "./kit";
 import type {Column} from "./kit";
 import {analyseGraph} from "../lib/graphAnalysis";
 import {formatMoney, formatNum} from "../lib/format";
@@ -13,6 +13,23 @@ import {buildReportGraphAnalysis, type ReportGraphAnalysis} from "../lib/reportG
 export interface GraphAnalysisPanelsHandle {exportReport: () => Promise<ReportGraphAnalysis>}
 
 const PAGE_SIZE = 20;
+function flowChart(flow: ReturnType<typeof analyseGraph>["flow"], directed = true) {
+  // Separate sender and receiver roles: bidirectional transfers and cycles
+  // remain visible without feeding cyclic links to the Sankey layout.
+  const senders = [...new Map(flow.map(r => [r.source.id, r.source])).values()];
+  const receivers = [...new Map(flow.map(r => [r.target.id, r.target])).values()];
+  const from = new Map(senders.map((n, i) => [n.id, i]));
+  const to = new Map(receivers.map((n, i) => [n.id, senders.length + i]));
+  return {labels: [...senders.map(n => `${directed ? "Илгээсэн" : "Тал А"} · ${n.label}`),
+    ...receivers.map(n => `${directed ? "Хүлээн авсан" : "Тал Б"} · ${n.label}`)],
+    source: flow.map(r => from.get(r.source.id)!), target: flow.map(r => to.get(r.target.id)!),
+    value: flow.map(r => r.amount), nodeColors: [...senders, ...receivers]
+      .map(n => n.offender ? "#FF1744" : n.type === "ACCOUNT" ? "#00B0FF" : "#00C853"),
+    linkColors: flow.map(r => r.source.offender || r.target.offender
+      ? "rgba(255,23,68,0.25)" : "rgba(0,200,83,0.25)"),
+    height: Math.max(460, Math.max(senders.length, receivers.length) * 24 + 64)};
+}
+
 function currentPage(params: URLSearchParams, key: string, length: number) {
   const raw = Number(params.get(key) ?? 1);
   const pages = Math.max(1, Math.ceil(length / PAGE_SIZE));
@@ -78,6 +95,15 @@ export default forwardRef<GraphAnalysisPanelsHandle, {
   const [redFocus, setRedFocus] = useState<string | null>(null);
   useImperativeHandle(ref, () => ({async exportReport() {
     const snapshot = buildReportGraphAnalysis(nodes, links);
+    // Use the same Sankey as the page, but capture every filtered flow in
+    // readable batches instead of exporting only the currently visible page.
+    for (const directed of [true, false]) {
+      const rows = analysis.flow.filter(r => r.directed === directed);
+      for (let offset = 0; offset < rows.length; offset += PAGE_SIZE) {
+        snapshot.flowImages.push(await exportSankeyPng(flowChart(rows.slice(offset, offset + PAGE_SIZE), directed),
+          directed ? undefined : "Чиглэл тодорхойгүй · Нэрээр холбосон · Тал А ↔ Тал Б"));
+      }
+    }
     if (snapshot.shared.rows.length) {
       if (!sharedRef.current) throw Error("Дундын харилцааны зураглал бэлэн болоогүй байна.");
       snapshot.shared.image = await sharedRef.current.exportPng();
@@ -88,23 +114,7 @@ export default forwardRef<GraphAnalysisPanelsHandle, {
     }
     return snapshot;
   }}));
-  const directed = useMemo(() => {
-    const flow = flowRows.filter(r => r.directed);
-    // Separate sender and receiver roles: bidirectional transfers and cycles
-    // remain visible without feeding cyclic links to the Sankey layout.
-    const senders = [...new Map(flow.map(r => [r.source.id, r.source])).values()];
-    const receivers = [...new Map(flow.map(r => [r.target.id, r.target])).values()];
-    const from = new Map(senders.map((n, i) => [n.id, i]));
-    const to = new Map(receivers.map((n, i) => [n.id, senders.length + i]));
-    return {labels: [...senders.map(n => `Илгээсэн · ${n.label}`),
-      ...receivers.map(n => `Хүлээн авсан · ${n.label}`)],
-      source: flow.map(r => from.get(r.source.id)!), target: flow.map(r => to.get(r.target.id)!),
-      value: flow.map(r => r.amount), colors: [...senders, ...receivers]
-        .map(n => n.offender ? "#FF1744" : n.type === "ACCOUNT" ? "#00B0FF" : "#00C853"),
-      linkColors: flow.map(r => r.source.offender || r.target.offender
-        ? "rgba(255,23,68,0.25)" : "rgba(0,200,83,0.25)"),
-      height: Math.max(460, Math.max(senders.length, receivers.length) * 24 + 64)};
-  }, [flowRows]);
+  const directed = useMemo(() => flowChart(flowRows.filter(r => r.directed)), [flowRows]);
   const unknown = flowRows.filter(r => !r.directed);
   const unknownScene = useMemo(() => {
     const pairs = new Set(flowRows.filter(r => !r.directed)
@@ -132,7 +142,7 @@ export default forwardRef<GraphAnalysisPanelsHandle, {
       diagram={<>
         {directed.value.length > 0 && <div className="graph-analysis-flow" aria-label="Мөнгөн урсгалын зураглал">
           <SankeyChart labels={directed.labels} source={directed.source} target={directed.target}
-            value={directed.value} nodeColors={directed.colors} linkColors={directed.linkColors}
+            value={directed.value} nodeColors={directed.nodeColors} linkColors={directed.linkColors}
             height={directed.height} />
         </div>}
         {unknown.length > 0 && <div aria-label="Чиглэл тодорхойгүй холбоосын зураглал">

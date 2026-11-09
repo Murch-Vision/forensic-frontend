@@ -8,7 +8,7 @@
 .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.*/
 import {useState} from "react";
 import type {CSSProperties, ReactNode} from "react";
-import Plot from "./Plot";
+import Plot, {exportPlotPng} from "./Plot";
 
 // Shared layout / table / chart primitives reused by every ported page.
 // All visuals use the classes defined in styles/app.css plus inline SVG so
@@ -393,7 +393,7 @@ export function BenfordChart(props: {observed: number[]}) {
 }
 
 // Sankey diagram for network money-flow (ported from the Blazor sankey).
-export function SankeyChart(props: {
+interface SankeyProps {
   labels: string[];
   source: number[];
   target: number[];
@@ -401,30 +401,39 @@ export function SankeyChart(props: {
   nodeColors?: string[];
   linkColors?: string[];
   height?: number;
-}) {
+}
+function sankeyData(props: SankeyProps, pad = 14) {
   // Plotly's sankey mutates its input arrays in place. Apollo freezes query
   // results, so passing them straight through throws ("Cannot assign to read
   // only property") and the chart silently renders blank. Hand Plotly its own
   // mutable copies.
-  return (
-    <Plot
-      height={props.height ?? 420}
-      data={[{
-        type: "sankey",
-        orientation: "h",
-        node: {
-          label: [...props.labels], pad: 14, thickness: 16,
-          color: props.nodeColors ? [...props.nodeColors] : CYAN,
-          line: {color: "#252550", width: 0.5},
-        },
-        link: {
-          source: [...props.source], target: [...props.target],
-          value: [...props.value],
-          color: props.linkColors ? [...props.linkColors] : undefined,
-        },
-      }]}
-    />
-  );
+  return [{
+    type: "sankey",
+    orientation: "h",
+    node: {
+      label: [...props.labels], pad, thickness: 16,
+      color: props.nodeColors ? [...props.nodeColors] : CYAN,
+      line: {color: "#252550", width: 0.5},
+    },
+    link: {
+      source: [...props.source], target: [...props.target],
+      value: [...props.value],
+      color: props.linkColors ? [...props.linkColors] : undefined,
+    },
+  }];
+}
+export function SankeyChart(props: SankeyProps) {
+  return <Plot height={props.height ?? 420} data={sankeyData(props)} />;
+}
+export function exportSankeyPng(props: SankeyProps, note?: string) {
+  const nodes = Math.max(new Set(props.source).size, new Set(props.target).size);
+  const height = Math.max(460, nodes * 36 + 64);
+  return exportPlotPng(sankeyData({...props,
+    linkColors: props.linkColors?.map(color => color.replace("0.25)", "0.6)")),
+  }, 30), height, {
+    font: {size: 24, color: "#DADAE8"}, margin: {l: 24, r: 24, t: note ? 54 : 24, b: 24},
+    ...(note ? {annotations: [{text: note, x: 0, y: 1.08, xref: "paper", yref: "paper", showarrow: false, xanchor: "left"}]} : {}),
+  });
 }
 
 // Radar (scatterpolar) for the multi-dimensional risk profile.

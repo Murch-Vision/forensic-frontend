@@ -74,6 +74,40 @@ export interface PlotProps {
   onClick?: (e: PlotClickEvent) => void;
 }
 
+// Render a fresh, complete chart for a document, independent of screen paging,
+// scrolling and hover state. The temporary DOM node never stores evidence.
+export async function exportPlotPng(data: unknown[], height: number, layout?: Record<string, unknown>) {
+  const element = document.createElement("div");
+  element.style.cssText = "position:fixed;left:-10000px;top:0;width:1600px;pointer-events:none";
+  document.body.appendChild(element);
+  try {
+    await document.fonts.ready;
+    await Plotly.newPlot(element, data, {...mergeLayout(layout), width: 1600, height},
+      {staticPlot: true, displayModeBar: false});
+    const url: string = await Plotly.toImage(element, {format: "png", width: 1600, height, scale: 1.25});
+    const canvas = document.createElement("canvas");
+    canvas.width = 2000; canvas.height = height * 1.25;
+    const context = canvas.getContext("2d");
+    if (!context) throw Error("Мөнгөн урсгалын зургийг үүсгэж чадсангүй.");
+    const image = new Image(); image.src = url; await image.decode();
+    context.drawImage(image, 0, 0);
+    // Small colour differences in Plotly's antialiasing make dense ribbons
+    // disproportionately large. Quantise those shades at print resolution
+    // so complete cases fit the existing bounded PNG transport.
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      for (let channel = 0; channel < 3; channel++) {
+        pixels.data[i + channel] = Math.min(255, Math.round(pixels.data[i + channel] / 16) * 16);
+      }
+    }
+    context.putImageData(pixels, 0, 0);
+    return {imageBase64: canvas.toDataURL("image/png").split(",")[1], width: canvas.width, height: canvas.height};
+  } finally {
+    Plotly.purge(element);
+    element.remove();
+  }
+}
+
 export default function Plot({data, layout, height, onClick}: PlotProps) {
   // react-plotly measures its container on mount; inside a flex/grid card the
   // width often isn't settled yet, so the chart paints blank at width 0 and no

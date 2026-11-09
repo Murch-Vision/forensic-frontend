@@ -7,6 +7,7 @@ export interface ReportGraphAnalysis {
   version: 1;
   flow: {from: string; to: string; amount: number; directed: boolean; soft: boolean;
     fromRed: boolean; toRed: boolean}[];
+  flowImages: ReportAnalysisImage[];
   shared: {rows: string[][]; image?: ReportAnalysisImage};
   red: {rows: string[][]; image?: ReportAnalysisImage};
 }
@@ -18,7 +19,7 @@ const identity = (node: NetworkNode, owner = node) =>
 // Full filtered scene, independent of the page currently open in each table.
 export function buildReportGraphAnalysis(nodes: NetworkNode[], links: NetworkLink[]): ReportGraphAnalysis {
   const a = analyseGraph(nodes, links);
-  return {version: 1,
+  return {version: 1, flowImages: [],
     flow: a.flow.map(r => ({from: identity(r.source), to: identity(r.target),
       amount: r.amount, directed: r.directed, soft: r.soft,
       fromRed: !!r.source.offender, toRed: !!r.target.offender})),
