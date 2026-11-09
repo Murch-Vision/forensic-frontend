@@ -7,6 +7,7 @@ const assert = require('node:assert/strict');
   try {
     const page = await browser.newPage({viewport:{width:1800,height:1100}});
     const errors = [], unexpected = [], mutations = [];
+    const staged=new Map(), exports=[];let nextUpload=0;
     page.on('pageerror', e => errors.push(e.message));
     const initial = {'s:1':{x:-300,y:100},'s:2':{x:300,y:100}};
     await page.addInitScript(p => {
@@ -36,6 +37,7 @@ const assert = require('node:assert/strict');
       let op;
       if(route.request().method()==='POST'){try{op=route.request().postDataJSON();}catch{}}
       if(!op?.query)return route.continue();
+      assert(Buffer.byteLength(route.request().postData())<700000,'Full report must fit the preview proxy in bounded chunks');
       if(/\bmutation\b/.test(op.query))mutations.push(op.operationName);
       let data;
       const empty = active.id === 2;
@@ -51,6 +53,23 @@ const assert = require('node:assert/strict');
         case 'CaseGraphs':data={caseGraphs:[]};break;
         // Removed first statement row must never reappear in lower money/red totals.
         case 'CaseNoiseFilter':data={caseNoiseFilter:{minAmount:0,ignoredPairs:[],ignoredTxns:[1],descRules:[]}};break;
+        case 'Reports':data={activeCase:active,accountAnalyses:[],directTransfers:[],caseRelations:{
+          mutualRelations:0,txnCount:0,creditTotal:0,debitTotal:0,netTotal:0,relations:[]}};break;
+        case 'BeginReportGraphUpload':{
+          const id=`upload-${++nextUpload}`;staged.set(id,'');data={beginReportGraphUpload:id};break;
+        }
+        case 'AppendReportGraphUpload':{
+          const {uploadId,offset,chunk}=op.variables;assert.equal(staged.get(uploadId).length,offset);
+          staged.set(uploadId,staged.get(uploadId)+chunk);data={appendReportGraphUpload:offset+chunk.length};break;
+        }
+        case 'ReleaseReportGraphUpload':staged.delete(op.variables.uploadId);data={releaseReportGraphUpload:true};break;
+        case 'ReportVerdictPdf':case 'ReportVerdictDocx':case 'ReportVerdictHtml':{
+          const graph=op.variables.graph;
+          const encoded=graph.analysisUploadId?staged.get(graph.analysisUploadId):graph.analysisBase64;
+          exports.push({analysis:JSON.parse(Buffer.from(encoded,'base64').toString('utf8')),graph});
+          const field=op.operationName[0].toLowerCase()+op.operationName.slice(1);
+          data={[field]:{filename:'QA-report',mimeType:'application/octet-stream',base64:Buffer.from('report').toString('base64')}};break;
+        }
         default:unexpected.push(op.operationName);return route.fulfill({json:{errors:[{message:'Unexpected mock operation'}]}});
       }
       return route.fulfill({json:{data}});
@@ -100,11 +119,43 @@ const assert = require('node:assert/strict');
     await shared.getByText('Харагдаж буй дундын харилцаа алга',{exact:true}).waitFor();
     assert.equal(await red.locator('tbody tr').count(),1,'Money visibility applies to red relationships too');
     await toggle.click();await money.locator('.sankey').waitFor();
+    const mainBefore=await pos();
+    await page.getByRole('button',{name:'Тайланд оруулах',exact:true}).click();
+    await page.waitForURL('**/reports');await page.locator('.report-analysis-preview').waitFor();
+    assert.equal(await page.locator('.report-analysis-preview table').nth(0).locator('tbody tr').count(),28,
+      'Report captures every filtered row even when chart table page 2 is open');
+    assert.equal(await page.locator('.report-analysis-image').count(),2,'Shared and red arranged scenes are captured');
+    assert.deepEqual(await pos(),mainBefore);
+    // Exercise analysis chunking independently of the main chart image.
+    await page.evaluate(async()=>{
+      const moduleUrl=performance.getEntriesByType('resource').map(r=>r.name).find(n=>n.includes('/src/lib/reportGraph.ts'));
+      const {reportGraphDraft}=await import(moduleUrl||'/src/lib/reportGraph.ts');
+      const c=document.createElement('canvas');c.width=768;c.height=384;
+      const ctx=c.getContext('2d'),pixels=ctx.createImageData(c.width,c.height);let seed=123;
+      for(let i=0;i<pixels.data.length;i++){seed=(seed*1664525+1013904223)>>>0;pixels.data[i]=i%4===3?255:seed>>>24;}
+      ctx.putImageData(pixels,0,0);const draft=reportGraphDraft();
+      reportGraphDraft({...draft,analysis:{...draft.analysis,shared:{...draft.analysis.shared,
+        image:{imageBase64:c.toDataURL('image/png').split(',')[1],width:c.width,height:c.height}}}});
+    });
+    await page.waitForFunction(()=>document.querySelector('.report-analysis-image')?.getAttribute('width')==='768');
+    for(const name of ['ТАЙЛАН PDF','ТАЙЛАН WORD','ТАЙЛАН HTML']){
+      const downloaded=page.waitForEvent('download');await page.getByRole('button',{name,exact:true}).click();await downloaded;
+      await page.waitForFunction(()=>!document.querySelector('button[disabled].btn-primary'));
+    }
+    assert.equal(exports.length,3);
+    for(const e of exports){
+      assert(e.graph.analysisUploadId,'Large analysis gets its own case-bound chunk transport');
+      assert.equal(e.analysis.flow.length,28);assert.equal(e.analysis.shared.rows.length,1);assert.equal(e.analysis.red.rows.length,3);
+      assert.equal(e.analysis.flow.reduce((s,r)=>s+r.amount,0),25+200+Array.from({length:26},(_,i)=>300+i).reduce((s,v)=>s+v,0));
+    }
+    assert.deepEqual(exports[0].analysis,exports[1].analysis);assert.deepEqual(exports[1].analysis,exports[2].analysis);
+    assert.equal(staged.size,0,'Analysis buffers are reclaimed after each edition');
     await page.goto(`${base}/linkchart?case=2`);
     await money.getByText('Харагдаж буй мөнгөн урсгал алга',{exact:true}).waitFor();
     await red.getByText('Улаанаар тэмдэглэсэн этгээдийн харагдаж буй харилцаа алга',{exact:true}).waitFor();
     assert(!await money.locator('tbody tr').count(),'Other case cannot retain earlier rows');
-    assert.deepEqual(mutations,['SetActiveCase']);
+    assert(mutations.every(m=>['SetActiveCase','BeginReportGraphUpload','AppendReportGraphUpload','ReleaseReportGraphUpload'].includes(m)));
+    assert.equal(mutations.filter(m=>m==='SetActiveCase').length,1);
     assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[]);
     console.log('PASS: three lists and diagrams, noise/visibility totals, red phone calls, independent focus, URL paging/reload/Back, responsive layout and case switching (mock API)');
   } finally {await browser.close();}

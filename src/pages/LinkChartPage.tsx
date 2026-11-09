@@ -40,6 +40,7 @@ import {Select} from "../components/inputs";
 import NetworkGraph, {LINK_STYLE} from "../components/NetworkGraph";
 import type {NetworkGraphHandle} from "../components/NetworkGraph";
 import GraphAnalysisPanels from "../components/GraphAnalysisPanels";
+import type {GraphAnalysisPanelsHandle} from "../components/GraphAnalysisPanels";
 import CaseGate from "../components/CaseGate";
 import LinkVerdictReport from "../components/LinkVerdictReport";
 import PersonFormModal, {type SavedPerson} from "../components/PersonFormModal";
@@ -499,17 +500,22 @@ export default function LinkChartPage() {
   // Search-to-focus: find any node (name / account number / phone) in the
   // dense graph, jump the view to it and open its detail panel.
   const graphRef = useRef<NetworkGraphHandle>(null);
+  const analysesRef = useRef<GraphAnalysisPanelsHandle>(null);
+  const currentSceneRef = useRef<{nodes: NetworkNode[]; links: NetworkLink[]} | null>(null);
   const currentCaseRef = useRef(activeCaseId);
   currentCaseRef.current = activeCaseId;
   async function addGraphToReport() {
-    if (!activeCaseId || !user || !graphRef.current || capturingReport) return;
+    if (!activeCaseId || !user || !graphRef.current || !analysesRef.current || capturingReport) return;
     const caseId = activeCaseId;
+    const scene = currentSceneRef.current;
     setCapturingReport(true); setReportCaptureError("");
     try {
       const image = await graphRef.current.exportPng();
+      const analysis = await analysesRef.current.exportReport();
       if (!reportCaptureMounted.current) return;
       if (currentCaseRef.current !== caseId) throw new Error("Идэвхтэй хэрэг солигдсон байна. Дахин оролдоно уу.");
-      reportGraphDraft({ownerUserId: user.id, caseFileId: caseId, ...image,
+      if (currentSceneRef.current !== scene) throw new Error("Зураглал өөрчлөгдсөн байна. Дахин оролдоно уу.");
+      reportGraphDraft({ownerUserId: user.id, caseFileId: caseId, ...image, analysis,
         title: savedGraphs.find(g => g.id === activeGraphId)?.name ?? "Нотлох баримтын сүлжээ",
         capturedAt: new Date().toISOString()});
       navigate("/reports");
@@ -940,6 +946,7 @@ export default function LinkChartPage() {
   }, [data, txQ.data, callQ.data, ignoredPairs, ignoredTxns, descRules,
     minAmount, hidden, hiddenKinds, activeGraphId, graphSuspects,
     ownerRequest.needed, ownersQ.loading, ownersQ.data]);
+  currentSceneRef.current = network;
 
   // Plain-language conclusions about the picture currently on screen — the
   // client's ask: a first-time viewer must understand the graph without
@@ -1845,7 +1852,7 @@ export default function LinkChartPage() {
         </div>
       </Card>
 
-      <GraphAnalysisPanels key={activeCaseId} nodes={network.nodes} links={network.links} />
+      <GraphAnalysisPanels ref={analysesRef} key={activeCaseId} nodes={network.nodes} links={network.links} />
 
       </CaseGate>
 

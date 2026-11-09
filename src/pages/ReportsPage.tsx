@@ -31,6 +31,8 @@ import {formatDate, formatDateTime, formatMoney, formatNum} from "../lib/format"
 import {downloadBase64, type ReportFile} from "../lib/download";
 import {reportGraphDraft} from "../lib/reportGraph";
 import {useAuth} from "../lib/auth";
+import {encodeAnalysis} from "../lib/reportGraphAnalysis";
+import ReportGraphAnalysisPreview from "../components/ReportGraphAnalysisPreview";
 
 interface ReportAccount {
   accountId: number;
@@ -142,22 +144,20 @@ export default function ReportsPage() {
     setBuilding(kind);
     setReportError("");
     const caseFileId = data?.activeCase?.id;
-    let uploadId: string | null = null;
+    const uploads: string[] = [];
     const deliverCurrent = (file: ReportFile | undefined, message?: string) => {
       if (!mounted.current || caseFileId !== currentCase.current) return;
       deliver(file, message);
     };
     try {
-      let imageInput = graph ? {caseFileId: graph.caseFileId, title: graph.title,
-        imageBase64: graph.imageBase64, imageUploadId: null as string | null} : null;
-      if (imageInput && imageInput.imageBase64.length > 640_000) {
+      const upload = async (text: string) => {
         const started = await client.mutate<{beginReportGraphUpload: string}>({
           mutation: BEGIN_REPORT_GRAPH_UPLOAD, variables: {caseFileId}});
-        uploadId = started.data?.beginReportGraphUpload ?? null;
+        const uploadId = started.data?.beginReportGraphUpload ?? null;
         if (!uploadId) throw new Error("Зураг дамжуулж эхэлсэнгүй. Дахин оролдоно уу.");
-        const text = imageInput.imageBase64;
+        uploads.push(uploadId);
         for (let offset = 0; offset < text.length; offset += 480_000) {
-          if (!mounted.current || caseFileId !== currentCase.current) return;
+          if (!mounted.current || caseFileId !== currentCase.current) throw Error("Идэвхтэй хэрэг солигдсон байна.");
           const chunk = text.slice(offset, offset + 480_000);
           const result = await client.mutate<{appendReportGraphUpload: number}>({
             mutation: APPEND_REPORT_GRAPH_UPLOAD, variables: {uploadId, offset, chunk}});
@@ -165,7 +165,17 @@ export default function ReportsPage() {
             throw new Error("Зураг бүрэн дамжсангүй. Дахин оролдоно уу.");
           }
         }
-        imageInput = {...imageInput, imageBase64: "", imageUploadId: uploadId};
+        return uploadId;
+      };
+      let imageInput = graph ? {caseFileId: graph.caseFileId, title: graph.title,
+        imageBase64: graph.imageBase64, imageUploadId: null as string | null,
+        analysisBase64: graph.analysis ? encodeAnalysis(graph.analysis) : "",
+        analysisUploadId: null as string | null} : null;
+      if (imageInput?.analysisBase64 && imageInput.imageBase64.length + imageInput.analysisBase64.length > 640_000) {
+        imageInput = {...imageInput, analysisUploadId: await upload(imageInput.analysisBase64), analysisBase64: ""};
+      }
+      if (imageInput && imageInput.imageBase64.length > 640_000) {
+        imageInput = {...imageInput, imageBase64: "", imageUploadId: await upload(imageInput.imageBase64)};
       }
       if (!mounted.current || caseFileId !== currentCase.current) return;
       const variables = {graph: imageInput};
@@ -184,7 +194,7 @@ export default function ReportsPage() {
         setReportError(e instanceof Error ? e.message : String(e));
       }
     } finally {
-      if (uploadId) await client.mutate({mutation: RELEASE_REPORT_GRAPH_UPLOAD,
+      for (const uploadId of uploads) await client.mutate({mutation: RELEASE_REPORT_GRAPH_UPLOAD,
         variables: {uploadId}}).catch(() => undefined);
       if (mounted.current) setBuilding(null);
     }
@@ -255,7 +265,8 @@ export default function ReportsPage() {
           <p>{graph.title} · {formatDateTime(graph.capturedAt)}</p>
           <img className="report-graph-preview" src={`data:image/png;base64,${graph.imageBase64}`}
             width={graph.width} height={graph.height} alt={graph.title} />
-          <p className="report-graph-hint">PDF, Word, HTML тайланд энэ зураг орно. Хуудсыг дахин ачаалбал зургаа дахин сонгоно уу.</p>
+          <p className="report-graph-hint">PDF, Word, HTML тайланд үндсэн зураглал болон доорх бүх жагсаалт, зураглал орно. Хуудсыг дахин ачаалбал дахин сонгоно уу.</p>
+          {graph.analysis && <ReportGraphAnalysisPreview analysis={graph.analysis} />}
         </> : <p>Холбоосын зураглал дээр «Тайланд оруулах» товчийг дарж зураг нэмнэ үү.</p>}
       </Card>}
 

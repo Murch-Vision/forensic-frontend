@@ -1,4 +1,4 @@
-import {useMemo, useRef, useState} from "react";
+import {forwardRef, useImperativeHandle, useMemo, useRef, useState} from "react";
 import type {ReactNode} from "react";
 import {useSearchParams} from "react-router-dom";
 import NetworkGraph, {LINK_STYLE} from "./NetworkGraph";
@@ -8,6 +8,9 @@ import type {Column} from "./kit";
 import {analyseGraph} from "../lib/graphAnalysis";
 import {formatMoney, formatNum} from "../lib/format";
 import type {NetworkLink, NetworkNode} from "../lib/networkGraph";
+import {buildReportGraphAnalysis, type ReportGraphAnalysis} from "../lib/reportGraphAnalysis";
+
+export interface GraphAnalysisPanelsHandle {exportReport: () => Promise<ReportGraphAnalysis>}
 
 const PAGE_SIZE = 20;
 function currentPage(params: URLSearchParams, key: string, length: number) {
@@ -61,9 +64,9 @@ function Section({id, title, note, empty, hasRows, list, diagram}: {
   </section>;
 }
 
-export default function GraphAnalysisPanels({nodes, links}: {
+export default forwardRef<GraphAnalysisPanelsHandle, {
   nodes: NetworkNode[]; links: NetworkLink[];
-}) {
+}>(function GraphAnalysisPanels({nodes, links}, ref) {
   const analysis = useMemo(() => analyseGraph(nodes, links), [nodes, links]);
   const [params] = useSearchParams();
   const flowPage = currentPage(params, "flowPage", analysis.flow.length);
@@ -73,6 +76,18 @@ export default function GraphAnalysisPanels({nodes, links}: {
   const redRef = useRef<NetworkGraphHandle>(null);
   const [sharedFocus, setSharedFocus] = useState<string | null>(null);
   const [redFocus, setRedFocus] = useState<string | null>(null);
+  useImperativeHandle(ref, () => ({async exportReport() {
+    const snapshot = buildReportGraphAnalysis(nodes, links);
+    if (snapshot.shared.rows.length) {
+      if (!sharedRef.current) throw Error("Дундын харилцааны зураглал бэлэн болоогүй байна.");
+      snapshot.shared.image = await sharedRef.current.exportPng();
+    }
+    if (snapshot.red.rows.length) {
+      if (!redRef.current) throw Error("Улаан этгээдийн зураглал бэлэн болоогүй байна.");
+      snapshot.red.image = await redRef.current.exportPng();
+    }
+    return snapshot;
+  }}));
   const directed = useMemo(() => {
     const flow = flowRows.filter(r => r.directed);
     // Separate sender and receiver roles: bidirectional transfers and cycles
@@ -164,4 +179,4 @@ export default function GraphAnalysisPanels({nodes, links}: {
           selectedId={redFocus} onNodeClick={n => setRedFocus(n?.id ?? null)} />
       </div>} />
   </div>;
-}
+});

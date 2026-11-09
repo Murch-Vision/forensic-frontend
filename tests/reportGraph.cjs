@@ -107,7 +107,8 @@ const base = process.env.FORENSIC_TEST_URL || 'https://forensic.dev.sea.maestro.
     // Seed a valid noisy PNG draft to exercise lossless chunk transport above
     // the proxy's 1 MB limit, without changing the graph or any case evidence.
     await page.evaluate(async()=>{
-      const {reportGraphDraft}=await import('/src/lib/reportGraph.ts');
+      const moduleUrl=performance.getEntriesByType('resource').map(r=>r.name).find(n=>n.includes('/src/lib/reportGraph.ts'));
+      const {reportGraphDraft}=await import(moduleUrl||'/src/lib/reportGraph.ts');
       const c=document.createElement('canvas');c.width=768;c.height=384;
       const ctx=c.getContext('2d'),pixels=ctx.createImageData(c.width,c.height);
       let seed=123456;
@@ -115,6 +116,7 @@ const base = process.env.FORENSIC_TEST_URL || 'https://forensic.dev.sea.maestro.
       ctx.putImageData(pixels,0,0);
       reportGraphDraft({...reportGraphDraft(),width:c.width,height:c.height,imageBase64:c.toDataURL('image/png').split(',')[1]});
     });
+    await page.waitForFunction(()=>document.querySelector('.report-graph-preview')?.getAttribute('width')==='768');
     await download('ТАЙЛАН HTML');
     assert(exports.at(-1).graph.imageUploadId);assert(exports.at(-1).graph.imageBase64.length>640000);
     failChunk=true;await page.getByRole('button',{name:'ТАЙЛАН PDF',exact:true}).click();

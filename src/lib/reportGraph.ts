@@ -1,4 +1,5 @@
 import {makeVar} from "@apollo/client";
+import type {ReportGraphAnalysis} from "./reportGraphAnalysis";
 
 export interface ReportGraphDraft {
   ownerUserId: number;
@@ -8,6 +9,7 @@ export interface ReportGraphDraft {
   width: number;
   height: number;
   capturedAt: string;
+  analysis?: ReportGraphAnalysis;
 }
 
 // Unsaved report attachment, held only while this tab is open. Never put an
