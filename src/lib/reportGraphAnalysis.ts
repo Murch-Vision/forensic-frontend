@@ -7,6 +7,7 @@ export interface ReportGraphAnalysis {
   version: 1;
   flow: {from: string; to: string; amount: number; directed: boolean; soft: boolean;
     fromRed: boolean; toRed: boolean}[];
+  // Kept for older v1 drafts; money images are excluded from report output.
   flowImages: ReportAnalysisImage[];
   shared: {rows: string[][]; amounts?: number[]; image?: ReportAnalysisImage};
   red: {rows: string[][]; image?: ReportAnalysisImage};
@@ -36,7 +37,7 @@ export function buildReportGraphAnalysis(nodes: NetworkNode[], links: NetworkLin
 }
 
 export function encodeAnalysis(analysis: ReportGraphAnalysis): string {
-  const bytes = new TextEncoder().encode(JSON.stringify(analysis));
+  const bytes = new TextEncoder().encode(JSON.stringify({...analysis, flowImages: []}));
   // A short-lived upload transports base64; it must preserve Mongolian UTF-8.
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 32_768) {

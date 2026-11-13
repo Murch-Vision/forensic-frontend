@@ -3,7 +3,7 @@ import type {ReactNode} from "react";
 import {useSearchParams} from "react-router-dom";
 import NetworkGraph, {LINK_STYLE} from "./NetworkGraph";
 import type {NetworkGraphHandle} from "./NetworkGraph";
-import {Card, DataTable, Empty, OffenderTag, SankeyChart, exportSankeyPng} from "./kit";
+import {Card, DataTable, Empty, OffenderTag, SankeyChart} from "./kit";
 import type {Column} from "./kit";
 import {analyseGraph} from "../lib/graphAnalysis";
 import {formatMoney, formatNum} from "../lib/format";
@@ -95,13 +95,6 @@ export default forwardRef<GraphAnalysisPanelsHandle, {
   const [redFocus, setRedFocus] = useState<string | null>(null);
   useImperativeHandle(ref, () => ({async exportReport() {
     const snapshot = buildReportGraphAnalysis(nodes, links);
-    // One complete chart, independent of the table page. Unknown directions
-    // occupy a labelled area of that same image rather than another image.
-    if (analysis.flow.length) {
-      snapshot.flowImages.push(await exportSankeyPng(
-        flowChart(analysis.flow.filter(r => r.directed)),
-        flowChart(analysis.flow.filter(r => !r.directed), false)));
-    }
     if (snapshot.shared.rows.length) {
       if (!sharedRef.current) throw Error("Дундын харилцааны зураглал бэлэн болоогүй байна.");
       snapshot.shared.image = await sharedRef.current.exportPng();

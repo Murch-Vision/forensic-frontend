@@ -93,7 +93,7 @@ const assert = require('node:assert/strict');
       }
       return route.fulfill({json:{data}});
     });
-    const base = process.env.FORENSIC_TEST_URL || 'https://forensic.dev.sea.maestro.living';
+    const base = process.env.FORENSIC_TEST_URL || 'https://forensic.dev.sea.maestroliving.app';
     await page.goto(`${base}/linkchart?people=invalid`);
     const money=page.locator('#graph-money-flow'), shared=page.locator('#graph-shared-relations'), red=page.locator('#graph-red-relations');
     await money.locator('.sankey').waitFor();
@@ -202,9 +202,10 @@ const assert = require('node:assert/strict');
     const mainBefore=await pos();
     await page.getByRole('button',{name:'Тайланд оруулах',exact:true}).click();
     await page.waitForURL('**/reports');await page.locator('.report-analysis-preview').waitFor();
-    assert.equal(await page.locator('.report-flow-image').count(),1,
-      'Report captures ONE complete Sankey even when chart table page 2 is open');
-    assert.equal(await page.locator('.report-analysis-preview table').count(),2,'Money has images only; relation lists remain');
+    assert.equal(await page.locator('.report-flow-image').count(),0,
+      'Money PNG is excluded from the report preview');
+    assert(!await page.locator('.report-analysis-preview').innerText().then(t=>t.includes('Мөнгөн урсгал')));
+    assert.equal(await page.locator('.report-analysis-preview table').count(),2,'Only shared and offender relation lists remain in the preview');
     assert.equal(await page.locator('.report-analysis-preview table').nth(0).locator('tbody tr').count(),1);
     for(const section of await page.locator('.report-analysis-image').all()){
       assert(await section.evaluate(el=>!!el.nextElementSibling?.querySelector('table')),
@@ -212,22 +213,8 @@ const assert = require('node:assert/strict');
     }
     assert.equal(await page.locator('.report-analysis-image').count(),2,'Shared and red arranged scenes are captured');
     assert.deepEqual(await pos(),mainBefore);
-    const traces=await page.evaluate(()=>window.reportTraces);
-    assert.equal(traces.length,1);
-    assert.equal(traces[0].values.length,28,'The actual image includes all filtered flows, beyond screen page 20');
-    assert.equal(traces[0].values.reduce((s,n)=>s+n,0),25+200+Array.from({length:26},(_,i)=>300+i).reduce((s,v)=>s+v,0));
-    assert.equal(traces[0].labels.filter(n=>n==='Илгээсэн · QA Person 01').length,1,
-      'A sender appears once in the global diagram, rather than once in each page');
-    const mixed=await page.evaluate(async()=>{
-      const moduleUrl=performance.getEntriesByType('resource').map(r=>r.name).find(n=>n.includes('/src/components/kit.tsx'));
-      const {exportSankeyPng}=await import(moduleUrl||'/src/components/kit.tsx');
-      const chart=await exportSankeyPng({labels:['Илгээсэн · A','Хүлээн авсан · B'],source:[0],target:[1],value:[30]},
-        {labels:['Тал А · C','Тал Б · D'],source:[0],target:[1],value:[40]});
-      return {width:chart.width,height:chart.height,traces:window.reportTraces};
-    });
-    assert.equal(mixed.traces.length,2,'Unknown direction remains a distinct labelled area of the same image');
-    assert.deepEqual(mixed.traces.map(t=>t.values),[[30],[40]]);
-    assert(mixed.width===2000&&mixed.height>900);
+    assert.equal(await page.evaluate(()=>window.reportTraces),undefined,
+      'Selecting a report must not generate or encode a Sankey PNG');
     // Exercise analysis chunking independently of the main chart image.
     await page.evaluate(async()=>{
       const moduleUrl=performance.getEntriesByType('resource').map(r=>r.name).find(n=>n.includes('/src/lib/reportGraph.ts'));
@@ -236,7 +223,7 @@ const assert = require('node:assert/strict');
       const ctx=c.getContext('2d'),pixels=ctx.createImageData(c.width,c.height);let seed=123;
       for(let i=0;i<pixels.data.length;i++){seed=(seed*1664525+1013904223)>>>0;pixels.data[i]=i%4===3?255:seed>>>24;}
       ctx.putImageData(pixels,0,0);const draft=reportGraphDraft();
-      reportGraphDraft({...draft,analysis:{...draft.analysis,shared:{...draft.analysis.shared,
+      reportGraphDraft({...draft,analysis:{...draft.analysis,flowImages:[draft.analysis.red.image],shared:{...draft.analysis.shared,
         image:{imageBase64:c.toDataURL('image/png').split(',')[1],width:c.width,height:c.height}}}});
     });
     await page.waitForFunction(()=>document.querySelector('.report-analysis-image')?.getAttribute('width')==='1600');
@@ -250,8 +237,7 @@ const assert = require('node:assert/strict');
       'Reproduce an analysis above the old single-image upload limit');
     for(const e of exports){
       assert(e.graph.analysisUploadId,'Large analysis gets its own case-bound chunk transport');
-      assert.equal(e.analysis.flowImages.length,1);
-      assert(e.analysis.flowImages.every(image=>image.width===2000&&image.height>1000));
+      assert.equal(e.analysis.flowImages.length,0,'No money PNG is uploaded for any report format');
       assert.equal(e.analysis.flow.length,28);assert.equal(e.analysis.shared.rows.length,1);assert.equal(e.analysis.red.rows.length,3);
       assert.equal(e.analysis.flow.reduce((s,r)=>s+r.amount,0),25+200+Array.from({length:26},(_,i)=>300+i).reduce((s,v)=>s+v,0));
     }

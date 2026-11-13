@@ -265,7 +265,7 @@ export default function ReportsPage() {
           <p>{graph.title} · {formatDateTime(graph.capturedAt)}</p>
           <img className="report-graph-preview" src={`data:image/png;base64,${graph.imageBase64}`}
             width={graph.width} height={graph.height} alt={graph.title} />
-          <p className="report-graph-hint">PDF, Word, HTML тайланд үндсэн зураглал болон доорх бүх жагсаалт, зураглал орно. Хуудсыг дахин ачаалбал дахин сонгоно уу.</p>
+          <p className="report-graph-hint">PDF, Word, HTML тайланд үндсэн, дундын болон хэрэгтний харилцааны зураглал, жагсаалт орно. Хуудсыг дахин ачаалбал дахин сонгоно уу.</p>
           {graph.analysis && <ReportGraphAnalysisPreview analysis={graph.analysis} />}
         </> : <p>Холбоосын зураглал дээр «Тайланд оруулах» товчийг дарж зураг нэмнэ үү.</p>}
       </Card>}
