@@ -532,6 +532,7 @@ export const IMPORT_DATA = gql`
     $subjectSuspectId: Int
     $subjectNumber: String
     $mapping: [ColumnMapInput!]
+    $counterpartyFromDescription: Boolean
     $uploadId: String
     $headerRow: Int
     $startRow: Int
@@ -546,6 +547,7 @@ export const IMPORT_DATA = gql`
       subjectSuspectId: $subjectSuspectId
       subjectNumber: $subjectNumber
       mapping: $mapping
+      counterpartyFromDescription: $counterpartyFromDescription
       uploadId: $uploadId
       headerRow: $headerRow
       startRow: $startRow

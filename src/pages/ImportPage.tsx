@@ -300,6 +300,7 @@ export default function ImportPage() {
   const [subjectId, setSubjectId] = useState(0);
   const [subjectNumber, setSubjectNumber] = useState("");
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [counterpartyFromDescription, setCounterpartyFromDescription] = useState(false);
   const suspectsQ = useQuery<{suspects: {id: number; fullName: string;
     phoneNumbers: {number: string}[]}[]}>(IMPORT_SUSPECTS);
   const suspects = suspectsQ.data?.suspects ?? [];
@@ -347,6 +348,7 @@ export default function ImportPage() {
     importQ.reset();
     setPreview(null);
     setRowRange(AUTO_RANGE);
+    setCounterpartyFromDescription(false);
     setSheets([]);
     setSheetName(null);
     setUploadId(null);
@@ -468,6 +470,10 @@ export default function ImportPage() {
 
   async function onImport() {
     if (!content || !preview || working || importLock.current) return;
+    if (kind === "BANK" && counterpartyFromDescription && !mapping.description) {
+      setError("Гүйлгээний утгаас данс авахын тулд Тайлбар баганыг сонгоно уу.");
+      return;
+    }
     importLock.current = true;
     setImporting(true);
     importQ.reset();
@@ -486,6 +492,7 @@ export default function ImportPage() {
         subjectNumber: kind === "CDR" && subjectNumber.trim()
           ? subjectNumber.trim() : null,
         bankAccountId: null,
+        counterpartyFromDescription: kind === "BANK" && counterpartyFromDescription,
         mapping: mappingArg.length > 0 ? mappingArg : null,
         ...rowRange,
       },
@@ -749,6 +756,20 @@ export default function ImportPage() {
               Нэр нь нэг регистртэй таарвал регистргүй дансанд нөхнө.
             </p>}
           </div>
+          {kind === "BANK" && <div style={{marginBottom: 16}}>
+            <label className="form-label">Харьцсан дансны эх үүсвэр</label>
+            <Select value={counterpartyFromDescription ? "description" : "columns"}
+              onChange={(value) => {importQ.reset(); setError(null); setCounterpartyFromDescription(value === "description");}}
+              options={[
+                {value: "columns", label: "Баганын данс, нэр"},
+                {value: "description", label: "Гүйлгээний утгаас IBAN, нэр"},
+              ]} style={{width: "100%"}} />
+            {counterpartyFromDescription && <p style={{fontSize: 12, color: "var(--text-muted)", margin: "8px 0 0"}}>
+              Тайлбар хэсэгт гүйлгээний утгын баганыг сонгоно уу. Нэг хүчинтэй IBAN,
+              банкны тэмдэглэгээний дараах нэрийг авна. Шимтгэлийн мөр болон
+              IBAN тодорхойгүй мөрд баганын данс, нэрийг авна. Эх утга бүтнээр хадгалагдана.
+            </p>}
+          </div>}
           <div className="import-mapping">
             {mapFields.map((f) => (
               <div key={f.key}>

@@ -9,8 +9,8 @@ const assert=require('node:assert/strict');
   const errors=[],unexpected=[],imports=[];
   page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>localStorage.setItem('forensic.authToken','mock-session'));
-  const headers=['Огноо','Данс','Дүн','Харьцсан данс','Эхний нэр','Хоёр дахь нэр'];
-  const sample=['2026-11-01','1001','100','2001','Авизын түр данс','САРАН БОЛД'];
+  const headers=['Огноо','Данс','Дүн','Харьцсан данс','Эхний нэр','Хоёр дахь нэр','Гүйлгээний утга'];
+  const sample=['2026-11-01','1001','100','800181200001','Авизын түр данс','САРАН БОЛД','р /CAXBMNUB-, Оюунхишиг ЗОЛБООТ MN350032005002742471/'];
   await page.route('**/*',async route=>{
     let op; if(route.request().method()==='POST'){try{op=route.request().postDataJSON();}catch{}}
     if(!op?.query) return route.continue();
@@ -52,6 +52,7 @@ const assert=require('node:assert/strict');
   const map=Object.fromEntries(imports[0].mapping.map(m=>[m.field,m.column]));
   assert.equal(map.counterpartyName,'Эхний нэр');assert.equal(map.counterpartyName2,'Хоёр дахь нэр');
   assert.equal(imports[0].kind,'BANK');
+  assert.equal(imports[0].counterpartyFromDescription,false,'Existing bank imports keep column mapping by default');
   // Clearing the optional field keeps single-name bank statements supported.
   await secondary.locator('.select-trigger').scrollIntoViewIfNeeded();
   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
@@ -62,7 +63,32 @@ const assert=require('node:assert/strict');
   assert.equal(imports.length,2);
   assert(imports[1].mapping.some(m=>m.field==='counterpartyName2' && m.column===''));
   assert((await page.getByRole('status').innerText()).includes('Нэрээр данс таарууллаа'));
+  const source=page.getByRole('button',{name:'Баганын данс, нэр',exact:false});
+  await source.scrollIntoViewIfNeeded();
+  await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+  await source.click();
+  await page.getByRole('option',{name:'Гүйлгээний утгаас IBAN, нэр',exact:true}).click();
+  await page.getByText('Эх утга бүтнээр хадгалагдана.',{exact:false}).waitFor();
+  await page.getByRole('button',{name:'ИМПОРТЛОХ',exact:true}).click();
+  await page.getByRole('alert').filter({hasText:'Тайлбар баганыг сонгоно уу'}).waitFor();
+  assert.equal(imports.length,2,'An unmapped description must not submit the import');
+  const description=field('Тайлбар');
+  await description.locator('.select-trigger').scrollIntoViewIfNeeded();
+  await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+  await description.locator('.select-trigger').click();
+  await page.getByRole('option',{name:'Гүйлгээний утга',exact:true}).click();
+  await page.getByRole('button',{name:'ИМПОРТЛОХ',exact:true}).click();
+  await page.getByText('Импорт дууслаа',{exact:true}).waitFor();
+  assert.equal(imports.length,3);
+  assert.equal(imports[2].counterpartyFromDescription,true);
+  assert(imports[2].mapping.some(m=>m.field==='description'&&m.column==='Гүйлгээний утга'));
+  // Selecting a new file must reset this bank-specific extraction choice.
+  await page.locator('input[type="file"]').setInputFiles({name:'other-bank.csv',mimeType:'text/csv',buffer:Buffer.from('date,amount\n2026-11-01,1')});
+  await page.getByText('Баганын данс, нэр',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'ИМПОРТЛОХ',exact:true}).click();
+  await page.getByText('Импорт дууслаа',{exact:true}).waitFor();
+  assert.equal(imports[3].counterpartyFromDescription,false);
   assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[]);
-  console.log('PASS: independent second bank-name column selection, import payload and optional single-name compatibility (mock API)');
+  console.log('PASS: bank-name mapping, description extraction selection/validation, payload and new-file reset (mock API)');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
